@@ -4,7 +4,7 @@ from .license_pass import license_processing
 from .functions import func_proc
 from .maps import maps_proc
 from .structs import structs_proc
-from .globals_pass import globals_processing
+from .globals_pass import globals_list_creation, globals_processing
 from .debuginfo import DW_LANG_C11, DwarfBehaviorEnum, DebugInfoGenerator
 import os
 import subprocess
@@ -46,6 +46,7 @@ def processor(source_code, filename, module):
 
     license_processing(tree, module)
     globals_processing(tree, module)
+    globals_list_creation(tree, module)
 
 
 def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
