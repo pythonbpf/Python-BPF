@@ -232,7 +232,7 @@ def handle_assign(
         else:
             logger.info("Unsupported assignment call function type")
     elif isinstance(rval, ast.BinOp):
-        handle_binary_op(rval, module, builder, var_name, local_sym_tab)
+        handle_binary_op(rval, builder, var_name, local_sym_tab)
     else:
         logger.info("Unsupported assignment value type")
 
@@ -384,24 +384,49 @@ def process_stmt(
         )
     elif isinstance(stmt, ast.Return):
         if stmt.value is None:
-            builder.ret(ir.Constant(ir.IntType(32), 0))
+            builder.ret(ir.Constant(ir.IntType(64), 0))
             did_return = True
         elif (
             isinstance(stmt.value, ast.Call)
             and isinstance(stmt.value.func, ast.Name)
             and len(stmt.value.args) == 1
-            and isinstance(stmt.value.args[0], ast.Constant)
-            and isinstance(stmt.value.args[0].value, int)
         ):
-            call_type = stmt.value.func.id
-            if ctypes_to_ir(call_type) != ret_type:
-                raise ValueError(
-                    "Return type mismatch: expected"
-                    f"{ctypes_to_ir(call_type)}, got {call_type}"
-                )
-            else:
-                builder.ret(ir.Constant(ret_type, stmt.value.args[0].value))
+            if isinstance(stmt.value.args[0], ast.Constant) and isinstance(
+                stmt.value.args[0].value, int
+            ):
+                call_type = stmt.value.func.id
+                if ctypes_to_ir(call_type) != ret_type:
+                    raise ValueError(
+                        "Return type mismatch: expected"
+                        f"{ctypes_to_ir(call_type)}, got {call_type}"
+                    )
+                else:
+                    builder.ret(ir.Constant(ret_type, stmt.value.args[0].value))
+                    did_return = True
+            elif isinstance(stmt.value.args[0], ast.BinOp):
+                # TODO: Should be routed through eval_expr
+                val = handle_binary_op(stmt.value.args[0], builder, None, local_sym_tab)
+                if val is None:
+                    raise ValueError("Failed to evaluate return expression")
+                if val[1] != ret_type:
+                    raise ValueError(
+                        "Return type mismatch: expected" f"{ret_type}, got {val[1]}"
+                    )
+                builder.ret(val[0])
                 did_return = True
+            elif isinstance(stmt.value.args[0], ast.Name):
+                if stmt.value.args[0].id in local_sym_tab:
+                    var = local_sym_tab[stmt.value.args[0].id].var
+                    val = builder.load(var)
+                    if val.type != ret_type:
+                        raise ValueError(
+                            "Return type mismatch: expected"
+                            f"{ret_type}, got {val.type}"
+                        )
+                    builder.ret(val)
+                    did_return = True
+                else:
+                    raise ValueError("Failed to evaluate return expression")
         elif isinstance(stmt.value, ast.Name):
             if stmt.value.id == "XDP_PASS":
                 builder.ret(ir.Constant(ret_type, 2))
@@ -566,7 +591,7 @@ def process_func_body(
         )
 
     if not did_return:
-        builder.ret(ir.Constant(ir.IntType(32), 0))
+        builder.ret(ir.Constant(ir.IntType(64), 0))
 
 
 def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_tab):

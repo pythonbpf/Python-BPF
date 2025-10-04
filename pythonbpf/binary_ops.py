@@ -9,6 +9,7 @@ logger: Logger = logging.getLogger(__name__)
 def recursive_dereferencer(var, builder):
     """dereference until primitive type comes out"""
     # TODO: Not worrying about stack overflow for now
+    logger.info(f"Dereferencing {var}, type is {var.type}")
     if isinstance(var.type, ir.PointerType):
         a = builder.load(var)
         return recursive_dereferencer(a, builder)
@@ -18,7 +19,7 @@ def recursive_dereferencer(var, builder):
         raise TypeError(f"Unsupported type for dereferencing: {var.type}")
 
 
-def get_operand_value(operand, module, builder, local_sym_tab):
+def get_operand_value(operand, builder, local_sym_tab):
     """Extract the value from an operand, handling variables and constants."""
     if isinstance(operand, ast.Name):
         if operand.id in local_sym_tab:
@@ -29,14 +30,14 @@ def get_operand_value(operand, module, builder, local_sym_tab):
             return ir.Constant(ir.IntType(64), operand.value)
         raise TypeError(f"Unsupported constant type: {type(operand.value)}")
     elif isinstance(operand, ast.BinOp):
-        return handle_binary_op_impl(operand, module, builder, local_sym_tab)
+        return handle_binary_op_impl(operand, builder, local_sym_tab)
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 
 
-def handle_binary_op_impl(rval, module, builder, local_sym_tab):
+def handle_binary_op_impl(rval, builder, local_sym_tab):
     op = rval.op
-    left = get_operand_value(rval.left, module, builder, local_sym_tab)
-    right = get_operand_value(rval.right, module, builder, local_sym_tab)
+    left = get_operand_value(rval.left, builder, local_sym_tab)
+    right = get_operand_value(rval.right, builder, local_sym_tab)
     logger.info(f"left is {left}, right is {right}, op is {op}")
 
     # Map AST operation nodes to LLVM IR builder methods
@@ -61,6 +62,8 @@ def handle_binary_op_impl(rval, module, builder, local_sym_tab):
         raise SyntaxError("Unsupported binary operation")
 
 
-def handle_binary_op(rval, module, builder, var_name, local_sym_tab):
-    result = handle_binary_op_impl(rval, module, builder, local_sym_tab)
-    builder.store(result, local_sym_tab[var_name].var)
+def handle_binary_op(rval, builder, var_name, local_sym_tab):
+    result = handle_binary_op_impl(rval, builder, local_sym_tab)
+    if var_name in local_sym_tab:
+        builder.store(result, local_sym_tab[var_name].var)
+    return result, result.type
