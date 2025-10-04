@@ -34,11 +34,11 @@ def emit_global(module: ir.Module, node, name):
 
     # constructor call like "return c_int64(0)" or dataclass(...)
     elif isinstance(init_val, ast.Call):
-        if len(init_val.args) == 1 and isinstance(init_val.args[0], ast.Constant):
+        if len(init_val.args) >= 1 and isinstance(init_val.args[0], ast.Constant):
             llvm_init = ir.Constant(ty, init_val.args[0].value)
         else:
-            raise ValueError(f"Complex constructor not supported: {ast.dump(init_val)}")
-
+            logger.info("Defaulting to zero as no constant argument found")
+            llvm_init = ir.Constant(ty, 0)
     else:
         raise ValueError(f"Unsupported return expr {ast.dump(init_val)}")
 
@@ -48,7 +48,6 @@ def emit_global(module: ir.Module, node, name):
     gvar.linkage = "dso_local"
     gvar.global_constant = False
     return gvar
-
 
 def globals_processing(tree, module):
     """Process stuff decorated with @bpf and @bpfglobal except license and return the section name"""
