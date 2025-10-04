@@ -5,13 +5,11 @@ from pythonbpf.maps import HashMap
 from ctypes import c_void_p, c_int64
 
 # NOTE: This example exposes the problems with our typing system.
-# We assign every variable the type i64* by default.
-# lookup() return type is ptr, which can't be loaded.
-# So we can't do steps on line 25 and 27.
-# To counter this, we should allocate vars by speculating their type.
-# And in the assign pass, we should have something like a
-# recursive_dereferencer() that dereferences a ptr until it hits a non-ptr type.
-# And a recursive_wrapper() that does the opposite.
+# We can't do steps on line 25 and 27.
+# prev is of type i64**. For prev + 1, we deref it down to i64
+# To assign it back to prev, we need to go back to i64**.
+# We cannot allocate space for the intermediate type now.
+# We probably need to track the ref/deref chain for each variable.
 
 @bpf
 @map
