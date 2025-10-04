@@ -40,12 +40,13 @@ def processor(source_code, filename, module):
     for func_node in bpf_chunks:
         logger.info(f"Found BPF function/struct: {func_node.name}")
 
+    license_processing(tree, module)
+    globals_processing(tree, module)
+
     structs_sym_tab = structs_proc(tree, module, bpf_chunks)
     map_sym_tab = maps_proc(tree, module, bpf_chunks)
     func_proc(tree, module, bpf_chunks, map_sym_tab, structs_sym_tab)
 
-    license_processing(tree, module)
-    globals_processing(tree, module)
     globals_list_creation(tree, module)
 
 
