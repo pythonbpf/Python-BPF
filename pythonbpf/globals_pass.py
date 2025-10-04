@@ -10,13 +10,13 @@ logger: Logger = logging.getLogger(__name__)
 
 def emit_global(module: ir.Module, node, name):
     logger.info(f"global identifier {name} processing")
-    # TODO: below part is LLM generated check logic.
     # deduce LLVM type from the annotated return
     if not isinstance(node.returns, ast.Name):
         raise ValueError(f"Unsupported return annotation {ast.dump(node.returns)}")
     ty = ctypes_to_ir(node.returns.id)
 
     # extract the return expression
+    # TODO: turn this return extractor into a generic function I can use everywhere.
     ret_stmt = node.body[0]
     if not isinstance(ret_stmt, ast.Return) or ret_stmt.value is None:
         raise ValueError(f"Global '{name}' has no valid return")
@@ -29,7 +29,7 @@ def emit_global(module: ir.Module, node, name):
 
     # variable reference like "return SOME_CONST"
     elif isinstance(init_val, ast.Name):
-        # you may need symbol resolution here, stub as 0 for now
+        # need symbol resolution here, stub as 0 for now
         raise ValueError(f"Name reference {init_val.id} not yet supported")
 
     # constructor call like "return c_int64(0)" or dataclass(...)

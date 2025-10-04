@@ -6,17 +6,17 @@ from ctypes import c_void_p, c_int64, c_int32
 @bpf
 @bpfglobal
 def somevalue() -> c_int32:
-    return c_int32(0)
+    return c_int32(42)
 
 @bpf
 @bpfglobal
 def somevalue2() -> c_int64:
-    return c_int64(0)
+    return c_int64(69)
 
 @bpf
 @bpfglobal
 def somevalue1() -> c_int32:
-    return c_int32(0)
+    return c_int32(42)
 
 
 # --- Passing examples ---
@@ -31,7 +31,7 @@ def g1() -> c_int64:
 @bpf
 @bpfglobal
 def g2() -> c_int64:
-    return c_int64(0)
+    return c_int64(69)
 
 
 # --- Failing examples ---
