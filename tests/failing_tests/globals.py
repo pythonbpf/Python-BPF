@@ -18,9 +18,6 @@ def somevalue2() -> c_int64:
 def somevalue1() -> c_int32:
     return c_int32(0)
 
-import ast
-from dataclasses import dataclass
-from typing import List
 
 # --- Passing examples ---
 

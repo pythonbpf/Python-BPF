@@ -49,6 +49,7 @@ def emit_global(module: ir.Module, node, name):
     gvar.global_constant = False
     return gvar
 
+
 def globals_processing(tree, module):
     """Process stuff decorated with @bpf and @bpfglobal except license and return the section name"""
     globals_sym_tab = []
