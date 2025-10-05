@@ -48,7 +48,7 @@ def processor(source_code, filename, module):
     globals_processing(tree, module)
 
 
-def compile_to_ir(filename: str, output: str, loglevel=logging.WARNING):
+def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
     logging.basicConfig(
         level=loglevel, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
@@ -121,7 +121,7 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.WARNING):
     return output
 
 
-def compile(loglevel=logging.WARNING) -> bool:
+def compile(loglevel=logging.INFO) -> bool:
     # Look one level up the stack to the caller of this function
     caller_frame = inspect.stack()[1]
     caller_file = Path(caller_frame.filename).resolve()
@@ -154,7 +154,7 @@ def compile(loglevel=logging.WARNING) -> bool:
     return success
 
 
-def BPF(loglevel=logging.WARNING) -> BpfProgram:
+def BPF(loglevel=logging.INFO) -> BpfProgram:
     caller_frame = inspect.stack()[1]
     src = inspect.getsource(caller_frame.frame)
     with tempfile.NamedTemporaryFile(
