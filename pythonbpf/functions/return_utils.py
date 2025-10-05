@@ -59,6 +59,25 @@ def _handle_binop_return(arg, builder, ret_type, local_sym_tab) -> bool:
     return True
 
 
+def _handle_variable_return(var_name, builder, ret_type, local_sym_tab) -> bool:
+    """Handle return of a variable: return c_int64(my_var)"""
+
+    # var_name = stmt.value.args[0].id
+
+    if var_name not in local_sym_tab:
+        raise ValueError(f"Undefined variable in return: {var_name}")
+
+    var = local_sym_tab[var_name].var
+    val = builder.load(var)
+
+    if val.type != ret_type:
+        raise ValueError(f"Return type mismatch: expected {ret_type}, got {val.type}")
+
+    builder.ret(val)
+    logger.debug(f"Generated variable return: {var_name}")
+    return True
+
+
 def _handle_xdp_return(stmt: ast.Return, builder, ret_type) -> bool:
     """Handle XDP returns"""
     if not isinstance(stmt.value, ast.Name):
