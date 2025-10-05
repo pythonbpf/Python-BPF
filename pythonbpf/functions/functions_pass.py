@@ -359,6 +359,11 @@ def handle_return(builder, stmt, local_sym_tab, ret_type):
         return _handle_none_return(builder)
     elif isinstance(stmt.value, ast.Name) and _is_xdp_name(stmt.value.id):
         return _handle_xdp_return(stmt, builder, ret_type)
+    elif True:
+        val = eval_expr(None, None, builder, stmt.value, local_sym_tab, {}, {})
+        logger.info(f"Evaluated return expression to {val}")
+        builder.ret(val[0])
+        return True
     elif (
         isinstance(stmt.value, ast.Call)
         and isinstance(stmt.value.func, ast.Name)
