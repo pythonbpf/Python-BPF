@@ -360,7 +360,15 @@ def handle_return(builder, stmt, local_sym_tab, ret_type):
     elif isinstance(stmt.value, ast.Name) and _is_xdp_name(stmt.value.id):
         return _handle_xdp_return(stmt, builder, ret_type)
     else:
-        val = eval_expr(None, None, builder, stmt.value, local_sym_tab, {}, {})
+        val = eval_expr(
+            func=None,
+            module=None,
+            builder=builder,
+            expr=stmt.value,
+            local_sym_tab=local_sym_tab,
+            map_sym_tab={},
+            structs_sym_tab={},
+        )
         logger.info(f"Evaluated return expression to {val}")
         builder.ret(val[0])
         return True
