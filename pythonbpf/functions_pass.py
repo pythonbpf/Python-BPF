@@ -411,7 +411,7 @@ def process_stmt(
                     raise ValueError("Failed to evaluate return expression")
                 if val[1] != ret_type:
                     raise ValueError(
-                        "Return type mismatch: expected" f"{ret_type}, got {val[1]}"
+                        "Return type mismatch: expected " f"{ret_type}, got {val[1]}"
                     )
                 builder.ret(val[0])
                 did_return = True
@@ -480,6 +480,9 @@ def allocate_mem(
                 continue
             var_name = target.id
             rval = stmt.value
+            if var_name in local_sym_tab:
+                logger.info(f"Variable {var_name} already allocated")
+                continue
             if isinstance(rval, ast.Call):
                 if isinstance(rval.func, ast.Name):
                     call_type = rval.func.id
