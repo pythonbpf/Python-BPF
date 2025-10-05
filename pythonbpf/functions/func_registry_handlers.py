@@ -17,6 +17,6 @@ class StatementHandlerRegistry:
         return decorator
 
     @classmethod
-    def get_handler(cls, stmt_type):
+    def __getitem__(cls, stmt_type):
         """Get the handler for a specific statement type."""
         return cls._handlers.get(stmt_type, None)
