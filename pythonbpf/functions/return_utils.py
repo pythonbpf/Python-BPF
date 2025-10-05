@@ -37,6 +37,7 @@ def _handle_xdp_return(stmt: ast.Return, builder, ret_type) -> bool:
         raise ValueError(
             f"Unknown XDP action: {action_name}. Available: {XDP_ACTIONS.keys()}"
         )
+        return False
 
     value = XDP_ACTIONS[action_name]
     builder.ret(ir.Constant(ret_type, value))
