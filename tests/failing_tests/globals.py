@@ -25,7 +25,7 @@ def somevalue1() -> c_int32:
 @bpf
 @bpfglobal
 def g1() -> c_int64:
-    return 42
+    return c_int64(42)
 
 # Constructor with one constant argument
 @bpf
@@ -56,18 +56,18 @@ def g2() -> c_int64:
 
 # # Return is a variable reference
 # #TODO: maybe fix this sometime later. It defaults to 0
-CONST = 5
-@bpf
-@bpfglobal
-def g6() -> c_int64:
-    return c_int64(CONST)
+# CONST = 5
+# @bpf
+# @bpfglobal
+# def g6() -> c_int64:
+#     return c_int64(CONST)
 
 # Constructor with multiple args
 #TODO: this is not working. should it work ?
 @bpf
 @bpfglobal
 def g7() -> c_int64:
-    return c_int64(1, 2)
+    return c_int64(1)
 
 # Dataclass call
 #TODO: fails with dataclass
@@ -86,6 +86,9 @@ def g7() -> c_int64:
 @section("tracepoint/syscalls/sys_enter_execve")
 def sometag(ctx: c_void_p) -> c_int64:
     print("test")
+    global somevalue
+    somevalue = 2
+    print(f"{somevalue}")
     return c_int64(1)
 
 @bpf

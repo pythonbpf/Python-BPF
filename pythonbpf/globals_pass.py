@@ -7,6 +7,30 @@ from .type_deducer import ctypes_to_ir
 
 logger: Logger = logging.getLogger(__name__)
 
+# TODO: this is going to be a huge fuck of a headache in the future.
+global_sym_tab = []
+
+
+def populate_global_symbol_table(tree, module: ir.Module):
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef):
+            for dec in node.decorator_list:
+                if (
+                    isinstance(dec, ast.Call)
+                    and isinstance(dec.func, ast.Name)
+                    and dec.func.id == "section"
+                    and len(dec.args) == 1
+                    and isinstance(dec.args[0], ast.Constant)
+                    and isinstance(dec.args[0].value, str)
+                ):
+                    global_sym_tab.append(node)
+                elif isinstance(dec, ast.Name) and dec.id == "bpfglobal":
+                    global_sym_tab.append(node)
+
+                elif isinstance(dec, ast.Name) and dec.id == "map":
+                    global_sym_tab.append(node)
+    return False
+
 
 def emit_global(module: ir.Module, node, name):
     logger.info(f"global identifier {name} processing")
