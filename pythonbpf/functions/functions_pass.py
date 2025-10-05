@@ -9,7 +9,7 @@ from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.binary_ops import handle_binary_op
 from pythonbpf.expr_pass import eval_expr, handle_expr
 
-from .return_utils import _handle_none_return
+from .return_utils import _handle_none_return, _handle_xdp_return
 
 
 logger = logging.getLogger(__name__)
@@ -397,14 +397,7 @@ def handle_return(builder, stmt, local_sym_tab, ret_type):
             else:
                 raise ValueError("Failed to evaluate return expression")
     elif isinstance(stmt.value, ast.Name):
-        if stmt.value.id == "XDP_PASS":
-            builder.ret(ir.Constant(ret_type, 2))
-            return True
-        elif stmt.value.id == "XDP_DROP":
-            builder.ret(ir.Constant(ret_type, 1))
-            return True
-        else:
-            raise ValueError("Failed to evaluate return expression")
+        return _handle_xdp_return(stmt, builder, ret_type)
     else:
         raise ValueError("Unsupported return value")
 
