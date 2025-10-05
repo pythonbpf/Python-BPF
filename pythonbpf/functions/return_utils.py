@@ -5,11 +5,6 @@ from llvmlite import ir
 
 logger: logging.Logger = logging.getLogger(__name__)
 
-# TODO: Ideally there should be only 3 cases:
-# - Return none
-# - Return XDP
-# - Return expr
-
 XDP_ACTIONS = {
     "XDP_ABORTED": 0,
     "XDP_DROP": 1,
