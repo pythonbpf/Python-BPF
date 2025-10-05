@@ -354,8 +354,11 @@ def handle_if(
 
 
 def handle_return(builder, stmt, local_sym_tab, ret_type):
+    logger.info(f"Handling return statement: {ast.dump(stmt)}")
     if stmt.value is None:
         return _handle_none_return(builder)
+    elif isinstance(stmt.value, ast.Name):
+        return _handle_xdp_return(stmt, builder, ret_type)
     elif (
         isinstance(stmt.value, ast.Call)
         and isinstance(stmt.value.func, ast.Name)
@@ -396,8 +399,6 @@ def handle_return(builder, stmt, local_sym_tab, ret_type):
                 return True
             else:
                 raise ValueError("Failed to evaluate return expression")
-    elif isinstance(stmt.value, ast.Name):
-        return _handle_xdp_return(stmt, builder, ret_type)
     else:
         raise ValueError("Unsupported return value")
 
