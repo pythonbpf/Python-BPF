@@ -3,6 +3,7 @@ import ast
 
 from llvmlite import ir
 from pythonbpf.type_deducer import ctypes_to_ir
+from pythonbpf.binary_ops import handle_binary_op
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -36,6 +37,25 @@ def _handle_typed_constant_return(call_type, return_value, builder, ret_type) ->
     # return_value = stmt.value.args[0].value
     builder.ret(ir.Constant(ret_type, return_value))
     logger.debug(f"Generated typed constant return: {call_type}({return_value})")
+    return True
+
+
+def _handle_binop_return(arg, builder, ret_type, local_sym_tab) -> bool:
+    """Handle return with binary operation: return c_int64(x + 1)"""
+
+    # result = handle_binary_op(stmt.value.args[0], builder, None, local_sym_tab)
+    result = handle_binary_op(arg, builder, None, local_sym_tab)
+
+    if result is None:
+        raise ValueError("Failed to evaluate binary operation in return statement")
+
+    val, val_type = result
+
+    if val_type != ret_type:
+        raise ValueError(f"Return type mismatch: expected {ret_type}, got {val_type}")
+
+    builder.ret(val)
+    logger.debug(f"Generated binary operation return: {val}")
     return True
 
 
