@@ -4,10 +4,10 @@ import logging
 from typing import Any
 from dataclasses import dataclass
 
-from .helper import HelperHandlerRegistry, handle_helper_call
-from .type_deducer import ctypes_to_ir
-from .binary_ops import handle_binary_op
-from .expr_pass import eval_expr, handle_expr
+from pythonbpf.helper import HelperHandlerRegistry, handle_helper_call
+from pythonbpf.type_deducer import ctypes_to_ir
+from pythonbpf.binary_ops import handle_binary_op
+from pythonbpf.expr_pass import eval_expr, handle_expr
 
 logger = logging.getLogger(__name__)
 
