@@ -153,6 +153,10 @@ def eval_expr(
                         )
     elif isinstance(expr, ast.Attribute):
         return _handle_attribute_expr(expr, local_sym_tab, structs_sym_tab, builder)
+    elif isinstance(expr, ast.BinOp):
+        from pythonbpf.binary_ops import handle_binary_op
+
+        return handle_binary_op(expr, builder, None, local_sym_tab)
     logger.info("Unsupported expression evaluation")
     return None
 
