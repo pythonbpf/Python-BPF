@@ -9,7 +9,7 @@ from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.binary_ops import handle_binary_op
 from pythonbpf.expr_pass import eval_expr, handle_expr
 
-from .return_utils import _handle_none_return, _handle_xdp_return
+from .return_utils import _handle_none_return, _handle_xdp_return, _is_xdp_name
 
 
 logger = logging.getLogger(__name__)
@@ -357,7 +357,7 @@ def handle_return(builder, stmt, local_sym_tab, ret_type):
     logger.info(f"Handling return statement: {ast.dump(stmt)}")
     if stmt.value is None:
         return _handle_none_return(builder)
-    elif isinstance(stmt.value, ast.Name):
+    elif isinstance(stmt.value, ast.Name) and _is_xdp_name(stmt.value.id):
         return _handle_xdp_return(stmt, builder, ret_type)
     elif (
         isinstance(stmt.value, ast.Call)

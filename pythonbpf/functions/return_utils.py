@@ -111,6 +111,11 @@ def _handle_wrapped_return(stmt: ast.Return, builder, ret_type, local_sym_tab) -
         raise ValueError(f"Unsupported return argument type: {type(arg).__name__}")
 
 
+def _is_xdp_name(name: str) -> bool:
+    """Check if a name is an XDP action"""
+    return name in XDP_ACTIONS
+
+
 def _handle_xdp_return(stmt: ast.Return, builder, ret_type) -> bool:
     """Handle XDP returns"""
     if not isinstance(stmt.value, ast.Name):
