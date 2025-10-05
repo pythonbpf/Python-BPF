@@ -119,9 +119,7 @@ def _handle_ctypes_call(
         return None
     call_type = expr.func.id
     expected_type = ctypes_to_ir(call_type)
-    if expected_type is None:
-        logger.info(f"Unsupported ctypes type: {call_type}")
-        return None
+
     if val[1] != expected_type:
         # NOTE: We are only considering casting to and from int types for now
         if isinstance(val[1], ir.IntType) and isinstance(expected_type, ir.IntType):
