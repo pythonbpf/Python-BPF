@@ -359,53 +359,11 @@ def handle_return(builder, stmt, local_sym_tab, ret_type):
         return _handle_none_return(builder)
     elif isinstance(stmt.value, ast.Name) and _is_xdp_name(stmt.value.id):
         return _handle_xdp_return(stmt, builder, ret_type)
-    elif True:
+    else:
         val = eval_expr(None, None, builder, stmt.value, local_sym_tab, {}, {})
         logger.info(f"Evaluated return expression to {val}")
         builder.ret(val[0])
         return True
-    elif (
-        isinstance(stmt.value, ast.Call)
-        and isinstance(stmt.value.func, ast.Name)
-        and len(stmt.value.args) == 1
-    ):
-        if isinstance(stmt.value.args[0], ast.Constant) and isinstance(
-            stmt.value.args[0].value, int
-        ):
-            call_type = stmt.value.func.id
-            if ctypes_to_ir(call_type) != ret_type:
-                raise ValueError(
-                    "Return type mismatch: expected"
-                    f"{ctypes_to_ir(call_type)}, got {call_type}"
-                )
-            else:
-                builder.ret(ir.Constant(ret_type, stmt.value.args[0].value))
-                return True
-        elif isinstance(stmt.value.args[0], ast.BinOp):
-            # TODO: Should be routed through eval_expr
-            val = handle_binary_op(stmt.value.args[0], builder, None, local_sym_tab)
-            if val is None:
-                raise ValueError("Failed to evaluate return expression")
-            if val[1] != ret_type:
-                raise ValueError(
-                    f"Return type mismatch: expected {ret_type}, got {val[1]}"
-                )
-            builder.ret(val[0])
-            return True
-        elif isinstance(stmt.value.args[0], ast.Name):
-            if stmt.value.args[0].id in local_sym_tab:
-                var = local_sym_tab[stmt.value.args[0].id].var
-                val = builder.load(var)
-                if val.type != ret_type:
-                    raise ValueError(
-                        f"Return type mismatch: expected {ret_type}, got {val.type}"
-                    )
-                builder.ret(val)
-                return True
-            else:
-                raise ValueError("Failed to evaluate return expression")
-    else:
-        raise ValueError("Unsupported return value")
 
 
 def process_stmt(
