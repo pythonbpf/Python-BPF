@@ -351,9 +351,7 @@ def handle_if(
     builder.position_at_end(merge_block)
 
 
-def handle_return(
-    func, module, builder, stmt, map_sym_tab, local_sym_tab, struct_sym_tab, ret_type
-):
+def handle_return(builder, stmt, local_sym_tab, ret_type):
     if stmt.value is None:
         builder.ret(ir.Constant(ir.IntType(64), 0))
         return True
@@ -444,13 +442,9 @@ def process_stmt(
         )
     elif isinstance(stmt, ast.Return):
         did_return = handle_return(
-            func,
-            module,
             builder,
             stmt,
-            map_sym_tab,
             local_sym_tab,
-            structs_sym_tab,
             ret_type,
         )
     return did_return
