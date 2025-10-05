@@ -4,6 +4,8 @@ from logging import Logger
 import logging
 from typing import Dict
 
+from .type_deducer import ctypes_to_ir, is_ctypes
+
 logger: Logger = logging.getLogger(__name__)
 
 
@@ -88,6 +90,48 @@ def _handle_deref_call(expr: ast.Call, local_sym_tab: Dict, builder: ir.IRBuilde
     return val, local_sym_tab[arg.id].ir_type
 
 
+def _handle_ctypes_call(
+    func,
+    module,
+    builder,
+    expr,
+    local_sym_tab,
+    map_sym_tab,
+    structs_sym_tab=None,
+):
+    """Handle ctypes type constructor calls."""
+    if len(expr.args) != 1:
+        logger.info("ctypes constructor takes exactly one argument")
+        return None
+
+    arg = expr.args[0]
+    val = eval_expr(
+        func,
+        module,
+        builder,
+        arg,
+        local_sym_tab,
+        map_sym_tab,
+        structs_sym_tab,
+    )
+    if val is None:
+        logger.info("Failed to evaluate argument to ctypes constructor")
+        return None
+    call_type = expr.func.id
+    expected_type = ctypes_to_ir(call_type)
+
+    if val[1] != expected_type:
+        # NOTE: We are only considering casting to and from int types for now
+        if isinstance(val[1], ir.IntType) and isinstance(expected_type, ir.IntType):
+            if val[1].width < expected_type.width:
+                val = (builder.sext(val[0], expected_type), expected_type)
+            else:
+                val = (builder.trunc(val[0], expected_type), expected_type)
+        else:
+            raise ValueError(f"Type mismatch: expected {expected_type}, got {val[1]}")
+    return val
+
+
 def eval_expr(
     func,
     module,
@@ -105,6 +149,17 @@ def eval_expr(
     elif isinstance(expr, ast.Call):
         if isinstance(expr.func, ast.Name) and expr.func.id == "deref":
             return _handle_deref_call(expr, local_sym_tab, builder)
+
+        if isinstance(expr.func, ast.Name) and is_ctypes(expr.func.id):
+            return _handle_ctypes_call(
+                func,
+                module,
+                builder,
+                expr,
+                local_sym_tab,
+                map_sym_tab,
+                structs_sym_tab,
+            )
 
         # delayed import to avoid circular dependency
         from pythonbpf.helper import HelperHandlerRegistry, handle_helper_call
@@ -153,6 +208,10 @@ def eval_expr(
                         )
     elif isinstance(expr, ast.Attribute):
         return _handle_attribute_expr(expr, local_sym_tab, structs_sym_tab, builder)
+    elif isinstance(expr, ast.BinOp):
+        from pythonbpf.binary_ops import handle_binary_op
+
+        return handle_binary_op(expr, builder, None, local_sym_tab)
     logger.info("Unsupported expression evaluation")
     return None
 
