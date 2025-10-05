@@ -9,6 +9,8 @@ from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.binary_ops import handle_binary_op
 from pythonbpf.expr_pass import eval_expr, handle_expr
 
+from .return_utils import _handle_none_return
+
 
 logger = logging.getLogger(__name__)
 
@@ -353,8 +355,7 @@ def handle_if(
 
 def handle_return(builder, stmt, local_sym_tab, ret_type):
     if stmt.value is None:
-        builder.ret(ir.Constant(ir.IntType(64), 0))
-        return True
+        return _handle_none_return(builder)
     elif (
         isinstance(stmt.value, ast.Call)
         and isinstance(stmt.value.func, ast.Name)
