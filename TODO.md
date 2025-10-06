@@ -5,6 +5,7 @@
 - XDP support in pylibbpf
 - ringbuf support
 - recursive expression resolution
+- Add supoprt for BoolOp and short circuiting in conditions
 
 ## Long term
 
