@@ -131,9 +131,35 @@ def _handle_ctypes_call(
     return val
 
 
+def _handle_comparator(builder, op, lhs, rhs):
+    """Handle comparison operations."""
+
+    # NOTE: For now assume same types
+
+    comparison_ops = {
+        ast.Eq: "==",
+        ast.NotEq: "!=",
+        ast.Lt: "<",
+        ast.LtE: "<=",
+        ast.Gt: ">",
+        ast.GtE: ">=",
+    }
+
+    if type(op) not in comparison_ops:
+        logger.error(f"Unsupported comparison operator: {type(op)}")
+        return None
+
+    predicate = comparison_ops[type(op)]
+    result = builder.icmp_signed(predicate, lhs, rhs)
+    logger.debug(f"Comparison result: {result}")
+    return result, ir.IntType(1)
+
+
 def _handle_compare(
     func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab=None
 ):
+    """Handle ast.Compare expressions."""
+
     if len(cond.ops) != 1 or len(cond.comparators) != 1:
         logger.error("Only single comparisons are supported")
         return None
@@ -162,7 +188,7 @@ def _handle_compare(
 
     lhs, _ = lhs
     rhs, _ = rhs
-    return None
+    return _handle_comparator(builder, cond.ops[0], lhs, rhs)
 
 
 def eval_expr(

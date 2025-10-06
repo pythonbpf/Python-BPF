@@ -240,12 +240,25 @@ def handle_assign(
         logger.info("Unsupported assignment value type")
 
 
+def _convert_to_bool(builder, val):
+    if val.type == ir.IntType(1):
+        return val
+    if isinstance(val.type, ir.PointerType):
+        zero = ir.Constant(val.type, None)
+    else:
+        zero = ir.Constant(val.type, 0)
+    return builder.icmp_signed("!=", val, zero)
+
+
 def handle_cond(func, module, builder, cond, local_sym_tab, map_sym_tab):
+    if True:
+        val = eval_expr(func, module, builder, cond, local_sym_tab, map_sym_tab)[0]
+        return _convert_to_bool(builder, val)
     if isinstance(cond, ast.Constant):
         if isinstance(cond.value, bool) or isinstance(cond.value, int):
-            return ir.Constant(ir.IntType(1), int(bool(cond.value)))
+            return ir.Constant(ir.IntType(1), int(cond.value))
         else:
-            logger.info("Unsupported constant type in condition")
+            raise ValueError("Unsupported constant type in condition")
             return None
     elif isinstance(cond, ast.Name):
         if cond.id in local_sym_tab:
