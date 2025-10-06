@@ -242,9 +242,7 @@ def handle_assign(
 
 def handle_cond(func, module, builder, cond, local_sym_tab, map_sym_tab):
     if isinstance(cond, ast.Constant):
-        if isinstance(cond.value, bool):
-            return ir.Constant(ir.IntType(1), int(cond.value))
-        elif isinstance(cond.value, int):
+        if isinstance(cond.value, bool) or isinstance(cond.value, int):
             return ir.Constant(ir.IntType(1), int(bool(cond.value)))
         else:
             logger.info("Unsupported constant type in condition")
