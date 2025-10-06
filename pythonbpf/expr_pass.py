@@ -22,12 +22,11 @@ def _handle_name_expr(expr: ast.Name, local_sym_tab: Dict, builder: ir.IRBuilder
 
 def _handle_constant_expr(expr: ast.Constant):
     """Handle ast.Constant expressions."""
-    if isinstance(expr.value, int):
-        return ir.Constant(ir.IntType(64), expr.value), ir.IntType(64)
-    elif isinstance(expr.value, bool):
-        return ir.Constant(ir.IntType(1), int(expr.value)), ir.IntType(1)
+    logger.info("We the best")
+    if isinstance(expr.value, int) or isinstance(expr.value, bool):
+        return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
     else:
-        logger.info("Unsupported constant type")
+        logger.error("Unsupported constant type")
         return None
 
 
