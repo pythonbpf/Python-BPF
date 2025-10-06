@@ -132,6 +132,12 @@ def _handle_ctypes_call(
     return val
 
 
+def _handle_compare(
+    func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab=None
+):
+    pass
+
+
 def eval_expr(
     func,
     module,
@@ -212,6 +218,10 @@ def eval_expr(
         from pythonbpf.binary_ops import handle_binary_op
 
         return handle_binary_op(expr, builder, None, local_sym_tab)
+    elif isinstance(expr, ast.Compare):
+        return _handle_compare(
+            func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
     logger.info("Unsupported expression evaluation")
     return None
 
