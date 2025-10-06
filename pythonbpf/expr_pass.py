@@ -133,9 +133,37 @@ def _handle_ctypes_call(
 
 
 def _handle_compare(
-    func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab=None
+    func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab=None
 ):
-    pass
+    if len(cond.ops) != 1 or len(cond.comparators) != 1:
+        logger.error("Only single comparisons are supported")
+        return None
+    lhs = eval_expr(
+        func,
+        module,
+        builder,
+        cond.left,
+        local_sym_tab,
+        map_sym_tab,
+        structs_sym_tab,
+    )
+    rhs = eval_expr(
+        func,
+        module,
+        builder,
+        cond.comparators[0],
+        local_sym_tab,
+        map_sym_tab,
+        structs_sym_tab,
+    )
+
+    if lhs is None or rhs is None:
+        logger.error("Failed to evaluate comparison operands")
+        return None
+
+    lhs, _ = lhs
+    rhs, _ = rhs
+    return None
 
 
 def eval_expr(
