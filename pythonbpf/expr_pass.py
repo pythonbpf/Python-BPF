@@ -22,7 +22,6 @@ def _handle_name_expr(expr: ast.Name, local_sym_tab: Dict, builder: ir.IRBuilder
 
 def _handle_constant_expr(expr: ast.Constant):
     """Handle ast.Constant expressions."""
-    logger.info("We the best")
     if isinstance(expr.value, int) or isinstance(expr.value, bool):
         return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
     else:
@@ -191,6 +190,43 @@ def _handle_compare(
     return _handle_comparator(builder, cond.ops[0], lhs, rhs)
 
 
+def convert_to_bool(builder, val):
+    if val.type == ir.IntType(1):
+        return val
+    if isinstance(val.type, ir.PointerType):
+        zero = ir.Constant(val.type, None)
+    else:
+        zero = ir.Constant(val.type, 0)
+    return builder.icmp_signed("!=", val, zero)
+
+
+def _handle_unary_op(
+    func,
+    module,
+    builder,
+    expr: ast.UnaryOp,
+    local_sym_tab,
+    map_sym_tab,
+    structs_sym_tab=None,
+):
+    """Handle ast.UnaryOp expressions."""
+    if not isinstance(expr.op, ast.Not):
+        logger.error("Only 'not' unary operator is supported")
+        return None
+
+    operand = eval_expr(
+        func, module, builder, expr.operand, local_sym_tab, map_sym_tab, structs_sym_tab
+    )
+    if operand is None:
+        logger.error("Failed to evaluate operand for unary operation")
+        return None
+
+    operand_val, operand_type = operand
+    true_const = ir.Constant(ir.IntType(1), 1)
+    result = builder.xor(convert_to_bool(builder, operand_val), true_const)
+    return result, ir.IntType(1)
+
+
 def eval_expr(
     func,
     module,
@@ -273,6 +309,10 @@ def eval_expr(
         return handle_binary_op(expr, builder, None, local_sym_tab)
     elif isinstance(expr, ast.Compare):
         return _handle_compare(
+            func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+    elif isinstance(expr, ast.UnaryOp):
+        return _handle_unary_op(
             func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
         )
     logger.info("Unsupported expression evaluation")
