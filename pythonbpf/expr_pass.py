@@ -129,10 +129,29 @@ def _handle_ctypes_call(
     return val
 
 
+def _normalize_types(builder, lhs, rhs):
+    """Normalize types for comparison."""
+
+    if isinstance(lhs.type, ir.IntType) and isinstance(rhs.type, ir.IntType):
+        if lhs.type.width < rhs.type.width:
+            lhs = builder.sext(lhs, rhs.type)
+        else:
+            rhs = builder.sext(rhs, lhs.type)
+        return lhs, rhs
+
+    logger.error(f"Type mismatch: {lhs.type} vs {rhs.type}")
+    return None, None
+
+
 def _handle_comparator(builder, op, lhs, rhs):
     """Handle comparison operations."""
 
     # NOTE: For now assume same types
+    if lhs.type != rhs.type:
+        lhs, rhs = _normalize_types(builder, lhs, rhs)
+
+    if lhs is None or rhs is None:
+        return None
 
     comparison_ops = {
         ast.Eq: "==",
