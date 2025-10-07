@@ -43,7 +43,6 @@ def _handle_attribute_expr(
             var_ptr, var_type, var_metadata = local_sym_tab[var_name]
             logger.info(f"Loading attribute {attr_name} from variable {var_name}")
             logger.info(f"Variable type: {var_type}, Variable ptr: {var_ptr}")
-
             metadata = structs_sym_tab[var_metadata]
             if attr_name in metadata.fields:
                 gep = metadata.gep(builder, var_ptr, attr_name)

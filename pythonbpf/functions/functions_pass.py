@@ -240,9 +240,13 @@ def handle_assign(
         logger.info("Unsupported assignment value type")
 
 
-def handle_cond(func, module, builder, cond, local_sym_tab, map_sym_tab):
+def handle_cond(
+    func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab=None
+):
     if True:
-        val = eval_expr(func, module, builder, cond, local_sym_tab, map_sym_tab)[0]
+        val = eval_expr(
+            func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab
+        )[0]
         return convert_to_bool(builder, val)
     if isinstance(cond, ast.Constant):
         if isinstance(cond.value, bool) or isinstance(cond.value, int):
@@ -321,7 +325,9 @@ def handle_if(
     else:
         else_block = None
 
-    cond = handle_cond(func, module, builder, stmt.test, local_sym_tab, map_sym_tab)
+    cond = handle_cond(
+        func, module, builder, stmt.test, local_sym_tab, map_sym_tab, structs_sym_tab
+    )
     if else_block:
         builder.cbranch(cond, then_block, else_block)
     else:

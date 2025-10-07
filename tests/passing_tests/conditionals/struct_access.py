@@ -13,7 +13,7 @@ class data_t:
 @section("tracepoint/syscalls/sys_enter_execve")
 def hello_world(ctx: c_void_p) -> c_int64:
     dat = data_t()
-    if dat.pid:
+    if dat.ts:
         print("Hello, World!")
     else:
         print("Goodbye, World!")
