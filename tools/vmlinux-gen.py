@@ -6,9 +6,10 @@ Converts Linux kernel BTF (BPF Type Format) to Python ctypes definitions.
 This tool automates the process of:
 1. Dumping BTF from vmlinux
 2. Preprocessing enum definitions
-3. Running C preprocessor
-4. Converting to Python ctypes using clang2py
-5. Post-processing the output
+3. Processing struct kioctx to extract anonymous nested structs
+4. Running C preprocessor
+5. Converting to Python ctypes using clang2py
+6. Post-processing the output
 
 Requirements:
 - bpftool
@@ -96,6 +97,115 @@ class BTFConverter:
 
         return output_file
 
+    def step2_5_process_kioctx(self, input_file):
+        #TODO: this is a very bad bug and design decision. A single struct has an issue mostly.
+        """Step 2.5: Process struct kioctx to extract nested anonymous structs."""
+        self.log("Processing struct kioctx nested structs...")
+
+        with open(input_file, 'r') as f:
+            content = f.read()
+
+        # Pattern to match struct kioctx with its full body (handles multiple nesting levels)
+        kioctx_pattern = r'struct\s+kioctx\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\s*;'
+
+        def process_kioctx_replacement(match):
+            full_struct = match.group(0)
+            self.log(f"Found struct kioctx, length: {len(full_struct)} chars")
+
+            # Extract the struct body (everything between outermost { and })
+            body_match = re.search(r'struct\s+kioctx\s*\{(.*)\}\s*;', full_struct, re.DOTALL)
+            if not body_match:
+                return full_struct
+
+            body = body_match.group(1)
+
+            # Find all anonymous structs within the body
+            # Pattern: struct { ... } followed by ; (not a member name)
+            anon_struct_pattern = r'struct\s*\{[^}]*\}'
+
+            anon_structs = []
+            anon_counter = 4  # Start from 4, counting down to 1
+
+            def replace_anonymous_struct(m):
+                nonlocal anon_counter
+                anon_struct_content = m.group(0)
+
+                # Extract the body of the anonymous struct
+                anon_body_match = re.search(r'struct\s*\{(.*)\}', anon_struct_content, re.DOTALL)
+                if not anon_body_match:
+                    return anon_struct_content
+
+                anon_body = anon_body_match.group(1)
+
+                # Create the named struct definition
+                anon_name = f"__anon{anon_counter}"
+                member_name = f"a{anon_counter}"
+
+                # Store the struct definition
+                anon_structs.append(f"struct {anon_name} {{{anon_body}}};")
+
+                anon_counter -= 1
+
+                # Return the member declaration
+                return f"struct {anon_name} {member_name}"
+
+            # Process the body, finding and replacing anonymous structs
+            # We need to be careful to only match anonymous structs followed by ;
+            processed_body = body
+
+            # Find all occurrences and process them
+            pattern_with_semicolon = r'struct\s*\{([^}]*)\}\s*;'
+            matches = list(re.finditer(pattern_with_semicolon, body, re.DOTALL))
+
+            if not matches:
+                self.log("No anonymous structs found in kioctx")
+                return full_struct
+
+            self.log(f"Found {len(matches)} anonymous struct(s)")
+
+            # Process in reverse order to maintain string positions
+            for match in reversed(matches):
+                anon_struct_content = match.group(1)
+                start_pos = match.start()
+                end_pos = match.end()
+
+                # Create the named struct definition
+                anon_name = f"__anon{anon_counter}"
+                member_name = f"a{anon_counter}"
+
+                # Store the struct definition
+                anon_structs.insert(0, f"struct {anon_name} {{{anon_struct_content}}};")
+
+                # Replace in the body
+                replacement = f"struct {anon_name} {member_name};"
+                processed_body = processed_body[:start_pos] + replacement + processed_body[end_pos:]
+
+                anon_counter -= 1
+
+            # Rebuild the complete definition
+            if anon_structs:
+                # Prepend the anonymous struct definitions
+                anon_definitions = '\n'.join(anon_structs) + '\n\n'
+                new_struct = f"struct kioctx {{{processed_body}}};"
+                return anon_definitions + new_struct
+            else:
+                return full_struct
+
+        # Apply the transformation
+        processed_content = re.sub(
+            kioctx_pattern,
+            process_kioctx_replacement,
+            content,
+            flags=re.DOTALL
+        )
+
+        output_file = os.path.join(self.temp_dir, "vmlinux_kioctx_processed.h")
+        with open(output_file, 'w') as f:
+            f.write(processed_content)
+
+        self.log(f"Saved kioctx-processed output to {output_file}")
+        return output_file
+
     def step3_run_preprocessor(self, input_file):
         """Step 2: Run C preprocessor."""
         output_file = os.path.join(self.temp_dir, "vmlinux.i")
@@ -161,7 +271,8 @@ class BTFConverter:
             # Run conversion pipeline
             vmlinux_h = self.step1_dump_btf()
             vmlinux_processed_h = self.step2_preprocess_enums(vmlinux_h)
-            vmlinux_i = self.step3_run_preprocessor(vmlinux_processed_h)
+            vmlinux_kioctx_h = self.step2_5_process_kioctx(vmlinux_processed_h)
+            vmlinux_i = self.step3_run_preprocessor(vmlinux_kioctx_h)
             vmlinux_raw_py = self.step4_convert_to_ctypes(vmlinux_i)
             self.step5_postprocess(vmlinux_raw_py)
 
@@ -169,6 +280,8 @@ class BTFConverter:
 
         except Exception as e:
             print(f"\n✗ Error during conversion: {e}", file=sys.stderr)
+            import traceback
+            traceback.print_exc()
             sys.exit(1)
         finally:
             self.cleanup()
