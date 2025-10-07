@@ -139,6 +139,18 @@ def _get_base_type_and_depth(ir_type):
     return cur_type, depth
 
 
+def _deref_to_depth(builder, val, target_depth):
+    """Dereference a pointer to a certain depth."""
+
+    cur_val = val
+    for _ in range(target_depth):
+        if not isinstance(val.type, ir.PointerType):
+            logger.error("Cannot dereference further, non-pointer type")
+            return None
+        cur_val = builder.load(cur_val)
+    return cur_val
+
+
 def _normalize_types(builder, lhs, rhs):
     """Normalize types for comparison."""
 
