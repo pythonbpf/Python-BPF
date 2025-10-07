@@ -129,6 +129,14 @@ def _handle_ctypes_call(
     return val
 
 
+def _get_base_type(ir_type):
+    """Get the base type for pointer types."""
+    cur_type = ir_type
+    while isinstance(cur_type, ir.PointerType):
+        cur_type = cur_type.pointee
+    return cur_type
+
+
 def _normalize_types(builder, lhs, rhs):
     """Normalize types for comparison."""
 
