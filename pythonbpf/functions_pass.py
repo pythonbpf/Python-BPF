@@ -410,7 +410,7 @@ def process_stmt(
                     raise ValueError("Failed to evaluate return expression")
                 if val[1] != ret_type:
                     raise ValueError(
-                        f"Return type mismatch: expected {ret_type}, got {val[1]}"
+                        "Return type mismatch: expected " f"{ret_type}, got {val[1]}"
                     )
                 builder.ret(val[0])
                 did_return = True
@@ -420,7 +420,8 @@ def process_stmt(
                     val = builder.load(var)
                     if val.type != ret_type:
                         raise ValueError(
-                            f"Return type mismatch: expected{ret_type}, got {val.type}"
+                            "Return type mismatch: expected"
+                            f"{ret_type}, got {val.type}"
                         )
                     builder.ret(val)
                     did_return = True
