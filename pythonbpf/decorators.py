@@ -41,6 +41,7 @@ def section(name: str):
         A decorator function that marks the function with the section name
     """
     def wrapper(fn):
+        """Decorator that sets the section name on the function."""
         fn._section = name
         return fn
 

@@ -26,6 +26,7 @@ class HelperHandlerRegistry:
         """Decorator to register a handler function for a helper"""
 
         def decorator(func):
+            """Decorator that registers the handler function."""
             cls._handlers[helper_name] = func
             return func
 

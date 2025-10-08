@@ -8,11 +8,31 @@ from typing import Any, List
 
 
 class DebugInfoGenerator:
+    """
+    Generator for DWARF/BTF debug information in LLVM IR modules.
+    
+    This class provides methods to create debug metadata for BPF programs,
+    including types, structs, globals, and compilation units.
+    """
+    
     def __init__(self, module):
+        """
+        Initialize the debug info generator.
+        
+        Args:
+            module: LLVM IR module to attach debug info to
+        """
         self.module = module
         self._type_cache = {}  # Cache for common debug types
 
     def generate_file_metadata(self, filename, dirname):
+        """
+        Generate file metadata for debug info.
+        
+        Args:
+            filename: Name of the source file
+            dirname: Directory containing the source file
+        """
         self.module._file_metadata = self.module.add_debug_info(
             "DIFile",
             {  # type: ignore
@@ -24,6 +44,15 @@ class DebugInfoGenerator:
     def generate_debug_cu(
         self, language, producer: str, is_optimized: bool, is_distinct: bool
     ):
+        """
+        Generate debug compile unit metadata.
+        
+        Args:
+            language: DWARF language code (e.g., DW_LANG_C11)
+            producer: Compiler/producer string
+            is_optimized: Whether the code is optimized
+            is_distinct: Whether the compile unit should be distinct
+        """
         self.module._debug_compile_unit = self.module.add_debug_info(
             "DICompileUnit",
             {  # type: ignore
@@ -83,6 +112,16 @@ class DebugInfoGenerator:
 
     @staticmethod
     def _compute_array_size(base_type: Any, count: int) -> int:
+        """
+        Compute the size of an array in bits.
+        
+        Args:
+            base_type: The base type of the array
+            count: Number of elements in the array
+        
+        Returns:
+            Total size in bits
+        """
         # Extract size from base_type if possible
         # For simplicity, assuming base_type has a size attribute
         return getattr(base_type, "size", 32) * count

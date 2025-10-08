@@ -1,3 +1,5 @@
+"""Registry for statement handler functions."""
+
 from typing import Dict
 
 
@@ -11,6 +13,7 @@ class StatementHandlerRegistry:
         """Register a handler for a specific statement type."""
 
         def decorator(handler):
+            """Decorator that registers the handler."""
             cls._handlers[stmt_type] = handler
             return handler
 

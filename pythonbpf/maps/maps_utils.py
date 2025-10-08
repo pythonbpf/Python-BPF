@@ -1,3 +1,5 @@
+"""Registry for BPF map processor functions."""
+
 from collections.abc import Callable
 from typing import Any
 
@@ -12,6 +14,7 @@ class MapProcessorRegistry:
         """Decorator to register a processor function for a map type"""
 
         def decorator(func):
+            """Decorator that registers the processor function."""
             cls._processors[map_type_name] = func
             return func
 

@@ -43,6 +43,7 @@ def is_map(func_node):
 
 
 class BPFMapType(Enum):
+    """Enumeration of BPF map types."""
     UNSPEC = 0
     HASH = 1
     ARRAY = 2

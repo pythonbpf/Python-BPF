@@ -25,11 +25,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LocalSymbol:
+    """
+    Represents a local variable in a BPF function.
+    
+    Attributes:
+        var: LLVM IR alloca instruction for the variable
+        ir_type: LLVM IR type of the variable
+        metadata: Optional metadata (e.g., struct type name)
+    """
     var: ir.AllocaInstr
     ir_type: ir.Type
     metadata: Any = None
 
     def __iter__(self):
+        """Support tuple unpacking of LocalSymbol."""
         yield self.var
         yield self.ir_type
         yield self.metadata
@@ -692,6 +701,7 @@ def infer_return_type(func_node: ast.FunctionDef):
     found_type = None
 
     def _expr_type(e):
+        """Helper function to extract type from an expression."""
         if e is None:
             return "None"
         if isinstance(e, ast.Constant):
