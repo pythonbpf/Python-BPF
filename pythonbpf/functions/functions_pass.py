@@ -48,8 +48,11 @@ def handle_assign(
     func, module, builder, stmt, map_sym_tab, local_sym_tab, structs_sym_tab
 ):
     """Handle assignment statements in the function body."""
+
+    # TODO: Support this later
+    # GH #37
     if len(stmt.targets) != 1:
-        logger.info("Unsupported multiassignment")
+        logger.error("Multi-target assignment is not supported for now")
         return
 
     num_types = ("c_int32", "c_int64", "c_uint32", "c_uint64")
