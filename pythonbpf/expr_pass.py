@@ -315,6 +315,14 @@ def _handle_unary_op(
     return result, ir.IntType(1)
 
 
+def _handle_and_op(func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab):
+    pass
+
+
+def _handle_or_op(func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab):
+    pass
+
+
 def _handle_boolean_op(
     func,
     module,
@@ -324,7 +332,19 @@ def _handle_boolean_op(
     map_sym_tab,
     structs_sym_tab=None,
 ):
-    pass
+    """Handle `and` and `or` boolean operations."""
+
+    if isinstance(expr.op, ast.And):
+        return _handle_and_op(
+            func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+    elif isinstance(expr.op, ast.Or):
+        return _handle_or_op(
+            func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+    else:
+        logger.error(f"Unsupported boolean operator: {type(expr.op).__name__}")
+        return None
 
 
 def eval_expr(
