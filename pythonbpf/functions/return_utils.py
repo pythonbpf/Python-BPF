@@ -1,3 +1,10 @@
+"""
+Utility functions for handling return statements in BPF functions.
+
+Provides handlers for different types of returns including XDP actions,
+None returns, and standard returns.
+"""
+
 import logging
 import ast
 

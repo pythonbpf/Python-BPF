@@ -1,3 +1,9 @@
+"""
+DWARF debugging format constants.
+
+Generated constants from dwarf.h for use in debug information generation.
+"""
+
 # generated constants from dwarf.h
 
 DW_UT_compile = 0x01
