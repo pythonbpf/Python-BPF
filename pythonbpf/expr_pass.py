@@ -369,7 +369,56 @@ def _handle_and_op(func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_
 
 
 def _handle_or_op(func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab):
-    pass
+    """Handle `or` boolean operations."""
+
+    logger.debug(f"Handling 'or' operator with {len(expr.values)} operands")
+
+    merge_block = func.append_basic_block(name="or.merge")
+    true_block = func.append_basic_block(name="or.true")
+
+    incoming_values = []
+
+    for i, value in enumerate(expr.values):
+        is_last = i == len(expr.values) - 1
+
+        # Evaluate current operand
+        operand_result = eval_expr(
+            func, None, builder, value, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+        if operand_result is None:
+            logger.error(f"Failed to evaluate operand {i} in 'or' expression")
+            return None
+
+        operand_val, operand_type = operand_result
+
+        # Convert to boolean if needed
+        operand_bool = convert_to_bool(builder, operand_val)
+        current_block = builder.block
+
+        if is_last:
+            # Last operand: result is this value
+            builder.branch(merge_block)
+            incoming_values.append((operand_bool, current_block))
+        else:
+            # Not last: check if false, continue or short-circuit
+            next_check = func.append_basic_block(name=f"or.check_{i + 1}")
+            builder.cbranch(operand_bool, true_block, next_check)
+            builder.position_at_end(next_check)
+
+    # True block: short-circuit with true
+    builder.position_at_end(true_block)
+    builder.branch(merge_block)
+    true_value = ir.Constant(ir.IntType(1), 1)
+    incoming_values.append((true_value, true_block))
+
+    # Merge block: phi node
+    builder.position_at_end(merge_block)
+    phi = builder.phi(ir.IntType(1), name="or.result")
+    for val, block in incoming_values:
+        phi.add_incoming(val, block)
+
+    logger.debug(f"Generated 'or' with {len(incoming_values)} incoming values")
+    return phi, ir.IntType(1)
 
 
 def _handle_boolean_op(
