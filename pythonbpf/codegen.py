@@ -4,7 +4,11 @@ from .license_pass import license_processing
 from .functions import func_proc
 from .maps import maps_proc
 from .structs import structs_proc
-from .globals_pass import globals_processing
+from .globals_pass import (
+    globals_list_creation,
+    globals_processing,
+    populate_global_symbol_table,
+)
 from .debuginfo import DW_LANG_C11, DwarfBehaviorEnum, DebugInfoGenerator
 import os
 import subprocess
@@ -40,12 +44,15 @@ def processor(source_code, filename, module):
     for func_node in bpf_chunks:
         logger.info(f"Found BPF function/struct: {func_node.name}")
 
+    populate_global_symbol_table(tree, module)
+    license_processing(tree, module)
+    globals_processing(tree, module)
+
     structs_sym_tab = structs_proc(tree, module, bpf_chunks)
     map_sym_tab = maps_proc(tree, module, bpf_chunks)
     func_proc(tree, module, bpf_chunks, map_sym_tab, structs_sym_tab)
 
-    license_processing(tree, module)
-    globals_processing(tree, module)
+    globals_list_creation(tree, module)
 
 
 def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
