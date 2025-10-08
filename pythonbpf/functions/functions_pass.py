@@ -243,73 +243,10 @@ def handle_assign(
 def handle_cond(
     func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab=None
 ):
-    if True:
-        val = eval_expr(
-            func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab
-        )[0]
-        return convert_to_bool(builder, val)
-    if isinstance(cond, ast.Constant):
-        if isinstance(cond.value, bool) or isinstance(cond.value, int):
-            return ir.Constant(ir.IntType(1), int(cond.value))
-        else:
-            raise ValueError("Unsupported constant type in condition")
-            return None
-    elif isinstance(cond, ast.Name):
-        if cond.id in local_sym_tab:
-            var = local_sym_tab[cond.id].var
-            val = builder.load(var)
-            if val.type != ir.IntType(1):
-                # Convert nonzero values to true, zero to false
-                if isinstance(val.type, ir.PointerType):
-                    # For pointer types, compare with null pointer
-                    zero = ir.Constant(val.type, None)
-                else:
-                    # For integer types, compare with zero
-                    zero = ir.Constant(val.type, 0)
-                val = builder.icmp_signed("!=", val, zero)
-            return val
-        else:
-            logger.info(f"Undefined variable {cond.id} in condition")
-            return None
-    elif isinstance(cond, ast.Compare):
-        lhs = eval_expr(func, module, builder, cond.left, local_sym_tab, map_sym_tab)[0]
-        if len(cond.ops) != 1 or len(cond.comparators) != 1:
-            logger.info("Unsupported complex comparison")
-            return None
-        rhs = eval_expr(
-            func, module, builder, cond.comparators[0], local_sym_tab, map_sym_tab
-        )[0]
-        op = cond.ops[0]
-
-        if lhs.type != rhs.type:
-            if isinstance(lhs.type, ir.IntType) and isinstance(rhs.type, ir.IntType):
-                # Extend the smaller type to the larger type
-                if lhs.type.width < rhs.type.width:
-                    lhs = builder.sext(lhs, rhs.type)
-                elif lhs.type.width > rhs.type.width:
-                    rhs = builder.sext(rhs, lhs.type)
-            else:
-                logger.info("Type mismatch in comparison")
-                return None
-
-        if isinstance(op, ast.Eq):
-            return builder.icmp_signed("==", lhs, rhs)
-        elif isinstance(op, ast.NotEq):
-            return builder.icmp_signed("!=", lhs, rhs)
-        elif isinstance(op, ast.Lt):
-            return builder.icmp_signed("<", lhs, rhs)
-        elif isinstance(op, ast.LtE):
-            return builder.icmp_signed("<=", lhs, rhs)
-        elif isinstance(op, ast.Gt):
-            return builder.icmp_signed(">", lhs, rhs)
-        elif isinstance(op, ast.GtE):
-            return builder.icmp_signed(">=", lhs, rhs)
-        else:
-            logger.info("Unsupported comparison operator")
-            return None
-    else:
-        logger.info("Unsupported condition expression")
-        return None
+    val = eval_expr(
+        func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab
+    )[0]
+    return convert_to_bool(builder, val)
 
 
 def handle_if(
