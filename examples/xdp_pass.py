@@ -1,8 +1,8 @@
 from pythonbpf import bpf, map, section, bpfglobal, compile, compile_to_ir
 from pythonbpf.helper import XDP_PASS
 from pythonbpf.maps import HashMap
-from vmlinux import struct_xdp_md
-from ctypes import c_void_p, c_int64
+from ctypes import c_int64, c_void_p
+
 
 # Instructions to how to run this program
 # 1. Install PythonBPF: pip install pythonbpf
@@ -20,7 +20,7 @@ def count() -> HashMap:
 
 @bpf
 @section("xdp")
-def hello_world(ctx: struct_xdp_md) -> c_int64:
+def hello_world(ctx: c_void_p) -> c_int64:
     key = 0
     one = 1
     prev = count().lookup(key)

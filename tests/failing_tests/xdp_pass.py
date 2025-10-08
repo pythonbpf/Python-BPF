@@ -1,7 +1,7 @@
 from pythonbpf import bpf, map, section, bpfglobal, compile, compile_to_ir
 from pythonbpf.maps import HashMap
 from vmlinux import struct_xdp_md, XDP_PASS
-from ctypes import c_void_p, c_int64
+from ctypes import c_int64
 
 # Instructions to how to run this program
 # 1. Install PythonBPF: pip install pythonbpf
