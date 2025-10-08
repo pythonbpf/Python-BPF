@@ -5,7 +5,7 @@ import logging
 from typing import Dict
 
 from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
-from .type_normalization import normalize_types, convert_to_bool
+from .type_normalization import convert_to_bool, handle_comparator
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -130,37 +130,6 @@ def _handle_ctypes_call(
     return val
 
 
-def _handle_comparator(func, builder, op, lhs, rhs):
-    """Handle comparison operations."""
-
-    # NOTE: For now assume same types
-    if lhs.type != rhs.type:
-        lhs, rhs = normalize_types(func, builder, lhs, rhs)
-
-    if lhs is None or rhs is None:
-        return None
-
-    comparison_ops = {
-        ast.Eq: "==",
-        ast.NotEq: "!=",
-        ast.Lt: "<",
-        ast.LtE: "<=",
-        ast.Gt: ">",
-        ast.GtE: ">=",
-        ast.Is: "==",
-        ast.IsNot: "!=",
-    }
-
-    if type(op) not in comparison_ops:
-        logger.error(f"Unsupported comparison operator: {type(op)}")
-        return None
-
-    predicate = comparison_ops[type(op)]
-    result = builder.icmp_signed(predicate, lhs, rhs)
-    logger.debug(f"Comparison result: {result}")
-    return result, ir.IntType(1)
-
-
 def _handle_compare(
     func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab=None
 ):
@@ -194,7 +163,7 @@ def _handle_compare(
 
     lhs, _ = lhs
     rhs, _ = rhs
-    return _handle_comparator(func, builder, cond.ops[0], lhs, rhs)
+    return handle_comparator(func, builder, cond.ops[0], lhs, rhs)
 
 
 def _handle_unary_op(
