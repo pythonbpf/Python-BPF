@@ -10,3 +10,4 @@
 
 - Refactor the codebase to be better than a hackathon project
 - Port to C++ and use actual LLVM?
+- Fix struct_kioctx issue in the vmlinux transpiler
