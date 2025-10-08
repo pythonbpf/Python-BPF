@@ -7,6 +7,16 @@ logger: Logger = logging.getLogger(__name__)
 
 
 def emit_license(module: ir.Module, license_str: str):
+    """
+    Emit a LICENSE global variable into the LLVM IR module.
+    
+    Args:
+        module: The LLVM IR module to add the LICENSE variable to
+        license_str: The license string (e.g., 'GPL')
+    
+    Returns:
+        The created global variable
+    """
     license_bytes = license_str.encode("utf8") + b"\x00"
     elems = [ir.Constant(ir.IntType(8), b) for b in license_bytes]
     ty = ir.ArrayType(ir.IntType(8), len(elems))

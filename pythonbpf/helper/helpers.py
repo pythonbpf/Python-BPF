@@ -2,10 +2,22 @@ import ctypes
 
 
 def ktime():
+    """
+    Get the current kernel time in nanoseconds.
+    
+    Returns:
+        A c_int64 stub value (actual implementation is in BPF runtime)
+    """
     return ctypes.c_int64(0)
 
 
 def pid():
+    """
+    Get the current process ID (PID).
+    
+    Returns:
+        A c_int32 stub value (actual implementation is in BPF runtime)
+    """
     return ctypes.c_int32(0)
 
 

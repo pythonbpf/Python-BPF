@@ -26,6 +26,15 @@ def structs_proc(tree, module, chunks):
 
 
 def is_bpf_struct(cls_node):
+    """
+    Check if a class node is decorated with @struct.
+    
+    Args:
+        cls_node: The AST class node to check
+    
+    Returns:
+        True if the class is decorated with @struct, False otherwise
+    """
     return any(
         isinstance(decorator, ast.Name) and decorator.id == "struct"
         for decorator in cls_node.decorator_list
@@ -33,7 +42,16 @@ def is_bpf_struct(cls_node):
 
 
 def process_bpf_struct(cls_node, module):
-    """Process a single BPF struct definition"""
+    """
+    Process a single BPF struct definition and create its LLVM IR representation.
+    
+    Args:
+        cls_node: The AST class node representing the struct
+        module: The LLVM IR module (not used in current implementation)
+    
+    Returns:
+        A StructType object containing the struct's type information
+    """
 
     fields = parse_struct_fields(cls_node)
     field_types = list(fields.values())
@@ -44,7 +62,18 @@ def process_bpf_struct(cls_node, module):
 
 
 def parse_struct_fields(cls_node):
-    """Parse fields of a struct class node"""
+    """
+    Parse fields of a struct class node.
+    
+    Args:
+        cls_node: The AST class node representing the struct
+    
+    Returns:
+        A dictionary mapping field names to their LLVM IR types
+    
+    Raises:
+        TypeError: If a field has an unsupported type annotation
+    """
     fields = {}
 
     for item in cls_node.body:
@@ -57,7 +86,18 @@ def parse_struct_fields(cls_node):
 
 
 def get_type_from_ann(annotation):
-    """Convert an AST annotation node to an LLVM IR type for struct fields"""
+    """
+    Convert an AST annotation node to an LLVM IR type for struct fields.
+    
+    Args:
+        annotation: The AST annotation node (e.g., c_int64, str(32))
+    
+    Returns:
+        The corresponding LLVM IR type
+    
+    Raises:
+        TypeError: If the annotation type is not supported
+    """
     if isinstance(annotation, ast.Call) and isinstance(annotation.func, ast.Name):
         if annotation.func.id == "str":
             # Char array
@@ -72,7 +112,15 @@ def get_type_from_ann(annotation):
 
 
 def calc_struct_size(field_types):
-    """Calculate total size of the struct with alignment and padding"""
+    """
+    Calculate total size of the struct with alignment and padding.
+    
+    Args:
+        field_types: List of LLVM IR types for each field
+    
+    Returns:
+        The total size of the struct in bytes
+    """
     curr_offset = 0
     for ftype in field_types:
         if isinstance(ftype, ir.IntType):

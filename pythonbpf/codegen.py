@@ -37,6 +37,14 @@ def find_bpf_chunks(tree):
 
 
 def processor(source_code, filename, module):
+    """
+    Process Python source code and convert BPF-decorated functions to LLVM IR.
+    
+    Args:
+        source_code: The Python source code to process
+        filename: The name of the source file
+        module: The LLVM IR module to populate
+    """
     tree = ast.parse(source_code, filename)
     logger.debug(ast.dump(tree, indent=4))
 
@@ -56,6 +64,17 @@ def processor(source_code, filename, module):
 
 
 def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
+    """
+    Compile a Python BPF program to LLVM IR.
+    
+    Args:
+        filename: Path to the Python source file containing BPF programs
+        output: Path where the LLVM IR (.ll) file will be written
+        loglevel: Logging level for compilation messages
+    
+    Returns:
+        Path to the generated LLVM IR file
+    """
     logging.basicConfig(
         level=loglevel, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
@@ -129,6 +148,18 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
 
 
 def compile(loglevel=logging.INFO) -> bool:
+    """
+    Compile the calling Python BPF program to an object file.
+    
+    This function should be called from a Python file containing BPF programs.
+    It will compile the calling file to LLVM IR and then to a BPF object file.
+    
+    Args:
+        loglevel: Logging level for compilation messages
+    
+    Returns:
+        True if compilation succeeded, False otherwise
+    """
     # Look one level up the stack to the caller of this function
     caller_frame = inspect.stack()[1]
     caller_file = Path(caller_frame.filename).resolve()
@@ -162,6 +193,18 @@ def compile(loglevel=logging.INFO) -> bool:
 
 
 def BPF(loglevel=logging.INFO) -> BpfProgram:
+    """
+    Compile the calling Python BPF program and return a BpfProgram object.
+    
+    This function compiles the calling file's BPF programs to an object file
+    and loads it into a BpfProgram object for immediate use.
+    
+    Args:
+        loglevel: Logging level for compilation messages
+    
+    Returns:
+        A BpfProgram object that can be used to load and attach BPF programs
+    """
     caller_frame = inspect.stack()[1]
     src = inspect.getsource(caller_frame.frame)
     with tempfile.NamedTemporaryFile(

@@ -23,6 +23,15 @@ def struct(cls):
 
 
 def section(name: str):
+    """
+    Decorator to specify the ELF section name for a BPF program.
+    
+    Args:
+        name: The section name (e.g., 'xdp', 'tracepoint/syscalls/sys_enter_execve')
+    
+    Returns:
+        A decorator function that marks the function with the section name
+    """
     def wrapper(fn):
         fn._section = name
         return fn

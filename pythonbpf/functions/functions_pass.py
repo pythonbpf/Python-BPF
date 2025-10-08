@@ -243,6 +243,21 @@ def handle_assign(
 def handle_cond(
     func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab=None
 ):
+    """
+    Evaluate a condition expression and convert it to a boolean value.
+    
+    Args:
+        func: The LLVM IR function being built
+        module: The LLVM IR module
+        builder: LLVM IR builder
+        cond: The AST condition node to evaluate
+        local_sym_tab: Local symbol table
+        map_sym_tab: Map symbol table
+        structs_sym_tab: Struct symbol table
+    
+    Returns:
+        LLVM IR boolean value representing the condition result
+    """
     val = eval_expr(
         func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab
     )[0]
@@ -298,6 +313,18 @@ def handle_if(
 
 
 def handle_return(builder, stmt, local_sym_tab, ret_type):
+    """
+    Handle return statements in BPF functions.
+    
+    Args:
+        builder: LLVM IR builder
+        stmt: The AST Return node
+        local_sym_tab: Local symbol table
+        ret_type: Expected return type
+    
+    Returns:
+        True if a return was emitted, False otherwise
+    """
     logger.info(f"Handling return statement: {ast.dump(stmt)}")
     if stmt.value is None:
         return _handle_none_return(builder)
@@ -329,6 +356,23 @@ def process_stmt(
     did_return,
     ret_type=ir.IntType(64),
 ):
+    """
+    Process a single statement in a BPF function.
+    
+    Args:
+        func: The LLVM IR function being built
+        module: The LLVM IR module
+        builder: LLVM IR builder
+        stmt: The AST statement node to process
+        local_sym_tab: Local symbol table
+        map_sym_tab: Map symbol table
+        structs_sym_tab: Struct symbol table
+        did_return: Whether a return has been emitted
+        ret_type: Expected return type
+    
+    Returns:
+        True if a return was emitted, False otherwise
+    """
     logger.info(f"Processing statement: {ast.dump(stmt)}")
     if isinstance(stmt, ast.Expr):
         handle_expr(
@@ -363,6 +407,25 @@ def process_stmt(
 def allocate_mem(
     module, builder, body, func, ret_type, map_sym_tab, local_sym_tab, structs_sym_tab
 ):
+    """
+    Pre-allocate stack memory for local variables in a BPF function.
+    
+    This function scans the function body and creates alloca instructions
+    for all local variables before processing the function statements.
+    
+    Args:
+        module: The LLVM IR module
+        builder: LLVM IR builder
+        body: List of AST statements in the function body
+        func: The LLVM IR function being built
+        ret_type: Expected return type
+        map_sym_tab: Map symbol table
+        local_sym_tab: Local symbol table to populate
+        structs_sym_tab: Struct symbol table
+    
+    Returns:
+        Updated local symbol table
+    """
     for stmt in body:
         has_metadata = False
         if isinstance(stmt, ast.If):
@@ -556,6 +619,16 @@ def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_t
 
 
 def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab):
+    """
+    Process all BPF function chunks and generate LLVM IR.
+    
+    Args:
+        tree: The Python AST (not used in current implementation)
+        module: The LLVM IR module to add functions to
+        chunks: List of AST function nodes decorated with @bpf
+        map_sym_tab: Map symbol table
+        structs_sym_tab: Struct symbol table
+    """
     for func_node in chunks:
         is_global = False
         for decorator in func_node.decorator_list:
@@ -581,6 +654,18 @@ def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab):
 
 
 def infer_return_type(func_node: ast.FunctionDef):
+    """
+    Infer the return type of a BPF function from annotations or return statements.
+    
+    Args:
+        func_node: The AST function node
+    
+    Returns:
+        String representation of the return type (e.g., 'c_int64')
+    
+    Raises:
+        TypeError: If func_node is not a FunctionDef
+    """
     if not isinstance(func_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
         raise TypeError("Expected ast.FunctionDef")
     if func_node.returns is not None:

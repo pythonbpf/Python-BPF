@@ -17,7 +17,15 @@ COMPARISON_OPS = {
 
 
 def _get_base_type_and_depth(ir_type):
-    """Get the base type for pointer types."""
+    """
+    Get the base type and pointer depth for an LLVM IR type.
+    
+    Args:
+        ir_type: The LLVM IR type to analyze
+    
+    Returns:
+        A tuple of (base_type, depth) where depth is the number of pointer levels
+    """
     cur_type = ir_type
     depth = 0
     while isinstance(cur_type, ir.PointerType):
@@ -27,7 +35,18 @@ def _get_base_type_and_depth(ir_type):
 
 
 def _deref_to_depth(func, builder, val, target_depth):
-    """Dereference a pointer to a certain depth."""
+    """
+    Dereference a pointer to a certain depth with null checks.
+    
+    Args:
+        func: The LLVM IR function being built
+        builder: LLVM IR builder
+        val: The pointer value to dereference
+        target_depth: Number of levels to dereference
+    
+    Returns:
+        The dereferenced value, or None if dereferencing fails
+    """
 
     cur_val = val
     cur_type = val.type
@@ -73,7 +92,18 @@ def _deref_to_depth(func, builder, val, target_depth):
 
 
 def _normalize_types(func, builder, lhs, rhs):
-    """Normalize types for comparison."""
+    """
+    Normalize types for comparison by casting or dereferencing as needed.
+    
+    Args:
+        func: The LLVM IR function being built
+        builder: LLVM IR builder
+        lhs: Left-hand side value
+        rhs: Right-hand side value
+    
+    Returns:
+        A tuple of (normalized_lhs, normalized_rhs) or (None, None) on error
+    """
 
     logger.info(f"Normalizing types: {lhs.type} vs {rhs.type}")
     if isinstance(lhs.type, ir.IntType) and isinstance(rhs.type, ir.IntType):
@@ -99,7 +129,16 @@ def _normalize_types(func, builder, lhs, rhs):
 
 
 def convert_to_bool(builder, val):
-    """Convert a value to boolean."""
+    """
+    Convert an LLVM IR value to a boolean (i1) type.
+    
+    Args:
+        builder: LLVM IR builder
+        val: The value to convert
+    
+    Returns:
+        An i1 boolean value
+    """
     if val.type == ir.IntType(1):
         return val
     if isinstance(val.type, ir.PointerType):
@@ -110,7 +149,19 @@ def convert_to_bool(builder, val):
 
 
 def handle_comparator(func, builder, op, lhs, rhs):
-    """Handle comparison operations."""
+    """
+    Handle comparison operations between two values.
+    
+    Args:
+        func: The LLVM IR function being built
+        builder: LLVM IR builder
+        op: The AST comparison operator node
+        lhs: Left-hand side value
+        rhs: Right-hand side value
+    
+    Returns:
+        A tuple of (result, ir.IntType(1)) or None on error
+    """
 
     if lhs.type != rhs.type:
         lhs, rhs = _normalize_types(func, builder, lhs, rhs)

@@ -332,6 +332,21 @@ def eval_expr(
     map_sym_tab,
     structs_sym_tab=None,
 ):
+    """
+    Evaluate an expression and return its LLVM IR value and type.
+    
+    Args:
+        func: The LLVM IR function being built
+        module: The LLVM IR module
+        builder: LLVM IR builder
+        expr: The AST expression node to evaluate
+        local_sym_tab: Local symbol table
+        map_sym_tab: Map symbol table
+        structs_sym_tab: Struct symbol table
+    
+    Returns:
+        A tuple of (value, type) or None if evaluation fails
+    """
     logger.info(f"Evaluating expression: {ast.dump(expr)}")
     if isinstance(expr, ast.Name):
         return _handle_name_expr(expr, local_sym_tab, builder)

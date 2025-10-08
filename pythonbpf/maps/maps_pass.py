@@ -20,6 +20,15 @@ def maps_proc(tree, module, chunks):
 
 
 def is_map(func_node):
+    """
+    Check if a function node is decorated with @map.
+    
+    Args:
+        func_node: The AST function node to check
+    
+    Returns:
+        True if the function is decorated with @map, False otherwise
+    """
     return any(
         isinstance(decorator, ast.Name) and decorator.id == "map"
         for decorator in func_node.decorator_list
@@ -65,7 +74,17 @@ class BPFMapType(Enum):
 
 
 def create_bpf_map(module, map_name, map_params):
-    """Create a BPF map in the module with given parameters and debug info"""
+    """
+    Create a BPF map in the module with given parameters and debug info.
+    
+    Args:
+        module: The LLVM IR module to add the map to
+        map_name: The name of the BPF map
+        map_params: Dictionary of map parameters (type, key_size, value_size, max_entries)
+    
+    Returns:
+        The created global variable representing the map
+    """
 
     # Create the anonymous struct type for BPF map
     map_struct_type = ir.LiteralStructType(
