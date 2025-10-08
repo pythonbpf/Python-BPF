@@ -315,6 +315,18 @@ def _handle_unary_op(
     return result, ir.IntType(1)
 
 
+def _handle_boolean_op(
+    func,
+    module,
+    builder,
+    expr: ast.BoolOp,
+    local_sym_tab,
+    map_sym_tab,
+    structs_sym_tab=None,
+):
+    pass
+
+
 def eval_expr(
     func,
     module,
@@ -401,6 +413,10 @@ def eval_expr(
         )
     elif isinstance(expr, ast.UnaryOp):
         return _handle_unary_op(
+            func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+    elif isinstance(expr, ast.BoolOp):
+        return _handle_boolean_op(
             func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
         )
     logger.info("Unsupported expression evaluation")
