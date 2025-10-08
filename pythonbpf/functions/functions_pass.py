@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pythonbpf.helper import HelperHandlerRegistry, handle_helper_call
 from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.binary_ops import handle_binary_op
-from pythonbpf.expr_pass import eval_expr, handle_expr, convert_to_bool
+from pythonbpf.expr import eval_expr, handle_expr, convert_to_bool
 
 from .return_utils import _handle_none_return, _handle_xdp_return, _is_xdp_name
 
