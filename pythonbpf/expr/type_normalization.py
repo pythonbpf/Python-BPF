@@ -1,7 +1,19 @@
 from llvmlite import ir
 import logging
+import ast
 
 logger = logging.getLogger(__name__)
+
+COMPARISON_OPS = {
+    ast.Eq: "==",
+    ast.NotEq: "!=",
+    ast.Lt: "<",
+    ast.LtE: "<=",
+    ast.Gt: ">",
+    ast.GtE: ">=",
+    ast.Is: "==",
+    ast.IsNot: "!=",
+}
 
 
 def _get_base_type_and_depth(ir_type):
@@ -60,7 +72,7 @@ def _deref_to_depth(func, builder, val, target_depth):
     return cur_val
 
 
-def normalize_types(func, builder, lhs, rhs):
+def _normalize_types(func, builder, lhs, rhs):
     """Normalize types for comparison."""
 
     logger.info(f"Normalizing types: {lhs.type} vs {rhs.type}")
@@ -83,7 +95,7 @@ def normalize_types(func, builder, lhs, rhs):
                 rhs = _deref_to_depth(func, builder, rhs, rhs_depth - lhs_depth)
             elif rhs_depth < lhs_depth:
                 lhs = _deref_to_depth(func, builder, lhs, lhs_depth - rhs_depth)
-            return normalize_types(func, builder, lhs, rhs)
+            return _normalize_types(func, builder, lhs, rhs)
 
 
 def convert_to_bool(builder, val):
@@ -95,3 +107,22 @@ def convert_to_bool(builder, val):
     else:
         zero = ir.Constant(val.type, 0)
     return builder.icmp_signed("!=", val, zero)
+
+
+def handle_comparator(func, builder, op, lhs, rhs):
+    """Handle comparison operations."""
+
+    if lhs.type != rhs.type:
+        lhs, rhs = _normalize_types(func, builder, lhs, rhs)
+
+    if lhs is None or rhs is None:
+        return None
+
+    if type(op) not in COMPARISON_OPS:
+        logger.error(f"Unsupported comparison operator: {type(op)}")
+        return None
+
+    predicate = COMPARISON_OPS[type(op)]
+    result = builder.icmp_signed(predicate, lhs, rhs)
+    logger.debug(f"Comparison result: {result}")
+    return result, ir.IntType(1)
