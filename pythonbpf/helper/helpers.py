@@ -15,5 +15,8 @@ def deref(ptr):
     return result if result is not None else 0
 
 
+XDP_ABORTED = ctypes.c_int64(0)
 XDP_DROP = ctypes.c_int64(1)
 XDP_PASS = ctypes.c_int64(2)
+XDP_TX = ctypes.c_int64(3)
+XDP_REDIRECT = ctypes.c_int64(4)

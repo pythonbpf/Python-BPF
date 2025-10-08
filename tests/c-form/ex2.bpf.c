@@ -4,7 +4,6 @@
 
 SEC("xdp")
 int hello(struct xdp_md *ctx) {
-    // ctx.
     bpf_printk("Hello, World! %ud \n", ctx->data);
     return XDP_PASS;
 }
