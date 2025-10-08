@@ -1,3 +1,5 @@
+"""Expression evaluation and processing for BPF programs."""
+
 from .expr_pass import eval_expr, handle_expr
 from .type_normalization import convert_to_bool
 

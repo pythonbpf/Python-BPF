@@ -1,3 +1,11 @@
+"""
+Utility functions for BPF helper function handling.
+
+This module provides utility functions for processing BPF helper function
+calls, including argument handling, string formatting for bpf_printk,
+and a registry for helper function handlers.
+"""
+
 import ast
 import logging
 from collections.abc import Callable
@@ -35,14 +43,36 @@ class HelperHandlerRegistry:
 
 
 def get_var_ptr_from_name(var_name, local_sym_tab):
-    """Get a pointer to a variable from the symbol table."""
+    """
+    Get a pointer to a variable from the symbol table.
+    
+    Args:
+        var_name: Name of the variable to look up
+        local_sym_tab: Local symbol table
+    
+    Returns:
+        Pointer to the variable
+    
+    Raises:
+        ValueError: If the variable is not found
+    """
     if local_sym_tab and var_name in local_sym_tab:
         return local_sym_tab[var_name].var
     raise ValueError(f"Variable '{var_name}' not found in local symbol table")
 
 
 def create_int_constant_ptr(value, builder, int_width=64):
-    """Create a pointer to an integer constant."""
+    """
+    Create a pointer to an integer constant.
+    
+    Args:
+        value: The integer value
+        builder: LLVM IR builder
+        int_width: Width of the integer in bits (default: 64)
+    
+    Returns:
+        Pointer to the allocated integer constant
+    """
     # Default to 64-bit integer
     int_type = ir.IntType(int_width)
     ptr = builder.alloca(int_type)
@@ -52,7 +82,20 @@ def create_int_constant_ptr(value, builder, int_width=64):
 
 
 def get_or_create_ptr_from_arg(arg, builder, local_sym_tab):
-    """Extract or create pointer from the call arguments."""
+    """
+    Extract or create pointer from call arguments.
+    
+    Args:
+        arg: The AST argument node
+        builder: LLVM IR builder
+        local_sym_tab: Local symbol table
+    
+    Returns:
+        Pointer to the argument value
+    
+    Raises:
+        NotImplementedError: If the argument type is not supported
+    """
 
     if isinstance(arg, ast.Name):
         ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
@@ -66,7 +109,21 @@ def get_or_create_ptr_from_arg(arg, builder, local_sym_tab):
 
 
 def get_flags_val(arg, builder, local_sym_tab):
-    """Extract or create flags value from the call arguments."""
+    """
+    Extract or create flags value from call arguments.
+    
+    Args:
+        arg: The AST argument node for flags
+        builder: LLVM IR builder
+        local_sym_tab: Local symbol table
+    
+    Returns:
+        Integer flags value or LLVM IR value
+    
+    Raises:
+        ValueError: If a variable is not found in symbol table
+        NotImplementedError: If the argument type is not supported
+    """
     if not arg:
         return 0
 
@@ -85,7 +142,18 @@ def get_flags_val(arg, builder, local_sym_tab):
 
 
 def simple_string_print(string_value, module, builder, func):
-    """Prepare arguments for bpf_printk from a simple string value"""
+    """
+    Prepare arguments for bpf_printk from a simple string value.
+    
+    Args:
+        string_value: The string to print
+        module: LLVM IR module
+        builder: LLVM IR builder
+        func: The LLVM IR function being built
+    
+    Returns:
+        List of arguments for bpf_printk
+    """
     fmt_str = string_value + "\n\0"
     fmt_ptr = _create_format_string_global(fmt_str, func, module, builder)
 
@@ -101,7 +169,23 @@ def handle_fstring_print(
     local_sym_tab=None,
     struct_sym_tab=None,
 ):
-    """Handle f-string formatting for bpf_printk emitter."""
+    """
+    Handle f-string formatting for bpf_printk emitter.
+    
+    Args:
+        joined_str: AST JoinedStr node representing the f-string
+        module: LLVM IR module
+        builder: LLVM IR builder
+        func: The LLVM IR function being built
+        local_sym_tab: Local symbol table
+        struct_sym_tab: Struct symbol table
+    
+    Returns:
+        List of arguments for bpf_printk
+    
+    Raises:
+        NotImplementedError: If f-string contains unsupported value types
+    """
     fmt_parts = []
     exprs = []
 

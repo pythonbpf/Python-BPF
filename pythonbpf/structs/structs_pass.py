@@ -1,3 +1,10 @@
+"""
+BPF struct processing and LLVM IR type generation.
+
+This module handles the processing of Python classes decorated with @struct,
+converting them to LLVM IR struct types for use in BPF programs.
+"""
+
 import ast
 import logging
 from llvmlite import ir

@@ -1,3 +1,10 @@
+"""
+Binary operations handling for BPF programs.
+
+This module provides functions to handle binary operations (add, subtract,
+multiply, etc.) and emit the corresponding LLVM IR instructions.
+"""
+
 import ast
 from llvmlite import ir
 from logging import Logger

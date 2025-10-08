@@ -1,3 +1,10 @@
+"""
+Type mapping from Python ctypes to LLVM IR types.
+
+This module provides utilities to convert Python ctypes type names
+to their corresponding LLVM IR representations.
+"""
+
 from llvmlite import ir
 
 # TODO: THIS IS NOT SUPPOSED TO MATCH STRINGS :skull:

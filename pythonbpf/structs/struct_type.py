@@ -1,3 +1,10 @@
+"""
+Struct type wrapper for BPF structs.
+
+This module provides a wrapper class for LLVM IR struct types with
+helper methods for field access and manipulation.
+"""
+
 from llvmlite import ir
 
 

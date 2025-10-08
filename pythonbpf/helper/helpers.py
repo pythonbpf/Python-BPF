@@ -1,3 +1,11 @@
+"""
+BPF helper function stubs for Python type hints.
+
+This module provides Python stub functions that represent BPF helper functions.
+These stubs are used for type checking and will be replaced with actual BPF
+helper calls during compilation.
+"""
+
 import ctypes
 
 

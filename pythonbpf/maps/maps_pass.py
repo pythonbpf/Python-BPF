@@ -1,3 +1,10 @@
+"""
+BPF map processing and LLVM IR generation.
+
+This module handles the processing of BPF map definitions decorated with @map,
+converting them to appropriate LLVM IR global variables with BTF debug info.
+"""
+
 import ast
 from logging import Logger
 from llvmlite import ir

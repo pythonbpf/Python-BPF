@@ -1,3 +1,11 @@
+"""
+BPF map type definitions for Python type hints.
+
+This module provides Python classes that represent BPF map types.
+These are used for type checking and map definition; the actual BPF maps
+are generated as LLVM IR during compilation.
+"""
+
 # This file provides type  and function hints only and does not actually give any functionality.
 class HashMap:
     """

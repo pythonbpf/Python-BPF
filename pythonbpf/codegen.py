@@ -1,3 +1,11 @@
+"""
+Code generation module for PythonBPF.
+
+This module handles the conversion of Python BPF programs to LLVM IR and
+object files. It provides the main compilation pipeline from Python AST
+to BPF bytecode.
+"""
+
 import ast
 from llvmlite import ir
 from .license_pass import license_processing

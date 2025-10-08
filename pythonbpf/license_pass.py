@@ -1,3 +1,10 @@
+"""
+LICENSE global variable processing for BPF programs.
+
+This module handles the processing of the LICENSE function which is required
+for BPF programs to declare their license (typically "GPL").
+"""
+
 from llvmlite import ir
 import ast
 from logging import Logger

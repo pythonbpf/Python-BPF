@@ -1,3 +1,10 @@
+"""
+Type normalization and comparison operations for expressions.
+
+This module provides utilities for normalizing types between expressions,
+handling pointer dereferencing, and generating comparison operations.
+"""
+
 from llvmlite import ir
 import logging
 import ast

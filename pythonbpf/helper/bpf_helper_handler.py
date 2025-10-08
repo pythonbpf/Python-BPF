@@ -1,3 +1,11 @@
+"""
+BPF helper function handlers for LLVM IR emission.
+
+This module provides handlers for various BPF helper functions, emitting
+the appropriate LLVM IR to call kernel BPF helpers like map operations,
+printing, time functions, etc.
+"""
+
 import ast
 from llvmlite import ir
 from enum import Enum

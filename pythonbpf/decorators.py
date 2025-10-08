@@ -1,3 +1,11 @@
+"""
+Decorators for marking BPF functions, maps, structs, and globals.
+
+This module provides the core decorators used to annotate Python code
+for BPF compilation.
+"""
+
+
 def bpf(func):
     """Decorator to mark a function for BPF compilation."""
     func._is_bpf = True

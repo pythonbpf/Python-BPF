@@ -1,3 +1,11 @@
+"""
+Expression evaluation and LLVM IR generation.
+
+This module handles the evaluation of Python expressions in BPF programs,
+including variables, constants, function calls, comparisons, boolean
+operations, and more.
+"""
+
 import ast
 from llvmlite import ir
 from logging import Logger

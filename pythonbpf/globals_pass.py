@@ -1,3 +1,10 @@
+"""
+Global variables and compiler metadata processing.
+
+This module handles BPF global variables and emits the @llvm.compiler.used
+metadata to prevent LLVM from optimizing away important symbols.
+"""
+
 from llvmlite import ir
 import ast
 

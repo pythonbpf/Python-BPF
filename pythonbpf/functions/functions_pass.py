@@ -1,3 +1,11 @@
+"""
+BPF function processing and LLVM IR generation.
+
+This module handles the core function processing, converting Python function
+definitions into LLVM IR for BPF programs. It manages local variables,
+control flow, and statement processing.
+"""
+
 from llvmlite import ir
 import ast
 import logging
