@@ -228,6 +228,8 @@ def _handle_comparator(func, builder, op, lhs, rhs):
         ast.LtE: "<=",
         ast.Gt: ">",
         ast.GtE: ">=",
+        ast.Is: "==",
+        ast.IsNot: "!=",
     }
 
     if type(op) not in comparison_ops:
