@@ -1,11 +1,11 @@
-#include <linux/bpf.h>
+#include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
-#define u64 unsigned long long
-#define u32 unsigned int
+#include <bpf/bpf_endian.h>
 
 SEC("xdp")
 int hello(struct xdp_md *ctx) {
-    bpf_printk("Hello, World!\n");
+    // ctx.
+    bpf_printk("Hello, World! %ud \n", ctx->data);
     return XDP_PASS;
 }
 
