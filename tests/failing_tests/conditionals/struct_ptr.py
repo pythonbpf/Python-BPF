@@ -1,6 +1,11 @@
 from pythonbpf import bpf, struct, section, bpfglobal, compile
 from ctypes import c_void_p, c_int64, c_uint64
 
+# NOTE: Decided against fixing this
+# as one workaround is to just check any field of the struct
+# in the if statement. Ugly but works.
+# Might fix in future.
+
 
 @bpf
 @struct
