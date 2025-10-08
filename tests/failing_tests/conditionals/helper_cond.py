@@ -1,4 +1,4 @@
-from pythonbpf import bpf, map, section, bpfglobal
+from pythonbpf import bpf, map, section, bpfglobal, compile
 from ctypes import c_void_p, c_int64, c_uint64
 from pythonbpf.maps import HashMap
 
@@ -29,3 +29,6 @@ def hello_world(ctx: c_void_p) -> c_int64:
 @bpfglobal
 def LICENSE() -> str:
     return "GPL"
+
+
+compile()
