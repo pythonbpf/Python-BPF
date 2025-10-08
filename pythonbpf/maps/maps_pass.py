@@ -3,7 +3,7 @@ from logging import Logger
 from llvmlite import ir
 from enum import Enum
 from .maps_utils import MapProcessorRegistry
-from ..debuginfo import DebugInfoGenerator
+from pythonbpf.debuginfo import DebugInfoGenerator
 import logging
 
 logger: Logger = logging.getLogger(__name__)
