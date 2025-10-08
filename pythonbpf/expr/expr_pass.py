@@ -4,7 +4,8 @@ from logging import Logger
 import logging
 from typing import Dict
 
-from .type_deducer import ctypes_to_ir, is_ctypes
+from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
+from .type_normalization import convert_to_bool, handle_comparator
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -22,12 +23,10 @@ def _handle_name_expr(expr: ast.Name, local_sym_tab: Dict, builder: ir.IRBuilder
 
 def _handle_constant_expr(expr: ast.Constant):
     """Handle ast.Constant expressions."""
-    if isinstance(expr.value, int):
-        return ir.Constant(ir.IntType(64), expr.value), ir.IntType(64)
-    elif isinstance(expr.value, bool):
-        return ir.Constant(ir.IntType(1), int(expr.value)), ir.IntType(1)
+    if isinstance(expr.value, int) or isinstance(expr.value, bool):
+        return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
     else:
-        logger.info("Unsupported constant type")
+        logger.error("Unsupported constant type")
         return None
 
 
@@ -45,7 +44,6 @@ def _handle_attribute_expr(
             var_ptr, var_type, var_metadata = local_sym_tab[var_name]
             logger.info(f"Loading attribute {attr_name} from variable {var_name}")
             logger.info(f"Variable type: {var_type}, Variable ptr: {var_ptr}")
-
             metadata = structs_sym_tab[var_metadata]
             if attr_name in metadata.fields:
                 gep = metadata.gep(builder, var_ptr, attr_name)
@@ -132,6 +130,199 @@ def _handle_ctypes_call(
     return val
 
 
+def _handle_compare(
+    func, module, builder, cond, local_sym_tab, map_sym_tab, structs_sym_tab=None
+):
+    """Handle ast.Compare expressions."""
+
+    if len(cond.ops) != 1 or len(cond.comparators) != 1:
+        logger.error("Only single comparisons are supported")
+        return None
+    lhs = eval_expr(
+        func,
+        module,
+        builder,
+        cond.left,
+        local_sym_tab,
+        map_sym_tab,
+        structs_sym_tab,
+    )
+    rhs = eval_expr(
+        func,
+        module,
+        builder,
+        cond.comparators[0],
+        local_sym_tab,
+        map_sym_tab,
+        structs_sym_tab,
+    )
+
+    if lhs is None or rhs is None:
+        logger.error("Failed to evaluate comparison operands")
+        return None
+
+    lhs, _ = lhs
+    rhs, _ = rhs
+    return handle_comparator(func, builder, cond.ops[0], lhs, rhs)
+
+
+def _handle_unary_op(
+    func,
+    module,
+    builder,
+    expr: ast.UnaryOp,
+    local_sym_tab,
+    map_sym_tab,
+    structs_sym_tab=None,
+):
+    """Handle ast.UnaryOp expressions."""
+    if not isinstance(expr.op, ast.Not):
+        logger.error("Only 'not' unary operator is supported")
+        return None
+
+    operand = eval_expr(
+        func, module, builder, expr.operand, local_sym_tab, map_sym_tab, structs_sym_tab
+    )
+    if operand is None:
+        logger.error("Failed to evaluate operand for unary operation")
+        return None
+
+    operand_val, operand_type = operand
+    true_const = ir.Constant(ir.IntType(1), 1)
+    result = builder.xor(convert_to_bool(builder, operand_val), true_const)
+    return result, ir.IntType(1)
+
+
+def _handle_and_op(func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab):
+    """Handle `and` boolean operations."""
+
+    logger.debug(f"Handling 'and' operator with {len(expr.values)} operands")
+
+    merge_block = func.append_basic_block(name="and.merge")
+    false_block = func.append_basic_block(name="and.false")
+
+    incoming_values = []
+
+    for i, value in enumerate(expr.values):
+        is_last = i == len(expr.values) - 1
+
+        # Evaluate current operand
+        operand_result = eval_expr(
+            func, None, builder, value, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+        if operand_result is None:
+            logger.error(f"Failed to evaluate operand {i} in 'and' expression")
+            return None
+
+        operand_val, operand_type = operand_result
+
+        # Convert to boolean if needed
+        operand_bool = convert_to_bool(builder, operand_val)
+        current_block = builder.block
+
+        if is_last:
+            # Last operand: result is this value
+            builder.branch(merge_block)
+            incoming_values.append((operand_bool, current_block))
+        else:
+            # Not last: check if true, continue or short-circuit
+            next_check = func.append_basic_block(name=f"and.check_{i + 1}")
+            builder.cbranch(operand_bool, next_check, false_block)
+            builder.position_at_end(next_check)
+
+    # False block: short-circuit with false
+    builder.position_at_end(false_block)
+    builder.branch(merge_block)
+    false_value = ir.Constant(ir.IntType(1), 0)
+    incoming_values.append((false_value, false_block))
+
+    # Merge block: phi node
+    builder.position_at_end(merge_block)
+    phi = builder.phi(ir.IntType(1), name="and.result")
+    for val, block in incoming_values:
+        phi.add_incoming(val, block)
+
+    logger.debug(f"Generated 'and' with {len(incoming_values)} incoming values")
+    return phi, ir.IntType(1)
+
+
+def _handle_or_op(func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab):
+    """Handle `or` boolean operations."""
+
+    logger.debug(f"Handling 'or' operator with {len(expr.values)} operands")
+
+    merge_block = func.append_basic_block(name="or.merge")
+    true_block = func.append_basic_block(name="or.true")
+
+    incoming_values = []
+
+    for i, value in enumerate(expr.values):
+        is_last = i == len(expr.values) - 1
+
+        # Evaluate current operand
+        operand_result = eval_expr(
+            func, None, builder, value, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+        if operand_result is None:
+            logger.error(f"Failed to evaluate operand {i} in 'or' expression")
+            return None
+
+        operand_val, operand_type = operand_result
+
+        # Convert to boolean if needed
+        operand_bool = convert_to_bool(builder, operand_val)
+        current_block = builder.block
+
+        if is_last:
+            # Last operand: result is this value
+            builder.branch(merge_block)
+            incoming_values.append((operand_bool, current_block))
+        else:
+            # Not last: check if false, continue or short-circuit
+            next_check = func.append_basic_block(name=f"or.check_{i + 1}")
+            builder.cbranch(operand_bool, true_block, next_check)
+            builder.position_at_end(next_check)
+
+    # True block: short-circuit with true
+    builder.position_at_end(true_block)
+    builder.branch(merge_block)
+    true_value = ir.Constant(ir.IntType(1), 1)
+    incoming_values.append((true_value, true_block))
+
+    # Merge block: phi node
+    builder.position_at_end(merge_block)
+    phi = builder.phi(ir.IntType(1), name="or.result")
+    for val, block in incoming_values:
+        phi.add_incoming(val, block)
+
+    logger.debug(f"Generated 'or' with {len(incoming_values)} incoming values")
+    return phi, ir.IntType(1)
+
+
+def _handle_boolean_op(
+    func,
+    module,
+    builder,
+    expr: ast.BoolOp,
+    local_sym_tab,
+    map_sym_tab,
+    structs_sym_tab=None,
+):
+    """Handle `and` and `or` boolean operations."""
+
+    if isinstance(expr.op, ast.And):
+        return _handle_and_op(
+            func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+    elif isinstance(expr.op, ast.Or):
+        return _handle_or_op(
+            func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+    else:
+        logger.error(f"Unsupported boolean operator: {type(expr.op).__name__}")
+        return None
+
+
 def eval_expr(
     func,
     module,
@@ -212,6 +403,18 @@ def eval_expr(
         from pythonbpf.binary_ops import handle_binary_op
 
         return handle_binary_op(expr, builder, None, local_sym_tab)
+    elif isinstance(expr, ast.Compare):
+        return _handle_compare(
+            func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+    elif isinstance(expr, ast.UnaryOp):
+        return _handle_unary_op(
+            func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+    elif isinstance(expr, ast.BoolOp):
+        return _handle_boolean_op(
+            func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
     logger.info("Unsupported expression evaluation")
     return None
 

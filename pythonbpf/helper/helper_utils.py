@@ -3,7 +3,7 @@ import logging
 from collections.abc import Callable
 
 from llvmlite import ir
-from pythonbpf.expr_pass import eval_expr
+from pythonbpf.expr import eval_expr
 
 logger = logging.getLogger(__name__)
 
