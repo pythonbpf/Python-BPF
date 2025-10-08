@@ -5,7 +5,7 @@ import logging
 from typing import Dict
 
 from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
-from .type_normalization import normalize_types
+from .type_normalization import normalize_types, convert_to_bool
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -195,16 +195,6 @@ def _handle_compare(
     lhs, _ = lhs
     rhs, _ = rhs
     return _handle_comparator(func, builder, cond.ops[0], lhs, rhs)
-
-
-def convert_to_bool(builder, val):
-    if val.type == ir.IntType(1):
-        return val
-    if isinstance(val.type, ir.PointerType):
-        zero = ir.Constant(val.type, None)
-    else:
-        zero = ir.Constant(val.type, 0)
-    return builder.icmp_signed("!=", val, zero)
 
 
 def _handle_unary_op(

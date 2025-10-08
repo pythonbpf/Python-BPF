@@ -84,3 +84,14 @@ def normalize_types(func, builder, lhs, rhs):
             elif rhs_depth < lhs_depth:
                 lhs = _deref_to_depth(func, builder, lhs, lhs_depth - rhs_depth)
             return normalize_types(func, builder, lhs, rhs)
+
+
+def convert_to_bool(builder, val):
+    """Convert a value to boolean."""
+    if val.type == ir.IntType(1):
+        return val
+    if isinstance(val.type, ir.PointerType):
+        zero = ir.Constant(val.type, None)
+    else:
+        zero = ir.Constant(val.type, 0)
+    return builder.icmp_signed("!=", val, zero)
