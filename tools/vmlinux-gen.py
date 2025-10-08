@@ -243,6 +243,17 @@ class BTFConverter:
             data
         )
 
+        # below to replace those c_bool with bitfield greater than 8
+        def repl(m):
+            name, bits = m.groups()
+            return f"('{name}', ctypes.c_uint32, {bits})" if int(bits) > 8 else m.group(0)
+
+        data = re.sub(
+            r"\('([^']+)',\s*ctypes\.c_bool,\s*(\d+)\)",
+            repl,
+            data
+        )
+
         # Remove ctypes. prefix from invalid entries
         invalid_ctypes = ["bpf_iter_state", "_cache_type", "fs_context_purpose"]
         for name in invalid_ctypes:
