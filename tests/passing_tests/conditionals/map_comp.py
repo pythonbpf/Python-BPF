@@ -14,7 +14,7 @@ def last() -> HashMap:
 def hello_world(ctx: c_void_p) -> c_int64:
     last.update(0, 1)
     tsp = last.lookup(0)
-    if not (tsp > 0):
+    if tsp > 0:
         print("Hello, World!")
     else:
         print("Goodbye, World!")
