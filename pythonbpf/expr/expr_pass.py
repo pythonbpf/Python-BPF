@@ -4,7 +4,7 @@ from logging import Logger
 import logging
 from typing import Dict
 
-from .type_deducer import ctypes_to_ir, is_ctypes
+from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
 
 logger: Logger = logging.getLogger(__name__)
 
