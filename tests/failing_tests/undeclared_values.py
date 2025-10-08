@@ -8,7 +8,7 @@ from ctypes import c_void_p, c_int64
 @section("tracepoint/syscalls/sys_enter_execve")
 def sometag(ctx: c_void_p) -> c_int64:
     print("test")
-    print(f"{somevalue}")  #type: ignore
+    print(f"{somevalue}")  # noqa: F821
     return c_int64(1)
 
 @bpf
