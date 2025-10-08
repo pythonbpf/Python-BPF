@@ -4,7 +4,7 @@
 - Add all maps
 - XDP support in pylibbpf
 - ringbuf support
-- recursive expression resolution
+- Add oneline IfExpr conditionals (wishlist)
 
 ## Long term
 
