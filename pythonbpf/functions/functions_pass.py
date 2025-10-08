@@ -8,6 +8,7 @@ from pythonbpf.helper import HelperHandlerRegistry, handle_helper_call
 from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.binary_ops import handle_binary_op
 from pythonbpf.expr import eval_expr, handle_expr, convert_to_bool
+from pythonbpf.assign_pass import handle_variable_assignment
 
 from .return_utils import _handle_none_return, _handle_xdp_return, _is_xdp_name
 
@@ -55,9 +56,28 @@ def handle_assign(
         logger.error("Multi-target assignment is not supported for now")
         return
 
+    target = stmt.targets[0]
+    rval = stmt.value
+
+    if isinstance(target, ast.Name):
+        # NOTE: Simple variable assignment case: x = 5
+        var_name = target.id
+        result = handle_variable_assignment(
+            func,
+            module,
+            builder,
+            var_name,
+            rval,
+            local_sym_tab,
+            map_sym_tab,
+            structs_sym_tab,
+        )
+        if not result:
+            logger.error(f"Failed to handle assignment to {var_name}")
+        return
+
     num_types = ("c_int32", "c_int64", "c_uint32", "c_uint64")
 
-    target = stmt.targets[0]
     logger.info(f"Handling assignment to {ast.dump(target)}")
     if not isinstance(target, ast.Name) and not isinstance(target, ast.Attribute):
         logger.info("Unsupported assignment target")
