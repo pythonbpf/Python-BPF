@@ -342,7 +342,7 @@ def eval_expr(
 ):
     """
     Evaluate an expression and return its LLVM IR value and type.
-    
+
     Args:
         func: The LLVM IR function being built
         module: The LLVM IR module
@@ -351,7 +351,7 @@ def eval_expr(
         local_sym_tab: Local symbol table
         map_sym_tab: Map symbol table
         structs_sym_tab: Struct symbol table
-    
+
     Returns:
         A tuple of (value, type) or None if evaluation fails
     """

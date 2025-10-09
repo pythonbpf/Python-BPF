@@ -44,12 +44,12 @@ def get_operand_value(operand, builder, local_sym_tab):
 def handle_binary_op_impl(rval, builder, local_sym_tab):
     """
     Handle binary operations and emit corresponding LLVM IR instructions.
-    
+
     Args:
         rval: The AST BinOp node representing the binary operation
         builder: LLVM IR builder for emitting instructions
         local_sym_tab: Symbol table mapping variable names to their IR representations
-    
+
     Returns:
         The LLVM IR value representing the result of the binary operation
     """
@@ -83,13 +83,13 @@ def handle_binary_op_impl(rval, builder, local_sym_tab):
 def handle_binary_op(rval, builder, var_name, local_sym_tab):
     """
     Handle binary operations and optionally store the result to a variable.
-    
+
     Args:
         rval: The AST BinOp node representing the binary operation
         builder: LLVM IR builder for emitting instructions
         var_name: Optional variable name to store the result
         local_sym_tab: Symbol table mapping variable names to their IR representations
-    
+
     Returns:
         A tuple of (result_value, result_type)
     """

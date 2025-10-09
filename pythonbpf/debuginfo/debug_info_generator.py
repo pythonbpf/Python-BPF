@@ -10,15 +10,15 @@ from typing import Any, List
 class DebugInfoGenerator:
     """
     Generator for DWARF/BTF debug information in LLVM IR modules.
-    
+
     This class provides methods to create debug metadata for BPF programs,
     including types, structs, globals, and compilation units.
     """
-    
+
     def __init__(self, module):
         """
         Initialize the debug info generator.
-        
+
         Args:
             module: LLVM IR module to attach debug info to
         """
@@ -28,7 +28,7 @@ class DebugInfoGenerator:
     def generate_file_metadata(self, filename, dirname):
         """
         Generate file metadata for debug info.
-        
+
         Args:
             filename: Name of the source file
             dirname: Directory containing the source file
@@ -46,7 +46,7 @@ class DebugInfoGenerator:
     ):
         """
         Generate debug compile unit metadata.
-        
+
         Args:
             language: DWARF language code (e.g., DW_LANG_C11)
             producer: Compiler/producer string
@@ -114,11 +114,11 @@ class DebugInfoGenerator:
     def _compute_array_size(base_type: Any, count: int) -> int:
         """
         Compute the size of an array in bits.
-        
+
         Args:
             base_type: The base type of the array
             count: Number of elements in the array
-        
+
         Returns:
             Total size in bits
         """

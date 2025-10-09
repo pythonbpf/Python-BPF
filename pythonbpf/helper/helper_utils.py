@@ -46,14 +46,14 @@ class HelperHandlerRegistry:
 def get_var_ptr_from_name(var_name, local_sym_tab):
     """
     Get a pointer to a variable from the symbol table.
-    
+
     Args:
         var_name: Name of the variable to look up
         local_sym_tab: Local symbol table
-    
+
     Returns:
         Pointer to the variable
-    
+
     Raises:
         ValueError: If the variable is not found
     """
@@ -65,12 +65,12 @@ def get_var_ptr_from_name(var_name, local_sym_tab):
 def create_int_constant_ptr(value, builder, int_width=64):
     """
     Create a pointer to an integer constant.
-    
+
     Args:
         value: The integer value
         builder: LLVM IR builder
         int_width: Width of the integer in bits (default: 64)
-    
+
     Returns:
         Pointer to the allocated integer constant
     """
@@ -85,15 +85,15 @@ def create_int_constant_ptr(value, builder, int_width=64):
 def get_or_create_ptr_from_arg(arg, builder, local_sym_tab):
     """
     Extract or create pointer from call arguments.
-    
+
     Args:
         arg: The AST argument node
         builder: LLVM IR builder
         local_sym_tab: Local symbol table
-    
+
     Returns:
         Pointer to the argument value
-    
+
     Raises:
         NotImplementedError: If the argument type is not supported
     """
@@ -112,15 +112,15 @@ def get_or_create_ptr_from_arg(arg, builder, local_sym_tab):
 def get_flags_val(arg, builder, local_sym_tab):
     """
     Extract or create flags value from call arguments.
-    
+
     Args:
         arg: The AST argument node for flags
         builder: LLVM IR builder
         local_sym_tab: Local symbol table
-    
+
     Returns:
         Integer flags value or LLVM IR value
-    
+
     Raises:
         ValueError: If a variable is not found in symbol table
         NotImplementedError: If the argument type is not supported
@@ -145,13 +145,13 @@ def get_flags_val(arg, builder, local_sym_tab):
 def simple_string_print(string_value, module, builder, func):
     """
     Prepare arguments for bpf_printk from a simple string value.
-    
+
     Args:
         string_value: The string to print
         module: LLVM IR module
         builder: LLVM IR builder
         func: The LLVM IR function being built
-    
+
     Returns:
         List of arguments for bpf_printk
     """
@@ -172,7 +172,7 @@ def handle_fstring_print(
 ):
     """
     Handle f-string formatting for bpf_printk emitter.
-    
+
     Args:
         joined_str: AST JoinedStr node representing the f-string
         module: LLVM IR module
@@ -180,10 +180,10 @@ def handle_fstring_print(
         func: The LLVM IR function being built
         local_sym_tab: Local symbol table
         struct_sym_tab: Struct symbol table
-    
+
     Returns:
         List of arguments for bpf_printk
-    
+
     Raises:
         NotImplementedError: If f-string contains unsupported value types
     """

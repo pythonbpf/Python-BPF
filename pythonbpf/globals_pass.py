@@ -21,11 +21,11 @@ global_sym_tab = []
 def populate_global_symbol_table(tree, module: ir.Module):
     """
     Populate the global symbol table with BPF functions, maps, and globals.
-    
+
     Args:
         tree: The Python AST to scan for global symbols
         module: The LLVM IR module (not used in current implementation)
-    
+
     Returns:
         False (legacy return value)
     """
@@ -52,12 +52,12 @@ def populate_global_symbol_table(tree, module: ir.Module):
 def emit_global(module: ir.Module, node, name):
     """
     Emit a BPF global variable into the LLVM IR module.
-    
+
     Args:
         module: The LLVM IR module to add the global variable to
         node: The AST function node containing the global definition
         name: The name of the global variable
-    
+
     Returns:
         The created global variable
     """
@@ -146,7 +146,7 @@ def globals_processing(tree, module):
 def emit_llvm_compiler_used(module: ir.Module, names: list[str]):
     """
     Emit the @llvm.compiler.used global to prevent LLVM from optimizing away symbols.
-    
+
     Args:
         module: The LLVM IR module to add the compiler.used metadata to
         names: List of function/global names that must be preserved
@@ -172,7 +172,7 @@ def emit_llvm_compiler_used(module: ir.Module, names: list[str]):
 def globals_list_creation(tree, module: ir.Module):
     """
     Collect all BPF symbols and emit @llvm.compiler.used metadata.
-    
+
     Args:
         tree: The Python AST to scan for symbols
         module: The LLVM IR module to add metadata to

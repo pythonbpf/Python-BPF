@@ -25,6 +25,7 @@ logger: Logger = logging.getLogger(__name__)
 
 class BPFHelperID(Enum):
     """Enumeration of BPF helper function IDs."""
+
     BPF_MAP_LOOKUP_ELEM = 1
     BPF_MAP_UPDATE_ELEM = 2
     BPF_MAP_DELETE_ELEM = 3
@@ -263,7 +264,7 @@ def bpf_perf_event_output_handler(
 ):
     """
     Emit LLVM IR for bpf_perf_event_output helper function call.
-    
+
     This allows sending data to userspace via a perf event array.
     """
     if len(call.args) != 1:

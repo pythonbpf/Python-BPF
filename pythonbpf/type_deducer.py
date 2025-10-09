@@ -28,13 +28,13 @@ mapping = {
 def ctypes_to_ir(ctype: str):
     """
     Convert a ctypes type name to its corresponding LLVM IR type.
-    
+
     Args:
         ctype: String name of the ctypes type (e.g., 'c_int64', 'c_void_p')
-    
+
     Returns:
         The corresponding LLVM IR type
-    
+
     Raises:
         NotImplementedError: If the ctype is not supported
     """
@@ -46,10 +46,10 @@ def ctypes_to_ir(ctype: str):
 def is_ctypes(ctype: str) -> bool:
     """
     Check if a given type name is a supported ctypes type.
-    
+
     Args:
         ctype: String name of the type to check
-    
+
     Returns:
         True if the type is a supported ctypes type, False otherwise
     """

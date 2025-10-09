@@ -27,12 +27,13 @@ logger = logging.getLogger(__name__)
 class LocalSymbol:
     """
     Represents a local variable in a BPF function.
-    
+
     Attributes:
         var: LLVM IR alloca instruction for the variable
         ir_type: LLVM IR type of the variable
         metadata: Optional metadata (e.g., struct type name)
     """
+
     var: ir.AllocaInstr
     ir_type: ir.Type
     metadata: Any = None
@@ -262,7 +263,7 @@ def handle_cond(
 ):
     """
     Evaluate a condition expression and convert it to a boolean value.
-    
+
     Args:
         func: The LLVM IR function being built
         module: The LLVM IR module
@@ -271,7 +272,7 @@ def handle_cond(
         local_sym_tab: Local symbol table
         map_sym_tab: Map symbol table
         structs_sym_tab: Struct symbol table
-    
+
     Returns:
         LLVM IR boolean value representing the condition result
     """
@@ -332,13 +333,13 @@ def handle_if(
 def handle_return(builder, stmt, local_sym_tab, ret_type):
     """
     Handle return statements in BPF functions.
-    
+
     Args:
         builder: LLVM IR builder
         stmt: The AST Return node
         local_sym_tab: Local symbol table
         ret_type: Expected return type
-    
+
     Returns:
         True if a return was emitted, False otherwise
     """
@@ -375,7 +376,7 @@ def process_stmt(
 ):
     """
     Process a single statement in a BPF function.
-    
+
     Args:
         func: The LLVM IR function being built
         module: The LLVM IR module
@@ -386,7 +387,7 @@ def process_stmt(
         structs_sym_tab: Struct symbol table
         did_return: Whether a return has been emitted
         ret_type: Expected return type
-    
+
     Returns:
         True if a return was emitted, False otherwise
     """
@@ -426,10 +427,10 @@ def allocate_mem(
 ):
     """
     Pre-allocate stack memory for local variables in a BPF function.
-    
+
     This function scans the function body and creates alloca instructions
     for all local variables before processing the function statements.
-    
+
     Args:
         module: The LLVM IR module
         builder: LLVM IR builder
@@ -439,7 +440,7 @@ def allocate_mem(
         map_sym_tab: Map symbol table
         local_sym_tab: Local symbol table to populate
         structs_sym_tab: Struct symbol table
-    
+
     Returns:
         Updated local symbol table
     """
@@ -638,7 +639,7 @@ def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_t
 def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab):
     """
     Process all BPF function chunks and generate LLVM IR.
-    
+
     Args:
         tree: The Python AST (not used in current implementation)
         module: The LLVM IR module to add functions to
@@ -673,13 +674,13 @@ def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab):
 def infer_return_type(func_node: ast.FunctionDef):
     """
     Infer the return type of a BPF function from annotations or return statements.
-    
+
     Args:
         func_node: The AST function node
-    
+
     Returns:
         String representation of the return type (e.g., 'c_int64')
-    
+
     Raises:
         TypeError: If func_node is not a FunctionDef
     """
