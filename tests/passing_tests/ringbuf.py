@@ -33,3 +33,5 @@ compile_to_ir("ringbuf.py", "ringbuf.ll")
 compile()
 b = BPF()
 b.load_and_attach()
+while True:
+    print("running")
