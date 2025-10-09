@@ -19,6 +19,24 @@ def recursive_dereferencer(var, builder):
         raise TypeError(f"Unsupported type for dereferencing: {var.type}")
 
 
+def deref_to_val(var, builder):
+    """Dereference a variable to get its value and pointer chain."""
+    logger.info(f"Dereferencing {var}, type is {var.type}")
+
+    chain = [var]
+    cur = var
+
+    while isinstance(cur.type, ir.PointerType):
+        cur = builder.load(cur)
+        chain.append(cur)
+
+    if isinstance(cur.type, ir.IntType):
+        logger.info(f"dereference chain: {chain}")
+        return cur, chain
+    else:
+        raise TypeError(f"Unsupported type for dereferencing: {cur.type}")
+
+
 def get_operand_value(operand, builder, local_sym_tab):
     """Extract the value from an operand, handling variables and constants."""
     if isinstance(operand, ast.Name):
