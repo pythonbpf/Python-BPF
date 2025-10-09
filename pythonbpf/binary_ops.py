@@ -41,14 +41,18 @@ def get_operand_value(operand, builder, local_sym_tab):
     """Extract the value from an operand, handling variables and constants."""
     if isinstance(operand, ast.Name):
         if operand.id in local_sym_tab:
-            return recursive_dereferencer(local_sym_tab[operand.id].var, builder)
+            var = local_sym_tab[operand.id].var
+            val, chain = deref_to_val(var, builder)
+            return val, chain, var
         raise ValueError(f"Undefined variable: {operand.id}")
     elif isinstance(operand, ast.Constant):
         if isinstance(operand.value, int):
-            return ir.Constant(ir.IntType(64), operand.value)
+            cst = ir.Constant(ir.IntType(64), operand.value)
+            return cst, [cst], None
         raise TypeError(f"Unsupported constant type: {type(operand.value)}")
     elif isinstance(operand, ast.BinOp):
-        return handle_binary_op_impl(operand, builder, local_sym_tab)
+        res = handle_binary_op_impl(operand, builder, local_sym_tab)
+        return res, [res], None
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 
 
