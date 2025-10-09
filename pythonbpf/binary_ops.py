@@ -6,19 +6,6 @@ import logging
 logger: Logger = logging.getLogger(__name__)
 
 
-def recursive_dereferencer(var, builder):
-    """dereference until primitive type comes out"""
-    # TODO: Not worrying about stack overflow for now
-    logger.info(f"Dereferencing {var}, type is {var.type}")
-    if isinstance(var.type, ir.PointerType):
-        a = builder.load(var)
-        return recursive_dereferencer(a, builder)
-    elif isinstance(var.type, ir.IntType):
-        return var
-    else:
-        raise TypeError(f"Unsupported type for dereferencing: {var.type}")
-
-
 def deref_to_val(var, builder):
     """Dereference a variable to get its value and pointer chain."""
     logger.info(f"Dereferencing {var}, type is {var.type}")
@@ -58,8 +45,8 @@ def get_operand_value(operand, builder, local_sym_tab):
 
 def handle_binary_op_impl(rval, builder, local_sym_tab):
     op = rval.op
-    left = get_operand_value(rval.left, builder, local_sym_tab)
-    right = get_operand_value(rval.right, builder, local_sym_tab)
+    left, _, _ = get_operand_value(rval.left, builder, local_sym_tab)
+    right, _, _ = get_operand_value(rval.right, builder, local_sym_tab)
     logger.info(f"left is {left}, right is {right}, op is {op}")
 
     # Map AST operation nodes to LLVM IR builder methods
