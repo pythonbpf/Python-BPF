@@ -402,7 +402,7 @@ def eval_expr(
     elif isinstance(expr, ast.BinOp):
         from pythonbpf.binary_ops import handle_binary_op
 
-        return handle_binary_op(expr, builder, None, local_sym_tab)
+        return handle_binary_op(func, expr, builder, None, local_sym_tab)
     elif isinstance(expr, ast.Compare):
         return _handle_compare(
             func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab

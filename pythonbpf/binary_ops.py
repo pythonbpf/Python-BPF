@@ -3,34 +3,21 @@ from llvmlite import ir
 from logging import Logger
 import logging
 
+from pythonbpf.expr import get_base_type_and_depth, deref_to_depth
+
 logger: Logger = logging.getLogger(__name__)
 
 
-def deref_to_val(var, builder):
-    """Dereference a variable to get its value and pointer chain."""
-    logger.info(f"Dereferencing {var}, type is {var.type}")
-
-    chain = [var]
-    cur = var
-
-    while isinstance(cur.type, ir.PointerType):
-        cur = builder.load(cur)
-        chain.append(cur)
-
-    if isinstance(cur.type, ir.IntType):
-        logger.info(f"dereference chain: {chain}")
-        return cur, chain
-    else:
-        raise TypeError(f"Unsupported type for dereferencing: {cur.type}")
-
-
-def get_operand_value(operand, builder, local_sym_tab):
+def get_operand_value(func, operand, builder, local_sym_tab):
     """Extract the value from an operand, handling variables and constants."""
     if isinstance(operand, ast.Name):
         if operand.id in local_sym_tab:
             var = local_sym_tab[operand.id].var
-            val, chain = deref_to_val(var, builder)
-            return val, chain, var
+            var_type = var.type
+            base_type, depth = get_base_type_and_depth(var_type)
+            logger.info(f"var is {var}, base_type is {base_type}, depth is {depth}")
+            val = deref_to_depth(func, builder, var, depth)
+            return val, [val], var
         raise ValueError(f"Undefined variable: {operand.id}")
     elif isinstance(operand, ast.Constant):
         if isinstance(operand.value, int):
@@ -38,7 +25,7 @@ def get_operand_value(operand, builder, local_sym_tab):
             return cst, [cst], None
         raise TypeError(f"Unsupported constant type: {type(operand.value)}")
     elif isinstance(operand, ast.BinOp):
-        res = handle_binary_op_impl(operand, builder, local_sym_tab)
+        res = handle_binary_op_impl(func, operand, builder, local_sym_tab)
         return res, [res], None
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 
@@ -53,10 +40,10 @@ def store_through_chain(value, chain, builder):
         value = ptr
 
 
-def handle_binary_op_impl(rval, builder, local_sym_tab):
+def handle_binary_op_impl(func, rval, builder, local_sym_tab):
     op = rval.op
-    left, lchain, _ = get_operand_value(rval.left, builder, local_sym_tab)
-    right, rchain, _ = get_operand_value(rval.right, builder, local_sym_tab)
+    left, lchain, _ = get_operand_value(func, rval.left, builder, local_sym_tab)
+    right, rchain, _ = get_operand_value(func, rval.right, builder, local_sym_tab)
     logger.info(f"left is {left}, right is {right}, op is {op}")
 
     logger.info(f"left chain: {lchain}, right chain: {rchain}")
@@ -83,8 +70,8 @@ def handle_binary_op_impl(rval, builder, local_sym_tab):
         raise SyntaxError("Unsupported binary operation")
 
 
-def handle_binary_op(rval, builder, var_name, local_sym_tab):
-    result = handle_binary_op_impl(rval, builder, local_sym_tab)
+def handle_binary_op(func, rval, builder, var_name, local_sym_tab):
+    result = handle_binary_op_impl(func, rval, builder, local_sym_tab)
     if var_name and var_name in local_sym_tab:
         logger.info(
             f"Storing result {result} into variable {local_sym_tab[var_name].var}"
