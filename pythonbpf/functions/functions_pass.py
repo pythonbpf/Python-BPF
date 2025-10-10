@@ -386,6 +386,7 @@ def process_stmt(
 def allocate_mem(
     module, builder, body, func, ret_type, map_sym_tab, local_sym_tab, structs_sym_tab
 ):
+    double_alloc = False
     for stmt in body:
         has_metadata = False
         if isinstance(stmt, ast.If):
@@ -462,6 +463,7 @@ def allocate_mem(
                     # declare an intermediate ptr type for map lookup
                     ir_type = ir.IntType(64)
                     var_tmp = builder.alloca(ir_type, name=f"{var_name}_tmp")
+                    double_alloc = True
                     # var.align = ir_type.width // 8
                     logger.info(
                         f"Pre-allocated variable {var_name} and {var_name}_tmp for map"
@@ -504,7 +506,7 @@ def allocate_mem(
             else:
                 local_sym_tab[var_name] = LocalSymbol(var, ir_type)
 
-            if var_tmp:
+            if double_alloc:
                 local_sym_tab[f"{var_name}_tmp"] = LocalSymbol(var_tmp, ir_type)
     return local_sym_tab
 
