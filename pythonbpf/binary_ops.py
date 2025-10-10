@@ -18,32 +18,30 @@ def get_operand_value(func, operand, builder, local_sym_tab):
             base_type, depth = get_base_type_and_depth(var_type)
             logger.info(f"var is {var}, base_type is {base_type}, depth is {depth}")
             val = deref_to_depth(func, builder, var, depth)
-            return val, [val], var
+            return val
         raise ValueError(f"Undefined variable: {operand.id}")
     elif isinstance(operand, ast.Constant):
         if isinstance(operand.value, int):
             cst = ir.Constant(ir.IntType(64), int(operand.value))
-            return cst, [cst], None
+            return cst
         raise TypeError(f"Unsupported constant type: {type(operand.value)}")
     elif isinstance(operand, ast.BinOp):
         res = handle_binary_op_impl(func, operand, builder, local_sym_tab)
-        return res, [res], None
+        return res
     elif isinstance(operand, ast.Call):
         res = eval_expr(func, None, builder, operand, local_sym_tab, {}, {})
         if res is None:
             raise ValueError(f"Failed to evaluate call expression: {operand}")
-        val, val_type = res
-        return val, [val], None
+        val, _ = res
+        return val
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 
 
 def handle_binary_op_impl(func, rval, builder, local_sym_tab):
     op = rval.op
-    left, lchain, _ = get_operand_value(func, rval.left, builder, local_sym_tab)
-    right, rchain, _ = get_operand_value(func, rval.right, builder, local_sym_tab)
+    left = get_operand_value(func, rval.left, builder, local_sym_tab)
+    right = get_operand_value(func, rval.right, builder, local_sym_tab)
     logger.info(f"left is {left}, right is {right}, op is {op}")
-
-    logger.info(f"left chain: {lchain}, right chain: {rchain}")
 
     # NOTE: Before doing the operation, if the operands are integers
     # we always extend them to i64. The assignment to LHS will take
