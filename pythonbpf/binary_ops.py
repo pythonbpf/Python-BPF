@@ -55,9 +55,11 @@ def store_through_chain(value, chain, builder):
 
 def handle_binary_op_impl(rval, builder, local_sym_tab):
     op = rval.op
-    left, _, _ = get_operand_value(rval.left, builder, local_sym_tab)
-    right, _, _ = get_operand_value(rval.right, builder, local_sym_tab)
+    left, lchain, _ = get_operand_value(rval.left, builder, local_sym_tab)
+    right, rchain, _ = get_operand_value(rval.right, builder, local_sym_tab)
     logger.info(f"left is {left}, right is {right}, op is {op}")
+
+    logger.info(f"left chain: {lchain}, right chain: {rchain}")
 
     # Map AST operation nodes to LLVM IR builder methods
     op_map = {
