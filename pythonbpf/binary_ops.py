@@ -21,7 +21,7 @@ def get_operand_value(func, operand, builder, local_sym_tab):
         raise ValueError(f"Undefined variable: {operand.id}")
     elif isinstance(operand, ast.Constant):
         if isinstance(operand.value, int):
-            cst = ir.Constant(ir.IntType(64), operand.value)
+            cst = ir.Constant(ir.IntType(64), int(operand.value))
             return cst, [cst], None
         raise TypeError(f"Unsupported constant type: {type(operand.value)}")
     elif isinstance(operand, ast.BinOp):
