@@ -8,7 +8,9 @@ from pythonbpf.expr import get_base_type_and_depth, deref_to_depth, eval_expr
 logger: Logger = logging.getLogger(__name__)
 
 
-def get_operand_value(func, operand, builder, local_sym_tab):
+def get_operand_value(
+    func, module, operand, builder, local_sym_tab, map_sym_tab, structs_sym_tab=None
+):
     """Extract the value from an operand, handling variables and constants."""
     logger.info(f"Getting operand value for: {ast.dump(operand)}")
     if isinstance(operand, ast.Name):
@@ -26,10 +28,14 @@ def get_operand_value(func, operand, builder, local_sym_tab):
             return cst
         raise TypeError(f"Unsupported constant type: {type(operand.value)}")
     elif isinstance(operand, ast.BinOp):
-        res = handle_binary_op_impl(func, operand, builder, local_sym_tab)
+        res = handle_binary_op_impl(
+            func, module, operand, builder, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
         return res
-    elif isinstance(operand, ast.Call):
-        res = eval_expr(func, None, builder, operand, local_sym_tab, {}, {})
+    else:
+        res = eval_expr(
+            func, module, builder, operand, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
         if res is None:
             raise ValueError(f"Failed to evaluate call expression: {operand}")
         val, _ = res
@@ -37,10 +43,16 @@ def get_operand_value(func, operand, builder, local_sym_tab):
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 
 
-def handle_binary_op_impl(func, rval, builder, local_sym_tab):
+def handle_binary_op_impl(
+    func, module, rval, builder, local_sym_tab, map_sym_tab, structs_sym_tab=None
+):
     op = rval.op
-    left = get_operand_value(func, rval.left, builder, local_sym_tab)
-    right = get_operand_value(func, rval.right, builder, local_sym_tab)
+    left = get_operand_value(
+        func, module, rval.left, builder, local_sym_tab, map_sym_tab, structs_sym_tab
+    )
+    right = get_operand_value(
+        func, module, rval.right, builder, local_sym_tab, map_sym_tab, structs_sym_tab
+    )
     logger.info(f"left is {left}, right is {right}, op is {op}")
 
     # NOTE: Before doing the operation, if the operands are integers
@@ -73,8 +85,19 @@ def handle_binary_op_impl(func, rval, builder, local_sym_tab):
         raise SyntaxError("Unsupported binary operation")
 
 
-def handle_binary_op(func, rval, builder, var_name, local_sym_tab):
-    result = handle_binary_op_impl(func, rval, builder, local_sym_tab)
+def handle_binary_op(
+    func,
+    module,
+    rval,
+    builder,
+    var_name,
+    local_sym_tab,
+    map_sym_tab,
+    structs_sym_tab=None,
+):
+    result = handle_binary_op_impl(
+        func, module, rval, builder, local_sym_tab, map_sym_tab, structs_sym_tab
+    )
     if var_name and var_name in local_sym_tab:
         logger.info(
             f"Storing result {result} into variable {local_sym_tab[var_name].var}"
