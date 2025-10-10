@@ -461,8 +461,8 @@ def allocate_mem(
                     var = builder.alloca(ir_type, name=var_name)
 
                     # declare an intermediate ptr type for map lookup
-                    ir_type = ir.IntType(64)
-                    var_tmp = builder.alloca(ir_type, name=f"{var_name}_tmp")
+                    tmp_ir_type = ir.IntType(64)
+                    var_tmp = builder.alloca(tmp_ir_type, name=f"{var_name}_tmp")
                     double_alloc = True
                     # var.align = ir_type.width // 8
                     logger.info(
@@ -507,7 +507,7 @@ def allocate_mem(
                 local_sym_tab[var_name] = LocalSymbol(var, ir_type)
 
             if double_alloc:
-                local_sym_tab[f"{var_name}_tmp"] = LocalSymbol(var_tmp, ir_type)
+                local_sym_tab[f"{var_name}_tmp"] = LocalSymbol(var_tmp, tmp_ir_type)
     return local_sym_tab
 
 

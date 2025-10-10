@@ -1,7 +1,7 @@
 import ast
 import logging
 from llvmlite import ir
-from pythonbpf.expr import eval_expr
+from pythonbpf.expr import eval_expr, get_base_type_and_depth
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,9 @@ def handle_variable_assignment(
 
     val, val_type = val_result
     if val_type != var_type:
+        logger.info(f"val = {val}")
+        logger.info(f"var = {var_ptr}")
+        logger.info(f"truthy {var_type}")
         if isinstance(val_type, ir.IntType) and isinstance(var_type, ir.IntType):
             # Allow implicit int widening
             if val_type.width < var_type.width:
@@ -46,10 +49,24 @@ def handle_variable_assignment(
             elif val_type.width > var_type.width:
                 val = builder.trunc(val, var_type)
                 logger.info(f"Implicitly truncated int for variable {var_name}")
+        elif isinstance(val_type, ir.IntType) and isinstance(var_type, ir.PointerType):
+            ptr_target, ptr_depth = get_base_type_and_depth(var_type)
+            if ptr_target.width > val_type.width:
+                val = builder.sext(val, ptr_target)
+            elif ptr_target.width < val_type.width:
+                val = builder.trunc(val, ptr_target)
+
+            if ptr_depth > 1:
+                # NOTE: This is assignment to a PTR_TO_MAP_VALUE_OR_NULL
+                var_ptr_tmp = local_sym_tab[f"{var_name}_tmp"].var
+                builder.store(val, var_ptr_tmp)
+                val = var_ptr_tmp
         else:
             logger.error(
                 f"Type mismatch for variable {var_name}: {val_type} vs {var_type}"
             )
+            logger.error(f"var_type: {isinstance(var_type, ir.PointerType)}")
+            logger.error(f"val_type: {isinstance(val_type, ir.IntType)}")
             return False
 
     builder.store(val, var_ptr)

@@ -16,7 +16,7 @@ COMPARISON_OPS = {
 }
 
 
-def _get_base_type_and_depth(ir_type):
+def get_base_type_and_depth(ir_type):
     """Get the base type for pointer types."""
     cur_type = ir_type
     depth = 0
@@ -88,8 +88,8 @@ def _normalize_types(func, builder, lhs, rhs):
         logger.error(f"Type mismatch: {lhs.type} vs {rhs.type}")
         return None, None
     else:
-        lhs_base, lhs_depth = _get_base_type_and_depth(lhs.type)
-        rhs_base, rhs_depth = _get_base_type_and_depth(rhs.type)
+        lhs_base, lhs_depth = get_base_type_and_depth(lhs.type)
+        rhs_base, rhs_depth = get_base_type_and_depth(rhs.type)
         if lhs_base == rhs_base:
             if lhs_depth < rhs_depth:
                 rhs = _deref_to_depth(func, builder, rhs, rhs_depth - lhs_depth)
