@@ -83,14 +83,14 @@ def hist() -> HashMap:
 def hello(ctx: c_void_p) -> c_int64:
     process_id = pid()
     one = 1
-    prev = hist().lookup(process_id)
+    prev = hist.lookup(process_id)
     if prev:
         previous_value = prev + 1
         print(f"count: {previous_value} with {process_id}")
-        hist().update(process_id, previous_value)
+        hist.update(process_id, previous_value)
         return c_int64(0)
     else:
-        hist().update(process_id, one)
+        hist.update(process_id, one)
     return c_int64(0)
 
 
