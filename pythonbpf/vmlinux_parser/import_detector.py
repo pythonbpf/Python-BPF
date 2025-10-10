@@ -1,7 +1,7 @@
 import ast
 import logging
-import llvmlite.ir as ir
 from typing import List, Tuple
+from .vmlinux_class_handler import process_vmlinux_class
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +70,27 @@ def detect_import_statement(tree: ast.AST) -> List[Tuple[str, str]]:
     logger.info(f"Total vmlinux imports detected: {len(vmlinux_imports)}")
     return vmlinux_imports
 
-def vmlinux_proc(tree, module):
+def vmlinux_proc(tree: ast.AST, module):
     import_statements = detect_import_statement(tree)
-    logger.info(f"Import statements {import_statements}")
+
+    if not import_statements:
+        logger.info("No vmlinux imports found")
+        return
+
+    vmlinux_types = set()
+    for module_name, imported_item in import_statements:
+        vmlinux_types.add(imported_item)
+        logger.info(f"Registered vmlinux type: {imported_item}")
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            # Check if this class uses vmlinux types
+            logger.info(f"Processing ClassDef with vmlinux types: {node.name}")
+            process_vmlinux_class(node, module, vmlinux_types)
+
+        elif isinstance(node, ast.Assign):
+            logger.info(f"Processing Assign with vmlinux types")
+            process_vmlinux_assign(node, module, vmlinux_types)
+
+def process_vmlinux_assign(node, module, vmlinux_types):
+    raise NotImplementedError("Assignment handling has not been implemented yet")

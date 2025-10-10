@@ -8,3 +8,4 @@ __pycache__/
 *.o
 .ipynb_checkpoints/
 vmlinux.py
+~*
