@@ -3,13 +3,14 @@ from llvmlite import ir
 from logging import Logger
 import logging
 
-from pythonbpf.expr import get_base_type_and_depth, deref_to_depth
+from pythonbpf.expr import get_base_type_and_depth, deref_to_depth, eval_expr
 
 logger: Logger = logging.getLogger(__name__)
 
 
 def get_operand_value(func, operand, builder, local_sym_tab):
     """Extract the value from an operand, handling variables and constants."""
+    logger.info(f"Getting operand value for: {ast.dump(operand)}")
     if isinstance(operand, ast.Name):
         if operand.id in local_sym_tab:
             var = local_sym_tab[operand.id].var
@@ -27,6 +28,12 @@ def get_operand_value(func, operand, builder, local_sym_tab):
     elif isinstance(operand, ast.BinOp):
         res = handle_binary_op_impl(func, operand, builder, local_sym_tab)
         return res, [res], None
+    elif isinstance(operand, ast.Call):
+        res = eval_expr(func, None, builder, operand, local_sym_tab, {}, {})
+        if res is None:
+            raise ValueError(f"Failed to evaluate call expression: {operand}")
+        val, val_type = res
+        return val, [val], None
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 
 
@@ -47,6 +54,14 @@ def handle_binary_op_impl(func, rval, builder, local_sym_tab):
     logger.info(f"left is {left}, right is {right}, op is {op}")
 
     logger.info(f"left chain: {lchain}, right chain: {rchain}")
+
+    # NOTE: Before doing the operation, if the operands are integers
+    # we always extend them to i64. The assignment to LHS will take
+    # care of truncation if needed.
+    if isinstance(left.type, ir.IntType) and left.type.width < 64:
+        left = builder.sext(left, ir.IntType(64))
+    if isinstance(right.type, ir.IntType) and right.type.width < 64:
+        right = builder.sext(right, ir.IntType(64))
 
     # Map AST operation nodes to LLVM IR builder methods
     op_map = {
