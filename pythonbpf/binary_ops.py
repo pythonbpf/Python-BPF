@@ -37,16 +37,6 @@ def get_operand_value(func, operand, builder, local_sym_tab):
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 
 
-def store_through_chain(value, chain, builder):
-    """Store a value through a pointer chain."""
-    if not chain or len(chain) < 2:
-        raise ValueError("Pointer chain must have at least two elements")
-
-    for ptr in reversed(chain[1:]):
-        builder.store(value, ptr)
-        value = ptr
-
-
 def handle_binary_op_impl(func, rval, builder, local_sym_tab):
     op = rval.op
     left, lchain, _ = get_operand_value(func, rval.left, builder, local_sym_tab)
