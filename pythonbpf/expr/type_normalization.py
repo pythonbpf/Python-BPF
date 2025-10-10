@@ -26,7 +26,7 @@ def get_base_type_and_depth(ir_type):
     return cur_type, depth
 
 
-def _deref_to_depth(func, builder, val, target_depth):
+def deref_to_depth(func, builder, val, target_depth):
     """Dereference a pointer to a certain depth."""
 
     cur_val = val
@@ -92,9 +92,9 @@ def _normalize_types(func, builder, lhs, rhs):
         rhs_base, rhs_depth = get_base_type_and_depth(rhs.type)
         if lhs_base == rhs_base:
             if lhs_depth < rhs_depth:
-                rhs = _deref_to_depth(func, builder, rhs, rhs_depth - lhs_depth)
+                rhs = deref_to_depth(func, builder, rhs, rhs_depth - lhs_depth)
             elif rhs_depth < lhs_depth:
-                lhs = _deref_to_depth(func, builder, lhs, lhs_depth - rhs_depth)
+                lhs = deref_to_depth(func, builder, lhs, lhs_depth - rhs_depth)
             return _normalize_types(func, builder, lhs, rhs)
 
 

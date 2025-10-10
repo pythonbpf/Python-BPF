@@ -3,7 +3,7 @@ import logging
 from collections.abc import Callable
 
 from llvmlite import ir
-from pythonbpf.expr import eval_expr
+from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth
 
 logger = logging.getLogger(__name__)
 
@@ -224,10 +224,27 @@ def _populate_fval(ftype, node, fmt_parts, exprs):
             raise NotImplementedError(
                 f"Unsupported integer width in f-string: {ftype.width}"
             )
-    elif ftype == ir.PointerType(ir.IntType(8)):
-        # NOTE: We assume i8* is a string
-        fmt_parts.append("%s")
-        exprs.append(node)
+    elif isinstance(ftype, ir.PointerType):
+        target, depth = get_base_type_and_depth(ftype)
+        if isinstance(target, ir.IntType):
+            if target.width == 64:
+                fmt_parts.append("%lld")
+                exprs.append(node)
+            elif target.width == 32:
+                fmt_parts.append("%d")
+                exprs.append(node)
+            elif target.width == 8 and depth == 1:
+                # NOTE: Assume i8* is a string
+                fmt_parts.append("%s")
+                exprs.append(node)
+            else:
+                raise NotImplementedError(
+                    f"Unsupported pointer target type in f-string: {target}"
+                )
+        else:
+            raise NotImplementedError(
+                f"Unsupported pointer target type in f-string: {target}"
+            )
     else:
         raise NotImplementedError(f"Unsupported field type in f-string: {ftype}")
 
@@ -264,7 +281,20 @@ def _prepare_expr_args(expr, func, module, builder, local_sym_tab, struct_sym_ta
 
     if val:
         if isinstance(val.type, ir.PointerType):
-            val = builder.ptrtoint(val, ir.IntType(64))
+            target, depth = get_base_type_and_depth(val.type)
+            if isinstance(target, ir.IntType):
+                if target.width >= 32:
+                    val = deref_to_depth(func, builder, val, depth)
+                    val = builder.sext(val, ir.IntType(64))
+                elif target.width == 8 and depth == 1:
+                    # NOTE: i8* is string, no need to deref
+                    pass
+
+            else:
+                logger.warning(
+                    "Only int and ptr supported in bpf_printk args. Others default to 0."
+                )
+                val = ir.Constant(ir.IntType(64), 0)
         elif isinstance(val.type, ir.IntType):
             if val.type.width < 64:
                 val = builder.sext(val, ir.IntType(64))

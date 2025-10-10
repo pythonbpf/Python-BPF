@@ -26,7 +26,7 @@ def _handle_constant_expr(expr: ast.Constant):
     if isinstance(expr.value, int) or isinstance(expr.value, bool):
         return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
     else:
-        logger.error("Unsupported constant type")
+        logger.error(f"Unsupported constant type {ast.dump(expr)}")
         return None
 
 
