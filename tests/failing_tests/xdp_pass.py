@@ -1,6 +1,8 @@
 from pythonbpf import bpf, map, section, bpfglobal, compile, compile_to_ir
 from pythonbpf.maps import HashMap
-from vmlinux import struct_xdp_md, XDP_PASS
+from pythonbpf.helper import XDP_PASS
+from vmlinux import struct_xdp_md
+# from vmlinux import XDP_PASS
 from ctypes import c_int64
 
 # Instructions to how to run this program
@@ -9,7 +11,6 @@ from ctypes import c_int64
 # 3. Run the program with sudo: sudo tools/check.sh run examples/xdp_pass.o
 # 4. Attach object file to any network device with something like ./check.sh xdp examples/xdp_pass.o tailscale0
 # 5. send traffic through the device and observe effects
-
 
 @bpf
 @map
