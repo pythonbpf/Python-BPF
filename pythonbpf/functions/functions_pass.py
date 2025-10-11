@@ -425,6 +425,7 @@ def allocate_mem(
                 max_temps_needed = max(max_temps_needed, temps_needed)
 
     for stmt in body:
+        update_max_temps_for_stmt(stmt)
         has_metadata = False
         if isinstance(stmt, ast.If):
             if stmt.body:
@@ -545,6 +546,13 @@ def allocate_mem(
 
             if double_alloc:
                 local_sym_tab[f"{var_name}_tmp"] = LocalSymbol(var_tmp, tmp_ir_type)
+
+    logger.info(f"Temporary scratch space needed for calls: {max_temps_needed}")
+    for i in range(max_temps_needed):
+        temp_var = builder.alloca(ir.IntType(64), name=f"__helper_temp_{i}")
+        temp_var.align = 8
+        local_sym_tab[f"__helper_temp_{i}"] = LocalSymbol(temp_var, ir.IntType(64))
+
     return local_sym_tab
 
 
