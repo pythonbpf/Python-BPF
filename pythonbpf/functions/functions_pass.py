@@ -414,6 +414,16 @@ def allocate_mem(
     module, builder, body, func, ret_type, map_sym_tab, local_sym_tab, structs_sym_tab
 ):
     double_alloc = False
+    max_temps_needed = 0
+
+    def update_max_temps_for_stmt(stmt):
+        nonlocal max_temps_needed
+
+        for node in ast.walk(stmt):
+            if isinstance(node, ast.Call):
+                temps_needed = count_temps_in_call(node)
+                max_temps_needed = max(max_temps_needed, temps_needed)
+
     for stmt in body:
         has_metadata = False
         if isinstance(stmt, ast.If):
