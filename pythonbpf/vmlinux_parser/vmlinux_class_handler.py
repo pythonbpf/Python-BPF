@@ -92,7 +92,5 @@ def identify_ctypes_type(t):
         elif issubclass(t, ctypes._SimpleCData):
             print("Scalar type")
             print("Base type:", t)
-        else:
-            print("Other ctypes type")
     else:
-        print("Instance, not type")
+        raise TypeError("Instance sent instead of Class")

@@ -41,7 +41,7 @@ repos:
     - id: ruff
       args: ["--fix", "--show-fixes"]
     - id: ruff-format
-      exclude: ^(docs)|^(tests)|^(examples)
+#      exclude: ^(docs)|^(tests)|^(examples)
 
 # Checking static types
 - repo: https://github.com/pre-commit/mirrors-mypy

@@ -40,5 +40,6 @@ def hello_world(ctx: c_void_p) -> c_int64:
 def LICENSE() -> str:
     return "GPL"
 
+
 compile_to_ir("xdp_pass.py", "xdp_pass.ll")
 compile()
