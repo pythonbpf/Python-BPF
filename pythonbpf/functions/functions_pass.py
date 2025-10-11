@@ -4,7 +4,11 @@ import logging
 from typing import Any
 from dataclasses import dataclass
 
-from pythonbpf.helper import HelperHandlerRegistry, handle_helper_call
+from pythonbpf.helper import (
+    HelperHandlerRegistry,
+    handle_helper_call,
+    reset_scratch_pool,
+)
 from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.binary_ops import handle_binary_op
 from pythonbpf.expr import eval_expr, handle_expr, convert_to_bool
@@ -353,6 +357,7 @@ def process_stmt(
     ret_type=ir.IntType(64),
 ):
     logger.info(f"Processing statement: {ast.dump(stmt)}")
+    reset_scratch_pool()
     if isinstance(stmt, ast.Expr):
         handle_expr(
             func,
