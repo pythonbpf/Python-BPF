@@ -6,7 +6,7 @@ import inspect
 
 from .dependency_handler import DependencyHandler
 from .ir_generation import IRGenerator
-from .vmlinux_class_handler import process_vmlinux_class
+from .class_handler import process_vmlinux_class
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +58,8 @@ def detect_import_statement(tree: ast.AST) -> List[Tuple[str, ast.ImportFrom]]:
                 # Valid single import
                 for alias in node.names:
                     import_name = alias.name
-                    # Use alias if provided, otherwise use the original name
-                    as_name = alias.asname if alias.asname else alias.name
+                    # Use alias if provided, otherwise use the original name (commented)
+                    # as_name = alias.asname if alias.asname else alias.name
                     vmlinux_imports.append(("vmlinux", node))
                     logger.info(f"Found vmlinux import: {import_name}")
 
@@ -68,12 +68,13 @@ def detect_import_statement(tree: ast.AST) -> List[Tuple[str, ast.ImportFrom]]:
             for alias in node.names:
                 if alias.name == "vmlinux" or alias.name.startswith("vmlinux."):
                     raise SyntaxError(
-                        f"Direct import of vmlinux module is not supported. "
-                        f"Use 'from vmlinux import <type>' instead."
+                        "Direct import of vmlinux module is not supported. "
+                        "Use 'from vmlinux import <type>' instead."
                     )
 
     logger.info(f"Total vmlinux imports detected: {len(vmlinux_imports)}")
     return vmlinux_imports
+
 
 def vmlinux_proc(tree: ast.AST, module):
     import_statements = detect_import_statement(tree)
@@ -107,7 +108,10 @@ def vmlinux_proc(tree: ast.AST, module):
             imported_name = alias.name
             found = False
             for mod_node in mod_ast.body:
-                if isinstance(mod_node, ast.ClassDef) and mod_node.name == imported_name:
+                if (
+                    isinstance(mod_node, ast.ClassDef)
+                    and mod_node.name == imported_name
+                ):
                     process_vmlinux_class(mod_node, module, handler)
                     found = True
                     break
@@ -120,9 +124,12 @@ def vmlinux_proc(tree: ast.AST, module):
                 if found:
                     break
             if not found:
-                logger.info(f"{imported_name} not found as ClassDef or Assign in vmlinux")
+                logger.info(
+                    f"{imported_name} not found as ClassDef or Assign in vmlinux"
+                )
 
     IRGenerator(module, handler)
+
 
 def process_vmlinux_assign(node, module, assignments: Dict[str, type]):
     raise NotImplementedError("Assignment handling has not been implemented yet")

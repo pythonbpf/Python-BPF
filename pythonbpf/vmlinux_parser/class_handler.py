@@ -1,4 +1,3 @@
-import ast
 import logging
 from functools import lru_cache
 import importlib
@@ -20,9 +19,9 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
     symbols_in_module, imported_module = get_module_symbols("vmlinux")
 
     # Handle both node objects and type objects
-    if hasattr(node, 'name'):
+    if hasattr(node, "name"):
         current_symbol_name = node.name
-    elif hasattr(node, '__name__'):
+    elif hasattr(node, "__name__"):
         current_symbol_name = node.__name__
     else:
         current_symbol_name = str(node)
@@ -30,7 +29,9 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
     if current_symbol_name not in symbols_in_module:
         raise ImportError(f"{current_symbol_name} not present in module vmlinux")
     logger.info(f"Resolving vmlinux class {current_symbol_name}")
-    logger.debug(f"Current handler state: {handler.is_ready} readiness and {handler.get_all_nodes()} all nodes")
+    logger.debug(
+        f"Current handler state: {handler.is_ready} readiness and {handler.get_all_nodes()} all nodes"
+    )
     field_table = {}  # should contain the field and it's type.
 
     # Get the class object from the module
@@ -42,12 +43,12 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
     # Inspect the class fields
     # Assuming class_obj has fields stored in some standard way
     # If it's a ctypes-like structure with _fields_
-    if hasattr(class_obj, '_fields_'):
+    if hasattr(class_obj, "_fields_"):
         for field_name, field_type in class_obj._fields_:
             field_table[field_name] = field_type
 
     # If it's using __annotations__
-    elif hasattr(class_obj, '__annotations__'):
+    elif hasattr(class_obj, "__annotations__"):
         for field_name, field_type in class_obj.__annotations__.items():
             field_table[field_name] = field_type
 
@@ -69,16 +70,23 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
                 print("elem_name:", elem_name, "elem_type:", elem_type)
                 # currently fails when a non-normal type appears which is basically everytime
                 identify_ctypes_type(elem_type)
-                symbol_name = elem_type.__name__ if hasattr(elem_type, '__name__') else str(elem_type)
+                symbol_name = (
+                    elem_type.__name__
+                    if hasattr(elem_type, "__name__")
+                    else str(elem_type)
+                )
                 vmlinux_symbol = getattr(imported_module, symbol_name)
                 if process_vmlinux_class(vmlinux_symbol, llvm_module, handler):
                     new_dep_node.set_field_ready(elem_name, True)
             else:
-                raise ValueError(f"{elem_name} with type {elem_type} not supported in recursive resolver")
+                raise ValueError(
+                    f"{elem_name} with type {elem_type} not supported in recursive resolver"
+                )
         handler.add_node(new_dep_node)
         logger.info(f"added node: {current_symbol_name}")
 
     return True
+
 
 def identify_ctypes_type(t):
     if isinstance(t, type):  # t is a type/class

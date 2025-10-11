@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 @dataclass
 class Field:
     """Represents a field in a dependency node with its type and readiness state."""
+
     name: str
     type: type
     value: Any = None
@@ -64,13 +65,22 @@ class DependencyNode:
         ready_fields = somestruct.get_ready_fields()
         print(f"Ready fields: {[field.name for field in ready_fields.values()]}")  # ['field_1', 'field_2']
     """
+
     name: str
     fields: Dict[str, Field] = field(default_factory=dict)
     _ready_cache: Optional[bool] = field(default=None, repr=False)
 
-    def add_field(self, name: str, field_type: type, initial_value: Any = None, ready: bool = False) -> None:
+    def add_field(
+        self,
+        name: str,
+        field_type: type,
+        initial_value: Any = None,
+        ready: bool = False,
+    ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
-        self.fields[name] = Field(name=name, type=field_type, value=initial_value, ready=ready)
+        self.fields[name] = Field(
+            name=name, type=field_type, value=initial_value, ready=ready
+        )
         # Invalidate readiness cache
         self._ready_cache = None
 
