@@ -8,6 +8,8 @@ class Field:
 
     name: str
     type: type
+    containing_type: Optional[Any]
+    type_size: Optional[int]
     value: Any = None
     ready: bool = False
 
@@ -75,11 +77,18 @@ class DependencyNode:
         name: str,
         field_type: type,
         initial_value: Any = None,
+        containing_type: Optional[Any] = None,
+        type_size: Optional[int] = None,
         ready: bool = False,
     ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
         self.fields[name] = Field(
-            name=name, type=field_type, value=initial_value, ready=ready
+            name=name,
+            type=field_type,
+            value=initial_value,
+            ready=ready,
+            containing_type=containing_type,
+            type_size=type_size,
         )
         # Invalidate readiness cache
         self._ready_cache = None
