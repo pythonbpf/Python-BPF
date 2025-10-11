@@ -8,10 +8,12 @@ import ctypes
 
 logger = logging.getLogger(__name__)
 
+
 @lru_cache(maxsize=1)
 def get_module_symbols(module_name: str):
     imported_module = importlib.import_module(module_name)
     return [name for name in dir(imported_module)], imported_module
+
 
 # Recursive function that gets all the dependent classes and adds them to handler
 def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
@@ -64,11 +66,12 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
             elif module_name == "vmlinux":
                 new_dep_node.add_field(elem_name, elem_type, ready=False)
                 # Create a temporary node-like object for recursion
-                temp_node = type('TempNode', (), {'name': elem_type.__name__ if hasattr(elem_type, '__name__') else str(elem_type)})()
+                temp_node = type('TempNode', (),
+                                 {'name': elem_type.__name__ if hasattr(elem_type, '__name__') else str(elem_type)})()
                 if process_vmlinux_class(temp_node, llvm_module, handler):
                     new_dep_node.set_field_ready(elem_name, True)
             else:
-                print(f"[other] {elem_name} -> {elem_type}")
+                raise ValueError(f"{elem_name} with type {elem_type} not supported in recursive resolver")
         handler.add_node(new_dep_node)
 
     return True
