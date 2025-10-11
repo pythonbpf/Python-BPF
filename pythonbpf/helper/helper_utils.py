@@ -34,6 +34,44 @@ class HelperHandlerRegistry:
         return helper_name in cls._handlers
 
 
+class ScratchPoolManager:
+    """Manage the temporary helper variables in local_sym_tab"""
+
+    def __init__(self):
+        self._counter = 0
+
+    @property
+    def counter(self):
+        return self._counter
+
+    def reset(self):
+        self._counter = 0
+        logger.debug("Scratch pool counter reset to 0")
+
+    def get_next_temp(self, local_sym_tab):
+        temp_name = f"__helper_temp_{self._counter}"
+        self._counter += 1
+
+        if temp_name not in local_sym_tab:
+            raise ValueError(
+                f"Scratch pool exhausted or inadequate: {temp_name}. "
+                f"Current counter: {self._counter}"
+            )
+
+
+_temp_pool_manager = ScratchPoolManager()  # Singleton instance
+
+
+def reset_scratch_pool():
+    """Reset the scratch pool counter"""
+    _temp_pool_manager.reset()
+
+
+def get_next_scratch_temp(local_sym_tab):
+    """Get the next temporary variable name from the scratch pool"""
+    return _temp_pool_manager.get_next_temp(local_sym_tab)
+
+
 def get_var_ptr_from_name(var_name, local_sym_tab):
     """Get a pointer to a variable from the symbol table."""
     if local_sym_tab and var_name in local_sym_tab:
