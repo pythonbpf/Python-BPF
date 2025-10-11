@@ -30,6 +30,7 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
     if current_symbol_name not in symbols_in_module:
         raise ImportError(f"{current_symbol_name} not present in module vmlinux")
     logger.info(f"Resolving vmlinux class {current_symbol_name}")
+    logger.debug(f"Current handler state: {handler.is_ready} readiness and {handler.get_all_nodes()} all nodes")
     field_table = {}  # should contain the field and it's type.
 
     # Get the class object from the module
@@ -65,13 +66,33 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
                 new_dep_node.add_field(elem_name, elem_type, ready=True)
             elif module_name == "vmlinux":
                 new_dep_node.add_field(elem_name, elem_type, ready=False)
-                # Create a temporary node-like object for recursion
-                temp_node = type('TempNode', (),
-                                 {'name': elem_type.__name__ if hasattr(elem_type, '__name__') else str(elem_type)})()
-                if process_vmlinux_class(temp_node, llvm_module, handler):
+                print("elem_name:", elem_name, "elem_type:", elem_type)
+                # currently fails when a non-normal type appears which is basically everytime
+                identify_ctypes_type(elem_type)
+                symbol_name = elem_type.__name__ if hasattr(elem_type, '__name__') else str(elem_type)
+                vmlinux_symbol = getattr(imported_module, symbol_name)
+                if process_vmlinux_class(vmlinux_symbol, llvm_module, handler):
                     new_dep_node.set_field_ready(elem_name, True)
             else:
                 raise ValueError(f"{elem_name} with type {elem_type} not supported in recursive resolver")
         handler.add_node(new_dep_node)
+        logger.info(f"added node: {current_symbol_name}")
 
     return True
+
+def identify_ctypes_type(t):
+    if isinstance(t, type):  # t is a type/class
+        if issubclass(t, ctypes.Array):
+            print("Array type")
+            print("Element type:", t._type_)
+            print("Length:", t._length_)
+        elif issubclass(t, ctypes._Pointer):
+            print("Pointer type")
+            print("Points to:", t._type_)
+        elif issubclass(t, ctypes._SimpleCData):
+            print("Scalar type")
+            print("Base type:", t)
+        else:
+            print("Other ctypes type")
+    else:
+        print("Instance, not type")
