@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
 
-
+#TODO: FIX THE FUCKING TYPE NAME CONVENTION.
 @dataclass
 class Field:
     """Represents a field in a dependency node with its type and readiness state."""
@@ -20,6 +20,26 @@ class Field:
     def set_value(self, value: Any, mark_ready: bool = True) -> None:
         """Set the value of this field and optionally mark it as ready."""
         self.value = value
+        if mark_ready:
+            self.ready = True
+
+    def set_type(self, given_type, mark_ready: bool = True) -> None:
+        """Set value of the type field and mark as ready"""
+        self.type = given_type
+        if mark_ready:
+            self.ready = True
+
+    def set_containing_type(
+        self, containing_type: Optional[Any], mark_ready: bool = True
+    ) -> None:
+        """Set the containing_type of this field and optionally mark it as ready."""
+        self.containing_type = containing_type
+        if mark_ready:
+            self.ready = True
+
+    def set_type_size(self, type_size: Any, mark_ready: bool = True) -> None:
+        """Set the type_size of this field and optionally mark it as ready."""
+        self.type_size = type_size
         if mark_ready:
             self.ready = True
 
@@ -103,6 +123,37 @@ class DependencyNode:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
 
         self.fields[name].set_value(value, mark_ready)
+        # Invalidate readiness cache
+        self._ready_cache = None
+
+    def set_field_type(self, name: str, type: Any, mark_ready: bool = True) -> None:
+        """Set a field's type and optionally mark it as ready."""
+        if name not in self.fields:
+            raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
+
+        self.fields[name].set_type(type, mark_ready)
+        # Invalidate readiness cache
+        self._ready_cache = None
+
+    def set_field_containing_type(
+        self, name: str, containing_type: Any, mark_ready: bool = True
+    ) -> None:
+        """Set a field's containing_type and optionally mark it as ready."""
+        if name not in self.fields:
+            raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
+
+        self.fields[name].set_containing_type(containing_type, mark_ready)
+        # Invalidate readiness cache
+        self._ready_cache = None
+
+    def set_field_type_size(
+        self, name: str, type_size: Any, mark_ready: bool = True
+    ) -> None:
+        """Set a field's type_size and optionally mark it as ready."""
+        if name not in self.fields:
+            raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
+
+        self.fields[name].set_type_size(type_size, mark_ready)
         # Invalidate readiness cache
         self._ready_cache = None
 

@@ -61,6 +61,7 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
         return True
     else:
         new_dep_node = DependencyNode(name=current_symbol_name)
+        handler.add_node(new_dep_node)
         for elem_name, elem_type in field_table.items():
             module_name = getattr(elem_type, "__module__", None)
             if module_name == ctypes.__name__:
@@ -69,36 +70,48 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
                 new_dep_node.add_field(elem_name, elem_type, ready=False)
                 print("elem_name:", elem_name, "elem_type:", elem_type)
                 # currently fails when a non-normal type appears which is basically everytime
-                identify_ctypes_type(elem_type)
+                identify_ctypes_type(elem_name, elem_type, new_dep_node)
                 symbol_name = (
                     elem_type.__name__
                     if hasattr(elem_type, "__name__")
                     else str(elem_type)
                 )
-                vmlinux_symbol = getattr(imported_module, symbol_name)
+                vmlinux_symbol = None
+                if hasattr(elem_type, "_type_"):
+                    containing_module_name = getattr(
+                        (elem_type._type_), "__module__", None
+                    )
+                    if containing_module_name == ctypes.__name__:
+                        new_dep_node.set_field_ready(elem_name, True)
+                        continue
+                    elif containing_module_name == "vmlinux":
+                        symbol_name = (
+                            (elem_type._type_).__name__
+                            if hasattr((elem_type._type_), "__name__")
+                            else str(elem_type._type_)
+                        )
+                        vmlinux_symbol = getattr(imported_module, symbol_name)
+                else:
+                    vmlinux_symbol = getattr(imported_module, symbol_name)
                 if process_vmlinux_class(vmlinux_symbol, llvm_module, handler):
                     new_dep_node.set_field_ready(elem_name, True)
             else:
                 raise ValueError(
                     f"{elem_name} with type {elem_type} not supported in recursive resolver"
                 )
-        handler.add_node(new_dep_node)
         logger.info(f"added node: {current_symbol_name}")
 
     return True
 
 
-def identify_ctypes_type(t):
-    if isinstance(t, type):  # t is a type/class
-        if issubclass(t, ctypes.Array):
-            print("Array type")
-            print("Element type:", t._type_)
-            print("Length:", t._length_)
-        elif issubclass(t, ctypes._Pointer):
-            print("Pointer type")
-            print("Points to:", t._type_)
-        elif issubclass(t, ctypes._SimpleCData):
-            print("Scalar type")
-            print("Base type:", t)
+def identify_ctypes_type(elem_name, elem_type, new_dep_node: DependencyNode):
+    if isinstance(elem_type, type):
+        if issubclass(elem_type, ctypes.Array):
+            new_dep_node.set_field_type(elem_name, ctypes.Array)
+            new_dep_node.set_field_containing_type(elem_name, elem_type._type_)
+            new_dep_node.set_field_type_size(elem_name, elem_type._length_)
+        elif issubclass(elem_type, ctypes._Pointer):
+            new_dep_node.set_field_type(elem_name, ctypes._Pointer)
+            new_dep_node.set_field_containing_type(elem_name, elem_type._type_)
     else:
         raise TypeError("Instance sent instead of Class")
