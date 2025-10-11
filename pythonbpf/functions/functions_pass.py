@@ -383,6 +383,33 @@ def process_stmt(
     return did_return
 
 
+def count_temps_in_call(call_node):
+    """Count the number of temporary variables needed for a function call."""
+
+    count = 0
+    is_helper = False
+
+    if isinstance(call_node.func, ast.Name):
+        if HelperHandlerRegistry.has_handler(call_node.func.id):
+            is_helper = True
+    elif isinstance(call_node.func, ast.Attribute):
+        if HelperHandlerRegistry.has_handler(call_node.func.attr):
+            is_helper = True
+
+    if not is_helper:
+        return 0
+
+    for arg in call_node.args:
+        if (
+            isinstance(arg, ast.BinOp)
+            or isinstance(arg, ast.Constant)
+            or isinstance(arg, ast.UnaryOp)
+        ):
+            count += 1
+
+    return count
+
+
 def allocate_mem(
     module, builder, body, func, ret_type, map_sym_tab, local_sym_tab, structs_sym_tab
 ):
