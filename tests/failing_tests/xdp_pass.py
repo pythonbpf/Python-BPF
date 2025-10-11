@@ -2,6 +2,7 @@ from pythonbpf import bpf, map, section, bpfglobal, compile, compile_to_ir
 from pythonbpf.maps import HashMap
 from pythonbpf.helper import XDP_PASS
 from vmlinux import struct_xdp_md
+# from vmlinux import struct_ring_buffer_per_cpu
 from ctypes import c_int64
 
 # Instructions to how to run this program

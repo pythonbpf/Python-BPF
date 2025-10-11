@@ -16,7 +16,15 @@ def get_module_symbols(module_name: str):
 # Recursive function that gets all the dependent classes and adds them to handler
 def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
     symbols_in_module, imported_module = get_module_symbols("vmlinux")
-    current_symbol_name = node.name
+
+    # Handle both node objects and type objects
+    if hasattr(node, 'name'):
+        current_symbol_name = node.name
+    elif hasattr(node, '__name__'):
+        current_symbol_name = node.__name__
+    else:
+        current_symbol_name = str(node)
+
     if current_symbol_name not in symbols_in_module:
         raise ImportError(f"{current_symbol_name} not present in module vmlinux")
     logger.info(f"Resolving vmlinux class {current_symbol_name}")
@@ -43,7 +51,7 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
     else:
         raise TypeError("Could not get required class and definition")
 
-    logger.info(f"Extracted fields for {current_symbol_name}: {field_table}")
+    logger.debug(f"Extracted fields for {current_symbol_name}: {field_table}")
     if handler.has_node(current_symbol_name):
         logger.info("Extraction pruned due to already available field")
         return True
@@ -55,7 +63,9 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
                 new_dep_node.add_field(elem_name, elem_type, ready=True)
             elif module_name == "vmlinux":
                 new_dep_node.add_field(elem_name, elem_type, ready=False)
-                if process_vmlinux_class(elem_type, llvm_module, handler):
+                # Create a temporary node-like object for recursion
+                temp_node = type('TempNode', (), {'name': elem_type.__name__ if hasattr(elem_type, '__name__') else str(elem_type)})()
+                if process_vmlinux_class(temp_node, llvm_module, handler):
                     new_dep_node.set_field_ready(elem_name, True)
             else:
                 print(f"[other] {elem_name} -> {elem_type}")
