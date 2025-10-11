@@ -1,5 +1,5 @@
 from typing import Optional, Dict, List, Iterator
-from dependency_node import DependencyNode
+from .dependency_node import DependencyNode
 
 
 class DependencyHandler:

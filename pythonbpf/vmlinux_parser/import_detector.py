@@ -1,8 +1,11 @@
 import ast
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import importlib
 import inspect
+
+from .dependency_handler import DependencyHandler
+from .ir_generation import IRGenerator
 from .vmlinux_class_handler import process_vmlinux_class
 
 logger = logging.getLogger(__name__)
@@ -75,6 +78,11 @@ def detect_import_statement(tree: ast.AST) -> List[Tuple[str, ast.ImportFrom]]:
 def vmlinux_proc(tree: ast.AST, module):
     import_statements = detect_import_statement(tree)
 
+    # initialise dependency handler
+    handler = DependencyHandler()
+    # initialise assignment dictionary of name to type
+    assignments: Dict[str, type] = {}
+
     if not import_statements:
         logger.info("No vmlinux imports found")
         return
@@ -100,13 +108,13 @@ def vmlinux_proc(tree: ast.AST, module):
             found = False
             for mod_node in mod_ast.body:
                 if isinstance(mod_node, ast.ClassDef) and mod_node.name == imported_name:
-                    process_vmlinux_class(mod_node, module)
+                    process_vmlinux_class(mod_node, module, handler)
                     found = True
                     break
                 if isinstance(mod_node, ast.Assign):
                     for target in mod_node.targets:
                         if isinstance(target, ast.Name) and target.id == imported_name:
-                            process_vmlinux_assign(mod_node, module)
+                            process_vmlinux_assign(mod_node, module, assignments)
                             found = True
                             break
                 if found:
@@ -114,5 +122,7 @@ def vmlinux_proc(tree: ast.AST, module):
             if not found:
                 logger.info(f"{imported_name} not found as ClassDef or Assign in vmlinux")
 
-def process_vmlinux_assign(node, module):
+    IRGenerator(module, handler)
+
+def process_vmlinux_assign(node, module, assignments: Dict[str, type]):
     raise NotImplementedError("Assignment handling has not been implemented yet")
