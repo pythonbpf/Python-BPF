@@ -94,6 +94,25 @@ def get_or_create_ptr_from_arg(arg, builder, local_sym_tab):
         ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
     elif isinstance(arg, ast.Constant) and isinstance(arg.value, int):
         ptr = create_int_constant_ptr(arg.value, builder, local_sym_tab)
+    elif isinstance(arg, ast.BinOp):
+        # Evaluate the expression and store the result in a temp variable
+        val, _ = eval_expr(
+            None,
+            None,
+            builder,
+            arg,
+            local_sym_tab,
+            None,
+            None,
+        )
+        if val is None:
+            raise ValueError("Failed to evaluate expression for helper arg.")
+
+        # NOTE: We assume the result is an int64 for now
+        ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab)
+        logger.debug(f"Using temp variable '{temp_name}' for expression result")
+        builder.store(val, ptr)
+
     else:
         raise NotImplementedError(
             "Only simple variable names are supported as args in map helpers."
