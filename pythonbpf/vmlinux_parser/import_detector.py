@@ -8,7 +8,7 @@ from .vmlinux_class_handler import process_vmlinux_class
 logger = logging.getLogger(__name__)
 
 
-def detect_import_statement(tree: ast.AST) -> List[Tuple[str, str]]:
+def detect_import_statement(tree: ast.AST) -> List[Tuple[str, ast.ImportFrom]]:
     """
     Parse AST and detect import statements from vmlinux.
 
