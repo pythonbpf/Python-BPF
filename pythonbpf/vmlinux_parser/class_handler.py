@@ -13,9 +13,16 @@ def get_module_symbols(module_name: str):
     imported_module = importlib.import_module(module_name)
     return [name for name in dir(imported_module)], imported_module
 
+def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
+    symbols_in_module, imported_module = get_module_symbols("vmlinux")
+    if node.name in symbols_in_module:
+        vmlinux_type = getattr(imported_module, node.name)
+        process_vmlinux_post_ast(vmlinux_type, llvm_module, handler)
+    else:
+        raise ImportError(f"{node.name} not in vmlinux")
 
 # Recursive function that gets all the dependent classes and adds them to handler
-def process_vmlinux_class(node, llvm_module, handler: DependencyHandler, processing_stack=None):
+def process_vmlinux_post_ast(node, llvm_module, handler: DependencyHandler, processing_stack=None):
     """
     Recursively process vmlinux classes and their dependencies.
 
@@ -142,7 +149,7 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler, process
 
                 # Recursively process the dependency
                 if vmlinux_symbol is not None:
-                    if process_vmlinux_class(vmlinux_symbol, llvm_module, handler, processing_stack):
+                    if process_vmlinux_post_ast(vmlinux_symbol, llvm_module, handler, processing_stack):
                         new_dep_node.set_field_ready(elem_name, True)
             else:
                 raise ValueError(
