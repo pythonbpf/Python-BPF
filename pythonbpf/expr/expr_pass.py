@@ -5,6 +5,7 @@ import logging
 from typing import Dict
 
 from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
+from .call_registry import CallHandlerRegistry
 from .type_normalization import (
     convert_to_bool,
     handle_comparator,
@@ -14,27 +15,106 @@ from .type_normalization import (
 
 logger: Logger = logging.getLogger(__name__)
 
+# ============================================================================
+# Leaf Handlers (No Recursive eval_expr calls)
+# ============================================================================
 
-class CallHandlerRegistry:
-    """Registry for handling different types of calls (helpers, etc.)"""
 
-    _handler = None
+def _handle_name_expr(expr: ast.Name, local_sym_tab: Dict, builder: ir.IRBuilder):
+    """Handle ast.Name expressions."""
+    if expr.id in local_sym_tab:
+        var = local_sym_tab[expr.id].var
+        val = builder.load(var)
+        return val, local_sym_tab[expr.id].ir_type
+    else:
+        logger.info(f"Undefined variable {expr.id}")
+        return None
 
-    @classmethod
-    def set_handler(cls, handler):
-        """Set the handler for unknown calls"""
-        cls._handler = handler
 
-    @classmethod
-    def handle_call(
-        cls, call, module, builder, func, local_sym_tab, map_sym_tab, structs_sym_tab
+def _handle_constant_expr(module, builder, expr: ast.Constant):
+    """Handle ast.Constant expressions."""
+    if isinstance(expr.value, int) or isinstance(expr.value, bool):
+        return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
+    elif isinstance(expr.value, str):
+        str_name = f".str.{id(expr)}"
+        str_bytes = expr.value.encode("utf-8") + b"\x00"
+        str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
+        str_constant = ir.Constant(str_type, bytearray(str_bytes))
+
+        # Create global variable
+        global_str = ir.GlobalVariable(module, str_type, name=str_name)
+        global_str.linkage = "internal"
+        global_str.global_constant = True
+        global_str.initializer = str_constant
+
+        str_ptr = builder.bitcast(global_str, ir.PointerType(ir.IntType(8)))
+        return str_ptr, ir.PointerType(ir.IntType(8))
+    else:
+        logger.error(f"Unsupported constant type {ast.dump(expr)}")
+        return None
+
+
+def _handle_attribute_expr(
+    expr: ast.Attribute,
+    local_sym_tab: Dict,
+    structs_sym_tab: Dict,
+    builder: ir.IRBuilder,
+):
+    """Handle ast.Attribute expressions for struct field access."""
+    if isinstance(expr.value, ast.Name):
+        var_name = expr.value.id
+        attr_name = expr.attr
+        if var_name in local_sym_tab:
+            var_ptr, var_type, var_metadata = local_sym_tab[var_name]
+            logger.info(f"Loading attribute {attr_name} from variable {var_name}")
+            logger.info(f"Variable type: {var_type}, Variable ptr: {var_ptr}")
+            metadata = structs_sym_tab[var_metadata]
+            if attr_name in metadata.fields:
+                gep = metadata.gep(builder, var_ptr, attr_name)
+                val = builder.load(gep)
+                field_type = metadata.field_type(attr_name)
+                return val, field_type
+    return None
+
+
+def _handle_deref_call(expr: ast.Call, local_sym_tab: Dict, builder: ir.IRBuilder):
+    """Handle deref function calls."""
+    logger.info(f"Handling deref {ast.dump(expr)}")
+    if len(expr.args) != 1:
+        logger.info("deref takes exactly one argument")
+        return None
+
+    arg = expr.args[0]
+    if (
+        isinstance(arg, ast.Call)
+        and isinstance(arg.func, ast.Name)
+        and arg.func.id == "deref"
     ):
-        """Handle a call using the registered handler"""
-        if cls._handler is None:
+        logger.info("Multiple deref not supported")
+        return None
+
+    if isinstance(arg, ast.Name):
+        if arg.id in local_sym_tab:
+            arg_ptr = local_sym_tab[arg.id].var
+        else:
+            logger.info(f"Undefined variable {arg.id}")
             return None
-        return cls._handler(
-            call, module, builder, func, local_sym_tab, map_sym_tab, structs_sym_tab
-        )
+    else:
+        logger.info("Unsupported argument type for deref")
+        return None
+
+    if arg_ptr is None:
+        logger.info("Failed to evaluate deref argument")
+        return None
+
+    # Load the value from pointer
+    val = builder.load(arg_ptr)
+    return val, local_sym_tab[arg.id].ir_type
+
+
+# ============================================================================
+# Binary Operations
+# ============================================================================
 
 
 def get_operand_value(
@@ -139,96 +219,9 @@ def _handle_binary_op(
     return result, result.type
 
 
-def _handle_name_expr(expr: ast.Name, local_sym_tab: Dict, builder: ir.IRBuilder):
-    """Handle ast.Name expressions."""
-    if expr.id in local_sym_tab:
-        var = local_sym_tab[expr.id].var
-        val = builder.load(var)
-        return val, local_sym_tab[expr.id].ir_type
-    else:
-        logger.info(f"Undefined variable {expr.id}")
-        return None
-
-
-def _handle_constant_expr(module, builder, expr: ast.Constant):
-    """Handle ast.Constant expressions."""
-    if isinstance(expr.value, int) or isinstance(expr.value, bool):
-        return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
-    elif isinstance(expr.value, str):
-        str_name = f".str.{id(expr)}"
-        str_bytes = expr.value.encode("utf-8") + b"\x00"
-        str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
-        str_constant = ir.Constant(str_type, bytearray(str_bytes))
-
-        # Create global variable
-        global_str = ir.GlobalVariable(module, str_type, name=str_name)
-        global_str.linkage = "internal"
-        global_str.global_constant = True
-        global_str.initializer = str_constant
-
-        str_ptr = builder.bitcast(global_str, ir.PointerType(ir.IntType(8)))
-        return str_ptr, ir.PointerType(ir.IntType(8))
-    else:
-        logger.error(f"Unsupported constant type {ast.dump(expr)}")
-        return None
-
-
-def _handle_attribute_expr(
-    expr: ast.Attribute,
-    local_sym_tab: Dict,
-    structs_sym_tab: Dict,
-    builder: ir.IRBuilder,
-):
-    """Handle ast.Attribute expressions for struct field access."""
-    if isinstance(expr.value, ast.Name):
-        var_name = expr.value.id
-        attr_name = expr.attr
-        if var_name in local_sym_tab:
-            var_ptr, var_type, var_metadata = local_sym_tab[var_name]
-            logger.info(f"Loading attribute {attr_name} from variable {var_name}")
-            logger.info(f"Variable type: {var_type}, Variable ptr: {var_ptr}")
-            metadata = structs_sym_tab[var_metadata]
-            if attr_name in metadata.fields:
-                gep = metadata.gep(builder, var_ptr, attr_name)
-                val = builder.load(gep)
-                field_type = metadata.field_type(attr_name)
-                return val, field_type
-    return None
-
-
-def _handle_deref_call(expr: ast.Call, local_sym_tab: Dict, builder: ir.IRBuilder):
-    """Handle deref function calls."""
-    logger.info(f"Handling deref {ast.dump(expr)}")
-    if len(expr.args) != 1:
-        logger.info("deref takes exactly one argument")
-        return None
-
-    arg = expr.args[0]
-    if (
-        isinstance(arg, ast.Call)
-        and isinstance(arg.func, ast.Name)
-        and arg.func.id == "deref"
-    ):
-        logger.info("Multiple deref not supported")
-        return None
-
-    if isinstance(arg, ast.Name):
-        if arg.id in local_sym_tab:
-            arg_ptr = local_sym_tab[arg.id].var
-        else:
-            logger.info(f"Undefined variable {arg.id}")
-            return None
-    else:
-        logger.info("Unsupported argument type for deref")
-        return None
-
-    if arg_ptr is None:
-        logger.info("Failed to evaluate deref argument")
-        return None
-
-    # Load the value from pointer
-    val = builder.load(arg_ptr)
-    return val, local_sym_tab[arg.id].ir_type
+# ============================================================================
+# Comparison and Unary Operations
+# ============================================================================
 
 
 def _handle_ctypes_call(
@@ -339,6 +332,11 @@ def _handle_unary_op(
         neg_one = ir.Constant(ir.IntType(64), -1)
         result = builder.mul(operand, neg_one)
         return result, ir.IntType(64)
+
+
+# ============================================================================
+# Boolean Operations
+# ============================================================================
 
 
 def _handle_and_op(func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab):
@@ -469,6 +467,11 @@ def _handle_boolean_op(
     else:
         logger.error(f"Unsupported boolean operator: {type(expr.op).__name__}")
         return None
+
+
+# ============================================================================
+# Expression Dispatcher
+# ============================================================================
 
 
 def eval_expr(
