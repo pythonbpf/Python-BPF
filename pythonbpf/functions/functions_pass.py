@@ -10,7 +10,10 @@ from pythonbpf.helper import (
 )
 from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.expr import eval_expr, handle_expr, convert_to_bool
-from pythonbpf.assign_pass import handle_variable_assignment
+from pythonbpf.assign_pass import (
+    handle_variable_assignment,
+    handle_struct_field_assignment,
+)
 
 from .return_utils import _handle_none_return, _handle_xdp_return, _is_xdp_name
 
@@ -78,47 +81,15 @@ def handle_assign(
             logger.error(f"Failed to handle assignment to {var_name}")
         return
 
-    logger.info(f"Handling assignment to {ast.dump(target)}")
-    if not isinstance(target, ast.Name) and not isinstance(target, ast.Attribute):
-        logger.info("Unsupported assignment target")
+    if isinstance(target, ast.Attribute):
+        # NOTE: Struct field assignment case: pkt.field = value
+        handle_struct_field_assignment(
+            func, module, builder, target, rval, local_sym_tab, structs_sym_tab
+        )
         return
-    var_name = target.id if isinstance(target, ast.Name) else target.value.id
-    rval = stmt.value
 
-    # struct field assignment
-    field_name = target.attr
-    if var_name in local_sym_tab:
-        struct_type = local_sym_tab[var_name].metadata
-        struct_info = structs_sym_tab[struct_type]
-        if field_name in struct_info.fields:
-            field_ptr = struct_info.gep(
-                builder, local_sym_tab[var_name].var, field_name
-            )
-            val = eval_expr(
-                func,
-                module,
-                builder,
-                rval,
-                local_sym_tab,
-                map_sym_tab,
-                structs_sym_tab,
-            )
-            if isinstance(struct_info.field_type(field_name), ir.ArrayType) and val[
-                1
-            ] == ir.PointerType(ir.IntType(8)):
-                # TODO: Figure it out, not a priority rn
-                # Special case for string assignment to char array
-                # str_len = struct_info["field_types"][field_idx].count
-                # assign_string_to_array(builder, field_ptr, val[0], str_len)
-                # print(f"Assigned to struct field {var_name}.{field_name}")
-                pass
-            if val is None:
-                logger.info("Failed to evaluate struct field assignment")
-                return
-            logger.info(field_ptr)
-            builder.store(val[0], field_ptr)
-            logger.info(f"Assigned to struct field {var_name}.{field_name}")
-            return
+    # Unsupported target type
+    logger.error(f"Unsupported assignment target: {ast.dump(target)}")
 
 
 def handle_cond(
