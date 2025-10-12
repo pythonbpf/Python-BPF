@@ -41,7 +41,7 @@ def hello_world(ctx: c_void_p) -> c_int64:
     x = last.lookup(0)
     x = x + 1
     print(f"x is {x}")
-    if x == 11:
+    if x == 10:
         jat = data_t()
         jat.ts = 456
         print(f"Hello, World!, ts is {jat.ts}")
