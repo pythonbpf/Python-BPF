@@ -6,6 +6,46 @@ from pythonbpf.expr import eval_expr
 logger = logging.getLogger(__name__)
 
 
+def handle_struct_field_assignment(
+    func, module, builder, target, rval, local_sym_tab, structs_sym_tab
+):
+    """Handle struct field assignment (obj.field = value)."""
+
+    var_name = target.value.id
+    field_name = target.attr
+
+    if var_name not in local_sym_tab:
+        logger.error(f"Variable '{var_name}' not found in symbol table")
+        return
+
+    struct_type = local_sym_tab[var_name].metadata
+    struct_info = structs_sym_tab[struct_type]
+
+    if field_name not in struct_info.fields:
+        logger.error(f"Field '{field_name}' not found in struct '{struct_type}'")
+        return
+
+    # Get field pointer and evaluate value
+    field_ptr = struct_info.gep(builder, local_sym_tab[var_name].var, field_name)
+    val = eval_expr(func, module, builder, rval, local_sym_tab, None, structs_sym_tab)
+
+    if val is None:
+        logger.error(f"Failed to evaluate value for {var_name}.{field_name}")
+        return
+
+    # TODO: Handle string assignment to char array (not a priority)
+    field_type = struct_info.field_type(field_name)
+    if isinstance(field_type, ir.ArrayType) and val[1] == ir.PointerType(ir.IntType(8)):
+        logger.warning(
+            f"String to char array assignment not implemented for {var_name}.{field_name}"
+        )
+        return
+
+    # Store the value
+    builder.store(val[0], field_ptr)
+    logger.info(f"Assigned to struct field {var_name}.{field_name}")
+
+
 def handle_variable_assignment(
     func, module, builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
 ):
