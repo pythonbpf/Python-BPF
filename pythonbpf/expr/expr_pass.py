@@ -21,10 +21,24 @@ def _handle_name_expr(expr: ast.Name, local_sym_tab: Dict, builder: ir.IRBuilder
         return None
 
 
-def _handle_constant_expr(expr: ast.Constant):
+def _handle_constant_expr(module, builder, expr: ast.Constant):
     """Handle ast.Constant expressions."""
     if isinstance(expr.value, int) or isinstance(expr.value, bool):
         return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
+    elif isinstance(expr.value, str):
+        str_name = f".str.{id(expr)}"
+        str_bytes = expr.value.encode("utf-8") + b"\x00"
+        str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
+        str_constant = ir.Constant(str_type, bytearray(str_bytes))
+
+        # Create global variable
+        global_str = ir.GlobalVariable(module, str_type, name=str_name)
+        global_str.linkage = "internal"
+        global_str.global_constant = True
+        global_str.initializer = str_constant
+
+        str_ptr = builder.bitcast(global_str, ir.PointerType(ir.IntType(8)))
+        return str_ptr, ir.PointerType(ir.IntType(8))
     else:
         logger.error(f"Unsupported constant type {ast.dump(expr)}")
         return None
@@ -343,7 +357,7 @@ def eval_expr(
     if isinstance(expr, ast.Name):
         return _handle_name_expr(expr, local_sym_tab, builder)
     elif isinstance(expr, ast.Constant):
-        return _handle_constant_expr(expr)
+        return _handle_constant_expr(module, builder, expr)
     elif isinstance(expr, ast.Call):
         if isinstance(expr.func, ast.Name) and expr.func.id == "deref":
             return _handle_deref_call(expr, local_sym_tab, builder)
