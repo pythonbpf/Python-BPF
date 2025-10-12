@@ -15,6 +15,28 @@ from .type_normalization import (
 logger: Logger = logging.getLogger(__name__)
 
 
+class CallHandlerRegistry:
+    """Registry for handling different types of calls (helpers, etc.)"""
+
+    _handler = None
+
+    @classmethod
+    def set_handler(cls, handler):
+        """Set the handler for unknown calls"""
+        cls._handler = handler
+
+    @classmethod
+    def handle_call(
+        cls, call, module, builder, func, local_sym_tab, map_sym_tab, structs_sym_tab
+    ):
+        """Handle a call using the registered handler"""
+        if cls._handler is None:
+            return None
+        return cls._handler(
+            call, module, builder, func, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+
+
 def get_operand_value(
     func, module, operand, builder, local_sym_tab, map_sym_tab, structs_sym_tab=None
 ):
@@ -478,51 +500,14 @@ def eval_expr(
                 structs_sym_tab,
             )
 
-        # delayed import to avoid circular dependency
-        from pythonbpf.helper import HelperHandlerRegistry, handle_helper_call
+        result = CallHandlerRegistry.handle_call(
+            expr, module, builder, func, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
+        if result is not None:
+            return result
 
-        if isinstance(expr.func, ast.Name) and HelperHandlerRegistry.has_handler(
-            expr.func.id
-        ):
-            return handle_helper_call(
-                expr,
-                module,
-                builder,
-                func,
-                local_sym_tab,
-                map_sym_tab,
-                structs_sym_tab,
-            )
-        elif isinstance(expr.func, ast.Attribute):
-            logger.info(f"Handling method call: {ast.dump(expr.func)}")
-            if isinstance(expr.func.value, ast.Call) and isinstance(
-                expr.func.value.func, ast.Name
-            ):
-                method_name = expr.func.attr
-                if HelperHandlerRegistry.has_handler(method_name):
-                    return handle_helper_call(
-                        expr,
-                        module,
-                        builder,
-                        func,
-                        local_sym_tab,
-                        map_sym_tab,
-                        structs_sym_tab,
-                    )
-            elif isinstance(expr.func.value, ast.Name):
-                obj_name = expr.func.value.id
-                method_name = expr.func.attr
-                if obj_name in map_sym_tab:
-                    if HelperHandlerRegistry.has_handler(method_name):
-                        return handle_helper_call(
-                            expr,
-                            module,
-                            builder,
-                            func,
-                            local_sym_tab,
-                            map_sym_tab,
-                            structs_sym_tab,
-                        )
+        logger.warning(f"Unknown call: {ast.dump(expr)}")
+        return None
     elif isinstance(expr, ast.Attribute):
         return _handle_attribute_expr(expr, local_sym_tab, structs_sym_tab, builder)
     elif isinstance(expr, ast.BinOp):
