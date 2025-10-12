@@ -71,7 +71,7 @@ def bpf_map_lookup_elem_emitter(
     )
     map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
 
-    # TODO: I have changed the return typr to i64*, as we are
+    # TODO: I have changed the return type to i64*, as we are
     # allocating space for that type in allocate_mem. This is
     # temporary, and we will honour other widths later. But this
     # allows us to have cool binary ops on the returned value.

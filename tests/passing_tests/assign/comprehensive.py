@@ -6,7 +6,7 @@ from pythonbpf.helper import ktime
 
 # NOTE: This is a comprehensive test combining struct, helper, and map features
 # Please note that at line 50, though we have used an absurd expression to test
-# the comiler, it is recommended to used named variables to reduce the amount of
+# the compiler, it is recommended to use named variables to reduce the amount of
 # scratch space that needs to be allocated.
 
 @bpf
