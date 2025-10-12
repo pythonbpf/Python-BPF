@@ -180,23 +180,23 @@ def _handle_unary_op(
         logger.error("Only 'not' and '-' unary operators are supported")
         return None
 
-    operand = eval_expr(
-        func, module, builder, expr.operand, local_sym_tab, map_sym_tab, structs_sym_tab
+    from pythonbpf.binary_ops import get_operand_value
+
+    operand = get_operand_value(
+        func, module, expr.operand, builder, local_sym_tab, map_sym_tab, structs_sym_tab
     )
     if operand is None:
         logger.error("Failed to evaluate operand for unary operation")
         return None
 
-    operand_val, operand_type = operand
-
     if isinstance(expr.op, ast.Not):
         true_const = ir.Constant(ir.IntType(1), 1)
-        result = builder.xor(convert_to_bool(builder, operand_val), true_const)
+        result = builder.xor(convert_to_bool(builder, operand), true_const)
         return result, ir.IntType(1)
     elif isinstance(expr.op, ast.USub):
         # Multiply by -1
         neg_one = ir.Constant(ir.IntType(64), -1)
-        result = builder.mul(operand_val, neg_one)
+        result = builder.mul(operand, neg_one)
         return result, ir.IntType(64)
 
 

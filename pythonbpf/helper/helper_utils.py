@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from llvmlite import ir
 from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth
+from pythonbpf.binary_ops import get_operand_value
 
 logger = logging.getLogger(__name__)
 
@@ -98,14 +99,8 @@ def get_or_create_ptr_from_arg(
         ptr = create_int_constant_ptr(arg.value, builder, local_sym_tab)
     else:
         # Evaluate the expression and store the result in a temp variable
-        val, _ = eval_expr(
-            func,
-            module,
-            builder,
-            arg,
-            local_sym_tab,
-            map_sym_tab,
-            struct_sym_tab,
+        val = get_operand_value(
+            func, module, arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab
         )
         if val is None:
             raise ValueError("Failed to evaluate expression for helper arg.")
