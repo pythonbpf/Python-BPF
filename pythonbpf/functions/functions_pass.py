@@ -6,11 +6,9 @@ from dataclasses import dataclass
 
 from pythonbpf.helper import (
     HelperHandlerRegistry,
-    handle_helper_call,
     reset_scratch_pool,
 )
 from pythonbpf.type_deducer import ctypes_to_ir
-from pythonbpf.binary_ops import handle_binary_op
 from pythonbpf.expr import eval_expr, handle_expr, convert_to_bool
 from pythonbpf.assign_pass import handle_variable_assignment
 
@@ -80,191 +78,47 @@ def handle_assign(
             logger.error(f"Failed to handle assignment to {var_name}")
         return
 
-    num_types = ("c_int32", "c_int64", "c_uint32", "c_uint64")
-
     logger.info(f"Handling assignment to {ast.dump(target)}")
     if not isinstance(target, ast.Name) and not isinstance(target, ast.Attribute):
         logger.info("Unsupported assignment target")
         return
     var_name = target.id if isinstance(target, ast.Name) else target.value.id
     rval = stmt.value
-    if isinstance(target, ast.Attribute):
-        # struct field assignment
-        field_name = target.attr
-        if var_name in local_sym_tab:
-            struct_type = local_sym_tab[var_name].metadata
-            struct_info = structs_sym_tab[struct_type]
-            if field_name in struct_info.fields:
-                field_ptr = struct_info.gep(
-                    builder, local_sym_tab[var_name].var, field_name
-                )
-                val = eval_expr(
-                    func,
-                    module,
-                    builder,
-                    rval,
-                    local_sym_tab,
-                    map_sym_tab,
-                    structs_sym_tab,
-                )
-                if isinstance(struct_info.field_type(field_name), ir.ArrayType) and val[
-                    1
-                ] == ir.PointerType(ir.IntType(8)):
-                    # TODO: Figure it out, not a priority rn
-                    # Special case for string assignment to char array
-                    # str_len = struct_info["field_types"][field_idx].count
-                    # assign_string_to_array(builder, field_ptr, val[0], str_len)
-                    # print(f"Assigned to struct field {var_name}.{field_name}")
-                    pass
-                if val is None:
-                    logger.info("Failed to evaluate struct field assignment")
-                    return
-                logger.info(field_ptr)
-                builder.store(val[0], field_ptr)
-                logger.info(f"Assigned to struct field {var_name}.{field_name}")
+
+    # struct field assignment
+    field_name = target.attr
+    if var_name in local_sym_tab:
+        struct_type = local_sym_tab[var_name].metadata
+        struct_info = structs_sym_tab[struct_type]
+        if field_name in struct_info.fields:
+            field_ptr = struct_info.gep(
+                builder, local_sym_tab[var_name].var, field_name
+            )
+            val = eval_expr(
+                func,
+                module,
+                builder,
+                rval,
+                local_sym_tab,
+                map_sym_tab,
+                structs_sym_tab,
+            )
+            if isinstance(struct_info.field_type(field_name), ir.ArrayType) and val[
+                1
+            ] == ir.PointerType(ir.IntType(8)):
+                # TODO: Figure it out, not a priority rn
+                # Special case for string assignment to char array
+                # str_len = struct_info["field_types"][field_idx].count
+                # assign_string_to_array(builder, field_ptr, val[0], str_len)
+                # print(f"Assigned to struct field {var_name}.{field_name}")
+                pass
+            if val is None:
+                logger.info("Failed to evaluate struct field assignment")
                 return
-    elif isinstance(rval, ast.Constant):
-        if isinstance(rval.value, bool):
-            if rval.value:
-                builder.store(
-                    ir.Constant(ir.IntType(1), 1), local_sym_tab[var_name].var
-                )
-            else:
-                builder.store(
-                    ir.Constant(ir.IntType(1), 0), local_sym_tab[var_name].var
-                )
-            logger.info(f"Assigned constant {rval.value} to {var_name}")
-        elif isinstance(rval.value, int):
-            # Assume c_int64 for now
-            # var = builder.alloca(ir.IntType(64), name=var_name)
-            # var.align = 8
-            builder.store(
-                ir.Constant(ir.IntType(64), rval.value), local_sym_tab[var_name].var
-            )
-            logger.info(f"Assigned constant {rval.value} to {var_name}")
-        elif isinstance(rval.value, str):
-            str_val = rval.value.encode("utf-8") + b"\x00"
-            str_const = ir.Constant(
-                ir.ArrayType(ir.IntType(8), len(str_val)), bytearray(str_val)
-            )
-            global_str = ir.GlobalVariable(
-                module, str_const.type, name=f"{var_name}_str"
-            )
-            global_str.linkage = "internal"
-            global_str.global_constant = True
-            global_str.initializer = str_const
-            str_ptr = builder.bitcast(global_str, ir.PointerType(ir.IntType(8)))
-            builder.store(str_ptr, local_sym_tab[var_name].var)
-            logger.info(f"Assigned string constant '{rval.value}' to {var_name}")
-        else:
-            logger.info("Unsupported constant type")
-    elif isinstance(rval, ast.Call):
-        if isinstance(rval.func, ast.Name):
-            call_type = rval.func.id
-            logger.info(f"Assignment call type: {call_type}")
-            if (
-                call_type in num_types
-                and len(rval.args) == 1
-                and isinstance(rval.args[0], ast.Constant)
-                and isinstance(rval.args[0].value, int)
-            ):
-                ir_type = ctypes_to_ir(call_type)
-                # var = builder.alloca(ir_type, name=var_name)
-                # var.align = ir_type.width // 8
-                builder.store(
-                    ir.Constant(ir_type, rval.args[0].value),
-                    local_sym_tab[var_name].var,
-                )
-                logger.info(
-                    f"Assigned {call_type} constant {rval.args[0].value} to {var_name}"
-                )
-            elif HelperHandlerRegistry.has_handler(call_type):
-                # var = builder.alloca(ir.IntType(64), name=var_name)
-                # var.align = 8
-                val = handle_helper_call(
-                    rval,
-                    module,
-                    builder,
-                    func,
-                    local_sym_tab,
-                    map_sym_tab,
-                    structs_sym_tab,
-                )
-                builder.store(val[0], local_sym_tab[var_name].var)
-                logger.info(f"Assigned constant {rval.func.id} to {var_name}")
-            elif call_type == "deref" and len(rval.args) == 1:
-                logger.info(f"Handling deref assignment {ast.dump(rval)}")
-                val = eval_expr(
-                    func,
-                    module,
-                    builder,
-                    rval,
-                    local_sym_tab,
-                    map_sym_tab,
-                    structs_sym_tab,
-                )
-                if val is None:
-                    logger.info("Failed to evaluate deref argument")
-                    return
-                logger.info(f"Dereferenced value: {val}, storing in {var_name}")
-                builder.store(val[0], local_sym_tab[var_name].var)
-                logger.info(f"Dereferenced and assigned to {var_name}")
-            elif call_type in structs_sym_tab and len(rval.args) == 0:
-                struct_info = structs_sym_tab[call_type]
-                ir_type = struct_info.ir_type
-                # var = builder.alloca(ir_type, name=var_name)
-                # Null init
-                builder.store(ir.Constant(ir_type, None), local_sym_tab[var_name].var)
-                logger.info(f"Assigned struct {call_type} to {var_name}")
-            else:
-                logger.info(f"Unsupported assignment call type: {call_type}")
-        elif isinstance(rval.func, ast.Attribute):
-            logger.info(f"Assignment call attribute: {ast.dump(rval.func)}")
-            if isinstance(rval.func.value, ast.Name):
-                if rval.func.value.id in map_sym_tab:
-                    map_name = rval.func.value.id
-                    method_name = rval.func.attr
-                    if HelperHandlerRegistry.has_handler(method_name):
-                        val = handle_helper_call(
-                            rval,
-                            module,
-                            builder,
-                            func,
-                            local_sym_tab,
-                            map_sym_tab,
-                            structs_sym_tab,
-                        )
-                        builder.store(val[0], local_sym_tab[var_name].var)
-                else:
-                    # TODO: probably a struct access
-                    logger.info(f"TODO STRUCT ACCESS {ast.dump(rval)}")
-            elif isinstance(rval.func.value, ast.Call) and isinstance(
-                rval.func.value.func, ast.Name
-            ):
-                map_name = rval.func.value.func.id
-                method_name = rval.func.attr
-                if map_name in map_sym_tab:
-                    if HelperHandlerRegistry.has_handler(method_name):
-                        val = handle_helper_call(
-                            rval,
-                            module,
-                            builder,
-                            func,
-                            local_sym_tab,
-                            map_sym_tab,
-                            structs_sym_tab,
-                        )
-                        # var = builder.alloca(ir.IntType(64), name=var_name)
-                        # var.align = 8
-                        builder.store(val[0], local_sym_tab[var_name].var)
-            else:
-                logger.info("Unsupported assignment call structure")
-        else:
-            logger.info("Unsupported assignment call function type")
-    elif isinstance(rval, ast.BinOp):
-        handle_binary_op(rval, builder, var_name, local_sym_tab)
-    else:
-        logger.info("Unsupported assignment value type")
+            logger.info(field_ptr)
+            builder.store(val[0], field_ptr)
+            logger.info(f"Assigned to struct field {var_name}.{field_name}")
+            return
 
 
 def handle_cond(
