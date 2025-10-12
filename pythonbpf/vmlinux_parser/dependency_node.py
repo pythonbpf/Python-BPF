@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
 
-#TODO: FIX THE FUCKING TYPE NAME CONVENTION.
+
+# TODO: FIX THE FUCKING TYPE NAME CONVENTION.
 @dataclass
 class Field:
     """Represents a field in a dependency node with its type and readiness state."""
