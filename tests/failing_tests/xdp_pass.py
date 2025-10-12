@@ -2,8 +2,10 @@ from pythonbpf import bpf, map, section, bpfglobal, compile_to_ir
 from pythonbpf.maps import HashMap
 from pythonbpf.helper import XDP_PASS
 from vmlinux import struct_xdp_md
+
 # from vmlinux import struct_ring_buffer_per_cpu  # noqa: F401
 from vmlinux import struct_xdp_buff  # noqa: F401
+
 # from vmlinux import struct_xdp_md
 from ctypes import c_int64
 

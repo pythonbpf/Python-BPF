@@ -46,7 +46,9 @@ class Field:
         if mark_ready:
             self.ready = True
 
-    def set_ctype_complex_type(self, ctype_complex_type: Any, mark_ready: bool = True) -> None:
+    def set_ctype_complex_type(
+        self, ctype_complex_type: Any, mark_ready: bool = True
+    ) -> None:
         """Set the ctype_complex_type of this field and optionally mark it as ready."""
         self.ctype_complex_type = ctype_complex_type
         if mark_ready:
@@ -127,7 +129,7 @@ class DependencyNode:
             containing_type=containing_type,
             type_size=type_size,
             ctype_complex_type=ctype_complex_type,
-            bitfield_size=bitfield_size
+            bitfield_size=bitfield_size,
         )
         # Invalidate readiness cache
         self._ready_cache = None
