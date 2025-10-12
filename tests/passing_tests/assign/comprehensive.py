@@ -47,6 +47,7 @@ def hello_world(ctx: c_void_p) -> c_int64:
         print(f"Hello, World!, ts is {jat.ts}")
         a = last.lookup(0)
         print(f"a is {a}")
+        last.update(9, 9)
         last.update(0, last.lookup(last.lookup(0)) +
                     last.lookup(last.lookup(0)) + last.lookup(last.lookup(0)))
         z = last.lookup(0)
