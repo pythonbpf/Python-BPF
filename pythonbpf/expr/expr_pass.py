@@ -177,7 +177,7 @@ def _handle_unary_op(
 ):
     """Handle ast.UnaryOp expressions."""
     if not isinstance(expr.op, ast.Not) and not isinstance(expr.op, ast.USub):
-        logger.error("Only 'not' unary operator is supported")
+        logger.error("Only 'not' and '-' unary operators are supported")
         return None
 
     operand = eval_expr(
