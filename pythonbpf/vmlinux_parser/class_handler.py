@@ -62,23 +62,41 @@ def process_vmlinux_post_ast(
             class_obj = getattr(imported_module, current_symbol_name)
             # Inspect the class fields
             if hasattr(class_obj, "_fields_"):
-                for field_name, field_type in class_obj._fields_:
-                    field_table[field_name] = field_type
+                for field_elem in class_obj._fields_:
+                    field_name = None
+                    field_type = None
+                    bitfield_size = None
+                    if len(field_elem) == 2:
+                        field_name, field_type = field_elem
+                    elif len(field_elem) == 3:
+                        field_name, field_type, bitfield_size = field_elem
+                    field_table[field_name] = [field_type, bitfield_size]
             elif hasattr(class_obj, "__annotations__"):
-                for field_name, field_type in class_obj.__annotations__.items():
-                    field_table[field_name] = field_type
+                for field_elem in class_obj.__annotations__.items():
+                    field_name = None
+                    field_type = None
+                    bitfield_size = None
+                    if len(field_elem) == 2:
+                        field_name, field_type = field_elem
+                    elif len(field_elem) == 3:
+                        field_name, field_type, bitfield_size = field_elem
+                    field_table[field_name] = [field_type, bitfield_size]
             else:
                 raise TypeError("Could not get required class and definition")
 
-            logger.info(f"Extracted fields for {current_symbol_name}: {field_table}")
-
-            for elem_name, elem_type in field_table.items():
+            logger.debug(f"Extracted fields for {current_symbol_name}: {field_table}")
+            for elem in field_table.items():
+                elem_name, elem_temp_list = elem
+                [elem_type, elem_bitfield_size] = elem_temp_list
                 local_module_name = getattr(elem_type, "__module__", None)
                 if local_module_name == ctypes.__name__:
-                    new_dep_node.add_field(elem_name, elem_type, ready=True)
+                    new_dep_node.add_field(elem_name, elem_type, ready=False)
+                    new_dep_node.set_field_bitfield_size(elem_name, elem_bitfield_size)
+                    new_dep_node.set_field_ready(elem_name, is_ready=True)
                     logger.info(f"Field {elem_name} is direct ctypes type: {elem_type}")
                 elif local_module_name == "vmlinux":
                     new_dep_node.add_field(elem_name, elem_type, ready=False)
+                    new_dep_node.set_field_bitfield_size(elem_name, elem_bitfield_size)
                     logger.debug(
                         f"Processing vmlinux field: {elem_name}, type: {elem_type}"
                     )

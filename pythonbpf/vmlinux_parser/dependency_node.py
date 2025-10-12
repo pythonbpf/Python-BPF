@@ -12,6 +12,7 @@ class Field:
     ctype_complex_type: Optional[Any]
     containing_type: Optional[Any]
     type_size: Optional[int]
+    bitfield_size: Optional[int]
     value: Any = None
     ready: bool = False
 
@@ -48,6 +49,12 @@ class Field:
     def set_ctype_complex_type(self, ctype_complex_type: Any, mark_ready: bool = True) -> None:
         """Set the ctype_complex_type of this field and optionally mark it as ready."""
         self.ctype_complex_type = ctype_complex_type
+        if mark_ready:
+            self.ready = True
+
+    def set_bitfield_size(self, bitfield_size: Any, mark_ready: bool = True) -> None:
+        """Set the bitfield_size of this field and optionally mark it as ready."""
+        self.bitfield_size = bitfield_size
         if mark_ready:
             self.ready = True
 
@@ -108,6 +115,7 @@ class DependencyNode:
         containing_type: Optional[Any] = None,
         type_size: Optional[int] = None,
         ctype_complex_type: Optional[int] = None,
+        bitfield_size: Optional[int] = None,
         ready: bool = False,
     ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
@@ -118,7 +126,8 @@ class DependencyNode:
             ready=ready,
             containing_type=containing_type,
             type_size=type_size,
-            ctype_complex_type=ctype_complex_type
+            ctype_complex_type=ctype_complex_type,
+            bitfield_size=bitfield_size
         )
         # Invalidate readiness cache
         self._ready_cache = None
@@ -175,6 +184,17 @@ class DependencyNode:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
 
         self.fields[name].set_ctype_complex_type(ctype_complex_type, mark_ready)
+        # Invalidate readiness cache
+        self._ready_cache = None
+
+    def set_field_bitfield_size(
+        self, name: str, bitfield_size: Any, mark_ready: bool = True
+    ) -> None:
+        """Set a field's bitfield_size and optionally mark it as ready."""
+        if name not in self.fields:
+            raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
+
+        self.fields[name].set_bitfield_size(bitfield_size, mark_ready)
         # Invalidate readiness cache
         self._ready_cache = None
 
