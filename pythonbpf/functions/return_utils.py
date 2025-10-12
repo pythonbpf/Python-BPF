@@ -14,19 +14,19 @@ XDP_ACTIONS = {
 }
 
 
-def _handle_none_return(builder) -> bool:
+def handle_none_return(builder) -> bool:
     """Handle return or return None -> returns 0."""
     builder.ret(ir.Constant(ir.IntType(64), 0))
     logger.debug("Generated default return: 0")
     return True
 
 
-def _is_xdp_name(name: str) -> bool:
+def is_xdp_name(name: str) -> bool:
     """Check if a name is an XDP action"""
     return name in XDP_ACTIONS
 
 
-def _handle_xdp_return(stmt: ast.Return, builder, ret_type) -> bool:
+def handle_xdp_return(stmt: ast.Return, builder, ret_type) -> bool:
     """Handle XDP returns"""
     if not isinstance(stmt.value, ast.Name):
         return False
@@ -37,7 +37,6 @@ def _handle_xdp_return(stmt: ast.Return, builder, ret_type) -> bool:
         raise ValueError(
             f"Unknown XDP action: {action_name}. Available: {XDP_ACTIONS.keys()}"
         )
-        return False
 
     value = XDP_ACTIONS[action_name]
     builder.ret(ir.Constant(ret_type, value))

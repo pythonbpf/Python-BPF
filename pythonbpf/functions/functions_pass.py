@@ -14,7 +14,7 @@ from pythonbpf.assign_pass import (
 )
 from pythonbpf.allocation_pass import handle_assign_allocation, allocate_temp_pool
 
-from .return_utils import _handle_none_return, _handle_xdp_return, _is_xdp_name
+from .return_utils import handle_none_return, handle_xdp_return, is_xdp_name
 
 
 logger = logging.getLogger(__name__)
@@ -146,9 +146,9 @@ def handle_if(
 def handle_return(builder, stmt, local_sym_tab, ret_type):
     logger.info(f"Handling return statement: {ast.dump(stmt)}")
     if stmt.value is None:
-        return _handle_none_return(builder)
-    elif isinstance(stmt.value, ast.Name) and _is_xdp_name(stmt.value.id):
-        return _handle_xdp_return(stmt, builder, ret_type)
+        return handle_none_return(builder)
+    elif isinstance(stmt.value, ast.Name) and is_xdp_name(stmt.value.id):
+        return handle_xdp_return(stmt, builder, ret_type)
     else:
         val = eval_expr(
             func=None,
