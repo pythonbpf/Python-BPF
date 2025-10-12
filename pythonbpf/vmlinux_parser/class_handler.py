@@ -40,43 +40,22 @@ def process_vmlinux_post_ast(
     type_length: Optional[int] = None
     module_name = getattr(elem_type_class, "__module__", None)
 
-    if hasattr(elem_type_class, "_length_") and is_complex_type:
-        type_length = elem_type_class._length_
-
     if current_symbol_name in processing_stack:
-        logger.debug(
+        logger.info(
             f"Circular dependency detected for {current_symbol_name}, skipping"
         )
         return True
 
     # Check if already processed
     if handler.has_node(current_symbol_name):
-        existing_node = handler.get_node(current_symbol_name)
-        # If the node exists and is ready, we're done
-        if existing_node and existing_node.is_ready:
-            logger.info(f"Node {current_symbol_name} already processed and ready")
-            return True
+        logger.info(f"Node {current_symbol_name} already processed and ready")
+        return True
 
     processing_stack.add(current_symbol_name)
 
     if module_name == "vmlinux":
         if hasattr(elem_type_class, "_type_"):
-            is_complex_type = True
-            containing_type = elem_type_class._type_
-            if containing_type.__module__ == "vmlinux":
-                print("Very weird type ig for containing type", containing_type)
-            elif containing_type.__module__ == ctypes.__name__:
-                if isinstance(elem_type_class, type):
-                    if issubclass(elem_type_class, ctypes.Array):
-                        ctype_complex_type = ctypes.Array
-                    elif issubclass(elem_type_class, ctypes._Pointer):
-                        ctype_complex_type = ctypes._Pointer
-                else:
-                    raise TypeError("Unsupported ctypes subclass")
-                # handle ctype complex type
-
-            else:
-                raise ImportError(f"Unsupported module of {containing_type}")
+            pass
         else:
             new_dep_node = DependencyNode(name=current_symbol_name)
             handler.add_node(new_dep_node)
@@ -103,6 +82,40 @@ def process_vmlinux_post_ast(
                     logger.debug(
                         f"Processing vmlinux field: {elem_name}, type: {elem_type}"
                     )
+                    if hasattr(elem_type, "_type_"):
+                        is_complex_type = True
+                        containing_type = elem_type._type_
+                        if hasattr(elem_type, "_length_") and is_complex_type:
+                            type_length = elem_type._length_
+                        if containing_type.__module__ == "vmlinux":
+                            pass
+                        elif containing_type.__module__ == ctypes.__name__:
+                            if isinstance(elem_type, type):
+                                if issubclass(elem_type, ctypes.Array):
+                                    ctype_complex_type = ctypes.Array
+                                elif issubclass(elem_type, ctypes._Pointer):
+                                    ctype_complex_type = ctypes._Pointer
+                            else:
+                                raise TypeError("Unsupported ctypes subclass")
+                        else:
+                            raise ImportError(
+                                f"Unsupported module of {containing_type}"
+                            )
+                        logger.info(f"{containing_type} containing type of parent {elem_name} with {elem_type} and ctype {ctype_complex_type} and length {type_length}")
+                        new_dep_node.set_field_containing_type(elem_name, containing_type)
+                        new_dep_node.set_field_type_size(elem_name, type_length)
+                        new_dep_node.set_field_ctype_complex_type(elem_name, ctype_complex_type)
+                        new_dep_node.set_field_type(elem_name, elem_type)
+                        if containing_type.__module__ == "vmlinux":
+                            if process_vmlinux_post_ast(
+                                    containing_type, llvm_handler, handler, processing_stack
+                            ):
+                                new_dep_node.set_field_ready(elem_name, True)
+                        elif containing_type.__module__ == ctypes.__name__:
+                            logger.info(f"Processing ctype internal{containing_type}")
+                        else:
+                            raise TypeError("Module not supported in recursive resolution")
+                        continue
                     if process_vmlinux_post_ast(
                         elem_type, llvm_handler, handler, processing_stack
                     ):
@@ -111,7 +124,6 @@ def process_vmlinux_post_ast(
                     raise ValueError(
                         f"{elem_name} with type {elem_type} from module {module_name} not supported in recursive resolver"
                     )
-            print("")
 
     else:
         raise ImportError("UNSUPPORTED Module")

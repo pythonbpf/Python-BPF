@@ -9,6 +9,7 @@ class Field:
 
     name: str
     type: type
+    ctype_complex_type: Optional[Any]
     containing_type: Optional[Any]
     type_size: Optional[int]
     value: Any = None
@@ -41,6 +42,12 @@ class Field:
     def set_type_size(self, type_size: Any, mark_ready: bool = True) -> None:
         """Set the type_size of this field and optionally mark it as ready."""
         self.type_size = type_size
+        if mark_ready:
+            self.ready = True
+
+    def set_ctype_complex_type(self, ctype_complex_type: Any, mark_ready: bool = True) -> None:
+        """Set the ctype_complex_type of this field and optionally mark it as ready."""
+        self.ctype_complex_type = ctype_complex_type
         if mark_ready:
             self.ready = True
 
@@ -100,6 +107,7 @@ class DependencyNode:
         initial_value: Any = None,
         containing_type: Optional[Any] = None,
         type_size: Optional[int] = None,
+        ctype_complex_type: Optional[int] = None,
         ready: bool = False,
     ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
@@ -110,6 +118,7 @@ class DependencyNode:
             ready=ready,
             containing_type=containing_type,
             type_size=type_size,
+            ctype_complex_type=ctype_complex_type
         )
         # Invalidate readiness cache
         self._ready_cache = None
@@ -155,6 +164,17 @@ class DependencyNode:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
 
         self.fields[name].set_type_size(type_size, mark_ready)
+        # Invalidate readiness cache
+        self._ready_cache = None
+
+    def set_field_ctype_complex_type(
+        self, name: str, ctype_complex_type: Any, mark_ready: bool = True
+    ) -> None:
+        """Set a field's ctype_complex_type and optionally mark it as ready."""
+        if name not in self.fields:
+            raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
+
+        self.fields[name].set_ctype_complex_type(ctype_complex_type, mark_ready)
         # Invalidate readiness cache
         self._ready_cache = None
 
