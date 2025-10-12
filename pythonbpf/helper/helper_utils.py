@@ -87,23 +87,25 @@ def create_int_constant_ptr(value, builder, local_sym_tab, int_width=64):
     return ptr
 
 
-def get_or_create_ptr_from_arg(arg, builder, local_sym_tab):
+def get_or_create_ptr_from_arg(
+    func, module, arg, builder, local_sym_tab, struct_sym_tab=None
+):
     """Extract or create pointer from the call arguments."""
 
     if isinstance(arg, ast.Name):
         ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
     elif isinstance(arg, ast.Constant) and isinstance(arg.value, int):
         ptr = create_int_constant_ptr(arg.value, builder, local_sym_tab)
-    elif isinstance(arg, ast.BinOp):
+    else:
         # Evaluate the expression and store the result in a temp variable
         val, _ = eval_expr(
-            None,
-            None,
+            func,
+            module,
             builder,
             arg,
             local_sym_tab,
             None,
-            None,
+            struct_sym_tab,
         )
         if val is None:
             raise ValueError("Failed to evaluate expression for helper arg.")
@@ -113,10 +115,6 @@ def get_or_create_ptr_from_arg(arg, builder, local_sym_tab):
         logger.debug(f"Using temp variable '{temp_name}' for expression result")
         builder.store(val, ptr)
 
-    else:
-        raise NotImplementedError(
-            "Only simple variable names are supported as args in map helpers."
-        )
     return ptr
 
 

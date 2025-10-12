@@ -64,7 +64,9 @@ def bpf_map_lookup_elem_emitter(
         raise ValueError(
             f"Map lookup expects exactly one argument (key), got {len(call.args)}"
         )
-    key_ptr = get_or_create_ptr_from_arg(call.args[0], builder, local_sym_tab)
+    key_ptr = get_or_create_ptr_from_arg(
+        func, module, call.args[0], builder, local_sym_tab, struct_sym_tab
+    )
     map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
 
     fn_type = ir.FunctionType(
@@ -152,8 +154,12 @@ def bpf_map_update_elem_emitter(
     value_arg = call.args[1]
     flags_arg = call.args[2] if len(call.args) > 2 else None
 
-    key_ptr = get_or_create_ptr_from_arg(key_arg, builder, local_sym_tab)
-    value_ptr = get_or_create_ptr_from_arg(value_arg, builder, local_sym_tab)
+    key_ptr = get_or_create_ptr_from_arg(
+        func, module, key_arg, builder, local_sym_tab, struct_sym_tab
+    )
+    value_ptr = get_or_create_ptr_from_arg(
+        func, module, value_arg, builder, local_sym_tab, struct_sym_tab
+    )
     flags_val = get_flags_val(flags_arg, builder, local_sym_tab)
 
     map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
@@ -197,7 +203,9 @@ def bpf_map_delete_elem_emitter(
         raise ValueError(
             f"Map delete expects exactly one argument (key), got {len(call.args)}"
         )
-    key_ptr = get_or_create_ptr_from_arg(call.args[0], builder, local_sym_tab)
+    key_ptr = get_or_create_ptr_from_arg(
+        func, module, call.args[0], builder, local_sym_tab, struct_sym_tab
+    )
     map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
 
     # Define function type for bpf_map_delete_elem
