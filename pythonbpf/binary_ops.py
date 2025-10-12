@@ -39,6 +39,10 @@ def get_operand_value(
         if res is None:
             raise ValueError(f"Failed to evaluate call expression: {operand}")
         val, _ = res
+        logger.info(f"Evaluated expr to {val} of type {val.type}")
+        base_type, depth = get_base_type_and_depth(val.type)
+        if depth > 0:
+            val = deref_to_depth(func, builder, val, depth)
         return val
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 

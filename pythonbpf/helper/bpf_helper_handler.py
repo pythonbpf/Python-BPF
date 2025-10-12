@@ -34,6 +34,7 @@ def bpf_ktime_get_ns_emitter(
     func,
     local_sym_tab=None,
     struct_sym_tab=None,
+    map_sym_tab=None,
 ):
     """
     Emit LLVM IR for bpf_ktime_get_ns helper function call.
@@ -56,6 +57,7 @@ def bpf_map_lookup_elem_emitter(
     func,
     local_sym_tab=None,
     struct_sym_tab=None,
+    map_sym_tab=None,
 ):
     """
     Emit LLVM IR for bpf_map_lookup_elem helper function call.
@@ -65,12 +67,16 @@ def bpf_map_lookup_elem_emitter(
             f"Map lookup expects exactly one argument (key), got {len(call.args)}"
         )
     key_ptr = get_or_create_ptr_from_arg(
-        func, module, call.args[0], builder, local_sym_tab, struct_sym_tab
+        func, module, call.args[0], builder, local_sym_tab, map_sym_tab, struct_sym_tab
     )
     map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
 
+    # TODO: I have changed the return typr to i64*, as we are
+    # allocating space for that type in allocate_mem. This is
+    # temporary, and we will honour other widths later. But this
+    # allows us to have cool binary ops on the returned value.
     fn_type = ir.FunctionType(
-        ir.PointerType(),  # Return type: void*
+        ir.PointerType(ir.IntType(64)),  # Return type: void*
         [ir.PointerType(), ir.PointerType()],  # Args: (void*, void*)
         var_arg=False,
     )
@@ -93,6 +99,7 @@ def bpf_printk_emitter(
     func,
     local_sym_tab=None,
     struct_sym_tab=None,
+    map_sym_tab=None,
 ):
     """Emit LLVM IR for bpf_printk helper function call."""
     if not hasattr(func, "_fmt_counter"):
@@ -140,6 +147,7 @@ def bpf_map_update_elem_emitter(
     func,
     local_sym_tab=None,
     struct_sym_tab=None,
+    map_sym_tab=None,
 ):
     """
     Emit LLVM IR for bpf_map_update_elem helper function call.
@@ -155,10 +163,10 @@ def bpf_map_update_elem_emitter(
     flags_arg = call.args[2] if len(call.args) > 2 else None
 
     key_ptr = get_or_create_ptr_from_arg(
-        func, module, key_arg, builder, local_sym_tab, struct_sym_tab
+        func, module, key_arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab
     )
     value_ptr = get_or_create_ptr_from_arg(
-        func, module, value_arg, builder, local_sym_tab, struct_sym_tab
+        func, module, value_arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab
     )
     flags_val = get_flags_val(flags_arg, builder, local_sym_tab)
 
@@ -194,6 +202,7 @@ def bpf_map_delete_elem_emitter(
     func,
     local_sym_tab=None,
     struct_sym_tab=None,
+    map_sym_tab=None,
 ):
     """
     Emit LLVM IR for bpf_map_delete_elem helper function call.
@@ -204,7 +213,7 @@ def bpf_map_delete_elem_emitter(
             f"Map delete expects exactly one argument (key), got {len(call.args)}"
         )
     key_ptr = get_or_create_ptr_from_arg(
-        func, module, call.args[0], builder, local_sym_tab, struct_sym_tab
+        func, module, call.args[0], builder, local_sym_tab, map_sym_tab, struct_sym_tab
     )
     map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
 
@@ -233,6 +242,7 @@ def bpf_get_current_pid_tgid_emitter(
     func,
     local_sym_tab=None,
     struct_sym_tab=None,
+    map_sym_tab=None,
 ):
     """
     Emit LLVM IR for bpf_get_current_pid_tgid helper function call.
@@ -259,6 +269,7 @@ def bpf_perf_event_output_handler(
     func,
     local_sym_tab=None,
     struct_sym_tab=None,
+    map_sym_tab=None,
 ):
     if len(call.args) != 1:
         raise ValueError(
@@ -323,6 +334,7 @@ def handle_helper_call(
             func,
             local_sym_tab,
             struct_sym_tab,
+            map_sym_tab,
         )
 
     # Handle direct function calls (e.g., print(), ktime())

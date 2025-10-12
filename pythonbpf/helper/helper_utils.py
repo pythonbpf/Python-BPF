@@ -81,14 +81,14 @@ def create_int_constant_ptr(value, builder, local_sym_tab, int_width=64):
 
     # Default to 64-bit integer
     ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab)
-    logger.debug(f"Using temp variable '{temp_name}' for int constant {value}")
+    logger.info(f"Using temp variable '{temp_name}' for int constant {value}")
     const_val = ir.Constant(ir.IntType(int_width), value)
     builder.store(const_val, ptr)
     return ptr
 
 
 def get_or_create_ptr_from_arg(
-    func, module, arg, builder, local_sym_tab, struct_sym_tab=None
+    func, module, arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab=None
 ):
     """Extract or create pointer from the call arguments."""
 
@@ -104,15 +104,17 @@ def get_or_create_ptr_from_arg(
             builder,
             arg,
             local_sym_tab,
-            None,
+            map_sym_tab,
             struct_sym_tab,
         )
         if val is None:
             raise ValueError("Failed to evaluate expression for helper arg.")
 
         # NOTE: We assume the result is an int64 for now
+        # if isinstance(arg, ast.Attribute):
+        # return val
         ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab)
-        logger.debug(f"Using temp variable '{temp_name}' for expression result")
+        logger.info(f"Using temp variable '{temp_name}' for expression result")
         builder.store(val, ptr)
 
     return ptr
