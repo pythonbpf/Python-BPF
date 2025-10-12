@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def handle_struct_field_assignment(
-    func, module, builder, target, rval, local_sym_tab, structs_sym_tab
+    func, module, builder, target, rval, local_sym_tab, map_sym_tab, structs_sym_tab
 ):
     """Handle struct field assignment (obj.field = value)."""
 
@@ -27,7 +27,9 @@ def handle_struct_field_assignment(
 
     # Get field pointer and evaluate value
     field_ptr = struct_info.gep(builder, local_sym_tab[var_name].var, field_name)
-    val = eval_expr(func, module, builder, rval, local_sym_tab, None, structs_sym_tab)
+    val = eval_expr(
+        func, module, builder, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+    )
 
     if val is None:
         logger.error(f"Failed to evaluate value for {var_name}.{field_name}")

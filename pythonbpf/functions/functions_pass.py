@@ -84,7 +84,14 @@ def handle_assign(
     if isinstance(target, ast.Attribute):
         # NOTE: Struct field assignment case: pkt.field = value
         handle_struct_field_assignment(
-            func, module, builder, target, rval, local_sym_tab, structs_sym_tab
+            func,
+            module,
+            builder,
+            target,
+            rval,
+            local_sym_tab,
+            map_sym_tab,
+            structs_sym_tab,
         )
         return
 
