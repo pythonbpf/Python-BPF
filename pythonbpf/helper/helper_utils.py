@@ -3,7 +3,8 @@ import logging
 from collections.abc import Callable
 
 from llvmlite import ir
-from pythonbpf.expr import eval_expr
+from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth
+from pythonbpf.binary_ops import get_operand_value
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,41 @@ class HelperHandlerRegistry:
         return helper_name in cls._handlers
 
 
+class ScratchPoolManager:
+    """Manage the temporary helper variables in local_sym_tab"""
+
+    def __init__(self):
+        self._counter = 0
+
+    @property
+    def counter(self):
+        return self._counter
+
+    def reset(self):
+        self._counter = 0
+        logger.debug("Scratch pool counter reset to 0")
+
+    def get_next_temp(self, local_sym_tab):
+        temp_name = f"__helper_temp_{self._counter}"
+        self._counter += 1
+
+        if temp_name not in local_sym_tab:
+            raise ValueError(
+                f"Scratch pool exhausted or inadequate: {temp_name}. "
+                f"Current counter: {self._counter}"
+            )
+
+        return local_sym_tab[temp_name].var, temp_name
+
+
+_temp_pool_manager = ScratchPoolManager()  # Singleton instance
+
+
+def reset_scratch_pool():
+    """Reset the scratch pool counter"""
+    _temp_pool_manager.reset()
+
+
 def get_var_ptr_from_name(var_name, local_sym_tab):
     """Get a pointer to a variable from the symbol table."""
     if local_sym_tab and var_name in local_sym_tab:
@@ -41,27 +77,41 @@ def get_var_ptr_from_name(var_name, local_sym_tab):
     raise ValueError(f"Variable '{var_name}' not found in local symbol table")
 
 
-def create_int_constant_ptr(value, builder, int_width=64):
+def create_int_constant_ptr(value, builder, local_sym_tab, int_width=64):
     """Create a pointer to an integer constant."""
+
     # Default to 64-bit integer
-    int_type = ir.IntType(int_width)
-    ptr = builder.alloca(int_type)
-    ptr.align = int_type.width // 8
-    builder.store(ir.Constant(int_type, value), ptr)
+    ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab)
+    logger.info(f"Using temp variable '{temp_name}' for int constant {value}")
+    const_val = ir.Constant(ir.IntType(int_width), value)
+    builder.store(const_val, ptr)
     return ptr
 
 
-def get_or_create_ptr_from_arg(arg, builder, local_sym_tab):
+def get_or_create_ptr_from_arg(
+    func, module, arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab=None
+):
     """Extract or create pointer from the call arguments."""
 
     if isinstance(arg, ast.Name):
         ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
     elif isinstance(arg, ast.Constant) and isinstance(arg.value, int):
-        ptr = create_int_constant_ptr(arg.value, builder)
+        ptr = create_int_constant_ptr(arg.value, builder, local_sym_tab)
     else:
-        raise NotImplementedError(
-            "Only simple variable names are supported as args in map helpers."
+        # Evaluate the expression and store the result in a temp variable
+        val = get_operand_value(
+            func, module, arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab
         )
+        if val is None:
+            raise ValueError("Failed to evaluate expression for helper arg.")
+
+        # NOTE: We assume the result is an int64 for now
+        # if isinstance(arg, ast.Attribute):
+        # return val
+        ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab)
+        logger.info(f"Using temp variable '{temp_name}' for expression result")
+        builder.store(val, ptr)
+
     return ptr
 
 
@@ -224,10 +274,27 @@ def _populate_fval(ftype, node, fmt_parts, exprs):
             raise NotImplementedError(
                 f"Unsupported integer width in f-string: {ftype.width}"
             )
-    elif ftype == ir.PointerType(ir.IntType(8)):
-        # NOTE: We assume i8* is a string
-        fmt_parts.append("%s")
-        exprs.append(node)
+    elif isinstance(ftype, ir.PointerType):
+        target, depth = get_base_type_and_depth(ftype)
+        if isinstance(target, ir.IntType):
+            if target.width == 64:
+                fmt_parts.append("%lld")
+                exprs.append(node)
+            elif target.width == 32:
+                fmt_parts.append("%d")
+                exprs.append(node)
+            elif target.width == 8 and depth == 1:
+                # NOTE: Assume i8* is a string
+                fmt_parts.append("%s")
+                exprs.append(node)
+            else:
+                raise NotImplementedError(
+                    f"Unsupported pointer target type in f-string: {target}"
+                )
+        else:
+            raise NotImplementedError(
+                f"Unsupported pointer target type in f-string: {target}"
+            )
     else:
         raise NotImplementedError(f"Unsupported field type in f-string: {ftype}")
 
@@ -264,7 +331,20 @@ def _prepare_expr_args(expr, func, module, builder, local_sym_tab, struct_sym_ta
 
     if val:
         if isinstance(val.type, ir.PointerType):
-            val = builder.ptrtoint(val, ir.IntType(64))
+            target, depth = get_base_type_and_depth(val.type)
+            if isinstance(target, ir.IntType):
+                if target.width >= 32:
+                    val = deref_to_depth(func, builder, val, depth)
+                    val = builder.sext(val, ir.IntType(64))
+                elif target.width == 8 and depth == 1:
+                    # NOTE: i8* is string, no need to deref
+                    pass
+
+            else:
+                logger.warning(
+                    "Only int and ptr supported in bpf_printk args. Others default to 0."
+                )
+                val = ir.Constant(ir.IntType(64), 0)
         elif isinstance(val.type, ir.IntType):
             if val.type.width < 64:
                 val = builder.sext(val, ir.IntType(64))

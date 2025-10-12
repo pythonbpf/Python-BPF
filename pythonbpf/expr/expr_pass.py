@@ -26,7 +26,7 @@ def _handle_constant_expr(expr: ast.Constant):
     if isinstance(expr.value, int) or isinstance(expr.value, bool):
         return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
     else:
-        logger.error("Unsupported constant type")
+        logger.error(f"Unsupported constant type {ast.dump(expr)}")
         return None
 
 
@@ -176,21 +176,28 @@ def _handle_unary_op(
     structs_sym_tab=None,
 ):
     """Handle ast.UnaryOp expressions."""
-    if not isinstance(expr.op, ast.Not):
-        logger.error("Only 'not' unary operator is supported")
+    if not isinstance(expr.op, ast.Not) and not isinstance(expr.op, ast.USub):
+        logger.error("Only 'not' and '-' unary operators are supported")
         return None
 
-    operand = eval_expr(
-        func, module, builder, expr.operand, local_sym_tab, map_sym_tab, structs_sym_tab
+    from pythonbpf.binary_ops import get_operand_value
+
+    operand = get_operand_value(
+        func, module, expr.operand, builder, local_sym_tab, map_sym_tab, structs_sym_tab
     )
     if operand is None:
         logger.error("Failed to evaluate operand for unary operation")
         return None
 
-    operand_val, operand_type = operand
-    true_const = ir.Constant(ir.IntType(1), 1)
-    result = builder.xor(convert_to_bool(builder, operand_val), true_const)
-    return result, ir.IntType(1)
+    if isinstance(expr.op, ast.Not):
+        true_const = ir.Constant(ir.IntType(1), 1)
+        result = builder.xor(convert_to_bool(builder, operand), true_const)
+        return result, ir.IntType(1)
+    elif isinstance(expr.op, ast.USub):
+        # Multiply by -1
+        neg_one = ir.Constant(ir.IntType(64), -1)
+        result = builder.mul(operand, neg_one)
+        return result, ir.IntType(64)
 
 
 def _handle_and_op(func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab):
@@ -402,7 +409,16 @@ def eval_expr(
     elif isinstance(expr, ast.BinOp):
         from pythonbpf.binary_ops import handle_binary_op
 
-        return handle_binary_op(expr, builder, None, local_sym_tab)
+        return handle_binary_op(
+            func,
+            module,
+            expr,
+            builder,
+            None,
+            local_sym_tab,
+            map_sym_tab,
+            structs_sym_tab,
+        )
     elif isinstance(expr, ast.Compare):
         return _handle_compare(
             func, module, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab
