@@ -135,7 +135,7 @@ def bpf_printk_emitter(
     fn_ptr = builder.inttoptr(fn_addr, fn_ptr_type)
 
     builder.call(fn_ptr, args, tail=True)
-    return None
+    return True
 
 
 @HelperHandlerRegistry.register("update")
