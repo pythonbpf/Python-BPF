@@ -176,7 +176,7 @@ def _handle_unary_op(
     structs_sym_tab=None,
 ):
     """Handle ast.UnaryOp expressions."""
-    if not isinstance(expr.op, ast.Not):
+    if not isinstance(expr.op, ast.Not) and not isinstance(expr.op, ast.USub):
         logger.error("Only 'not' unary operator is supported")
         return None
 
@@ -188,9 +188,16 @@ def _handle_unary_op(
         return None
 
     operand_val, operand_type = operand
-    true_const = ir.Constant(ir.IntType(1), 1)
-    result = builder.xor(convert_to_bool(builder, operand_val), true_const)
-    return result, ir.IntType(1)
+
+    if isinstance(expr.op, ast.Not):
+        true_const = ir.Constant(ir.IntType(1), 1)
+        result = builder.xor(convert_to_bool(builder, operand_val), true_const)
+        return result, ir.IntType(1)
+    elif isinstance(expr.op, ast.USub):
+        # Multiply by -1
+        neg_one = ir.Constant(ir.IntType(64), -1)
+        result = builder.mul(operand_val, neg_one)
+        return result, ir.IntType(64)
 
 
 def _handle_and_op(func, builder, expr, local_sym_tab, map_sym_tab, structs_sym_tab):
