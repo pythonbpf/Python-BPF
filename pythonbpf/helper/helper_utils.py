@@ -3,8 +3,12 @@ import logging
 from collections.abc import Callable
 
 from llvmlite import ir
-from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth
-from pythonbpf.binary_ops import get_operand_value
+from pythonbpf.expr import (
+    eval_expr,
+    get_base_type_and_depth,
+    deref_to_depth,
+    get_operand_value,
+)
 
 logger = logging.getLogger(__name__)
 
