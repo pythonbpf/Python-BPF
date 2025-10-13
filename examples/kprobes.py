@@ -8,11 +8,13 @@ def hello_world(ctx: c_void_p) -> c_int64:
     print("Hello, World!")
     return c_int64(0)
 
+
 @bpf
 @section("kprobe/do_unlinkat")
 def hello_world2(ctx: c_void_p) -> c_int64:
     print("Hello, World!")
     return c_int64(0)
+
 
 @bpf
 @bpfglobal

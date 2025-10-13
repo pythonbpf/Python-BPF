@@ -1,8 +1,11 @@
-from pythonbpf import bpf, map, section, bpfglobal, compile, compile_to_ir
-from pythonbpf.helper import XDP_PASS
+from pythonbpf import bpf, map, section, bpfglobal, compile_to_ir
 from pythonbpf.maps import HashMap
-from ctypes import c_int64, c_void_p
+from pythonbpf.helper import XDP_PASS
+from vmlinux import struct_xdp_md
+from vmlinux import struct_xdp_buff  # noqa: F401
+from vmlinux import struct_ring_buffer_per_cpu  # noqa: F401
 
+from ctypes import c_int64
 
 # Instructions to how to run this program
 # 1. Install PythonBPF: pip install pythonbpf
@@ -20,7 +23,7 @@ def count() -> HashMap:
 
 @bpf
 @section("xdp")
-def hello_world(ctx: c_void_p) -> c_int64:
+def hello_world(ctx: struct_xdp_md) -> c_int64:
     key = 0
     one = 1
     prev = count().lookup(key)
@@ -42,4 +45,3 @@ def LICENSE() -> str:
 
 
 compile_to_ir("xdp_pass.py", "xdp_pass.ll")
-compile()

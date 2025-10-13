@@ -6,8 +6,8 @@ from ctypes import c_void_p, c_int32
 @section("tracepoint/syscalls/sys_enter_execve")
 def hello_world(ctx: c_void_p) -> c_int32:
     print("Hello, World!")
-    a = 1 # int64
-    return c_int32(a) # typecast to int32
+    a = 1  # int64
+    return c_int32(a)  # typecast to int32
 
 
 @bpf
