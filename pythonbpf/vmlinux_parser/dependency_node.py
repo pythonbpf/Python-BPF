@@ -20,41 +20,41 @@ class Field:
         """Set the readiness state of this field."""
         self.ready = is_ready
 
-    def set_value(self, value: Any, mark_ready: bool = True) -> None:
+    def set_value(self, value: Any, mark_ready: bool = False) -> None:
         """Set the value of this field and optionally mark it as ready."""
         self.value = value
         if mark_ready:
             self.ready = True
 
-    def set_type(self, given_type, mark_ready: bool = True) -> None:
+    def set_type(self, given_type, mark_ready: bool = False) -> None:
         """Set value of the type field and mark as ready"""
         self.type = given_type
         if mark_ready:
             self.ready = True
 
     def set_containing_type(
-        self, containing_type: Optional[Any], mark_ready: bool = True
+        self, containing_type: Optional[Any], mark_ready: bool = False
     ) -> None:
         """Set the containing_type of this field and optionally mark it as ready."""
         self.containing_type = containing_type
         if mark_ready:
             self.ready = True
 
-    def set_type_size(self, type_size: Any, mark_ready: bool = True) -> None:
+    def set_type_size(self, type_size: Any, mark_ready: bool = False) -> None:
         """Set the type_size of this field and optionally mark it as ready."""
         self.type_size = type_size
         if mark_ready:
             self.ready = True
 
     def set_ctype_complex_type(
-        self, ctype_complex_type: Any, mark_ready: bool = True
+        self, ctype_complex_type: Any, mark_ready: bool = False
     ) -> None:
         """Set the ctype_complex_type of this field and optionally mark it as ready."""
         self.ctype_complex_type = ctype_complex_type
         if mark_ready:
             self.ready = True
 
-    def set_bitfield_size(self, bitfield_size: Any, mark_ready: bool = True) -> None:
+    def set_bitfield_size(self, bitfield_size: Any, mark_ready: bool = False) -> None:
         """Set the bitfield_size of this field and optionally mark it as ready."""
         self.bitfield_size = bitfield_size
         if mark_ready:
@@ -138,7 +138,7 @@ class DependencyNode:
         """Get a field by name."""
         return self.fields[name]
 
-    def set_field_value(self, name: str, value: Any, mark_ready: bool = True) -> None:
+    def set_field_value(self, name: str, value: Any, mark_ready: bool = False) -> None:
         """Set a field's value and optionally mark it as ready."""
         if name not in self.fields:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
@@ -147,7 +147,7 @@ class DependencyNode:
         # Invalidate readiness cache
         self._ready_cache = None
 
-    def set_field_type(self, name: str, type: Any, mark_ready: bool = True) -> None:
+    def set_field_type(self, name: str, type: Any, mark_ready: bool = False) -> None:
         """Set a field's type and optionally mark it as ready."""
         if name not in self.fields:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
@@ -157,7 +157,7 @@ class DependencyNode:
         self._ready_cache = None
 
     def set_field_containing_type(
-        self, name: str, containing_type: Any, mark_ready: bool = True
+        self, name: str, containing_type: Any, mark_ready: bool = False
     ) -> None:
         """Set a field's containing_type and optionally mark it as ready."""
         if name not in self.fields:
@@ -168,7 +168,7 @@ class DependencyNode:
         self._ready_cache = None
 
     def set_field_type_size(
-        self, name: str, type_size: Any, mark_ready: bool = True
+        self, name: str, type_size: Any, mark_ready: bool = False
     ) -> None:
         """Set a field's type_size and optionally mark it as ready."""
         if name not in self.fields:
@@ -179,7 +179,7 @@ class DependencyNode:
         self._ready_cache = None
 
     def set_field_ctype_complex_type(
-        self, name: str, ctype_complex_type: Any, mark_ready: bool = True
+        self, name: str, ctype_complex_type: Any, mark_ready: bool = False
     ) -> None:
         """Set a field's ctype_complex_type and optionally mark it as ready."""
         if name not in self.fields:
@@ -190,7 +190,7 @@ class DependencyNode:
         self._ready_cache = None
 
     def set_field_bitfield_size(
-        self, name: str, bitfield_size: Any, mark_ready: bool = True
+        self, name: str, bitfield_size: Any, mark_ready: bool = False
     ) -> None:
         """Set a field's bitfield_size and optionally mark it as ready."""
         if name not in self.fields:
@@ -200,7 +200,7 @@ class DependencyNode:
         # Invalidate readiness cache
         self._ready_cache = None
 
-    def set_field_ready(self, name: str, is_ready: bool = True) -> None:
+    def set_field_ready(self, name: str, is_ready: bool = False) -> None:
         """Mark a field as ready or not ready."""
         if name not in self.fields:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
@@ -218,8 +218,8 @@ class DependencyNode:
 
         # Calculate readiness only when needed
         if not self.fields:
-            self._ready_cache = False
-            return False
+            self._ready_cache = True
+            return True
 
         self._ready_cache = all(elem.ready for elem in self.fields.values())
         return self._ready_cache
@@ -231,3 +231,7 @@ class DependencyNode:
     def get_ready_fields(self) -> Dict[str, Field]:
         """Get all fields that are marked as ready."""
         return {name: elem for name, elem in self.fields.items() if elem.ready}
+
+    def get_not_ready_fields(self) -> Dict[str, Field]:
+        """Get all fields that are marked as not ready."""
+        return {name: elem for name, elem in self.fields.items() if not elem.ready}
