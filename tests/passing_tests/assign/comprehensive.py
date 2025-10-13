@@ -9,6 +9,7 @@ from pythonbpf.helper import ktime
 # the compiler, it is recommended to use named variables to reduce the amount of
 # scratch space that needs to be allocated.
 
+
 @bpf
 @struct
 class data_t:
@@ -48,8 +49,12 @@ def hello_world(ctx: c_void_p) -> c_int64:
         a = last.lookup(0)
         print(f"a is {a}")
         last.update(9, 9)
-        last.update(0, last.lookup(last.lookup(0)) +
-                    last.lookup(last.lookup(0)) + last.lookup(last.lookup(0)))
+        last.update(
+            0,
+            last.lookup(last.lookup(0))
+            + last.lookup(last.lookup(0))
+            + last.lookup(last.lookup(0)),
+        )
         z = last.lookup(0)
         print(f"new map val at index 0 is {z}")
     else:

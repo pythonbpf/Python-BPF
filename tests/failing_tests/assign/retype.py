@@ -11,6 +11,7 @@ from pythonbpf.maps import HashMap
 # We can allow bitcasts in cases where the width of the types is the same in
 # the future. But for now, we do not allow any re-interpretation of variables.
 
+
 @bpf
 @map
 def last() -> HashMap:
