@@ -1,8 +1,9 @@
 import ast
 from llvmlite import ir
 from enum import Enum
+
+from .helper_registry import HelperHandlerRegistry
 from .helper_utils import (
-    HelperHandlerRegistry,
     get_or_create_ptr_from_arg,
     get_flags_val,
     handle_fstring_print,
