@@ -1,22 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 
-#include <linux/bpf.h>
+#include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
-
-struct trace_entry {
-  short unsigned int type;
-  unsigned char flags;
-  unsigned char preempt_count;
-  int pid;
-};
-
-struct trace_event_raw_sys_enter {
-  struct trace_entry ent;
-  long int id;
-  long unsigned int args[6];
-  char __data[0];
-};
 
 struct event {
   __u32 pid;
