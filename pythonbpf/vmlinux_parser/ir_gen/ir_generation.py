@@ -1,5 +1,5 @@
 import logging
-from .dependency_handler import DependencyHandler
+from pythonbpf.vmlinux_parser.dependency_handler import DependencyHandler
 
 logger = logging.getLogger(__name__)
 

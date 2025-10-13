@@ -5,7 +5,7 @@ import importlib
 import inspect
 
 from .dependency_handler import DependencyHandler
-from .ir_generation import IRGenerator
+from .ir_gen import IRGenerator
 from .class_handler import process_vmlinux_class
 
 logger = logging.getLogger(__name__)
