@@ -1,4 +1,4 @@
-from pythonbpf import bpf, section, bpfglobal, compile
+from pythonbpf import bpf, section, bpfglobal, BPF, trace_pipe
 from ctypes import c_void_p, c_int64
 
 
@@ -15,5 +15,6 @@ def LICENSE() -> str:
     return "GPL"
 
 
-compile()
+BPF().load_and_attach()
 print("Tracing sys_sync()... Ctrl-C to end.")
+trace_pipe()
