@@ -4,7 +4,7 @@ import importlib
 from .dependency_handler import DependencyHandler
 from .dependency_node import DependencyNode
 import ctypes
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ def process_vmlinux_post_ast(
 
     current_symbol_name = elem_type_class.__name__
     logger.info(f"Begin {current_symbol_name} Processing")
-    field_table = {}
+    field_table: Dict[str, list] = {}
     is_complex_type = False
     containing_type: Optional[Any] = None
     ctype_complex_type: Optional[Any] = None
@@ -65,9 +65,9 @@ def process_vmlinux_post_ast(
             # Inspect the class fields
             if hasattr(class_obj, "_fields_"):
                 for field_elem in class_obj._fields_:
-                    field_name = None
-                    field_type = None
-                    bitfield_size = None
+                    field_name: str = ""
+                    field_type: Optional[Any] = None
+                    bitfield_size: Optional[int] = None
                     if len(field_elem) == 2:
                         field_name, field_type = field_elem
                     elif len(field_elem) == 3:
@@ -75,13 +75,15 @@ def process_vmlinux_post_ast(
                     field_table[field_name] = [field_type, bitfield_size]
             elif hasattr(class_obj, "__annotations__"):
                 for field_elem in class_obj.__annotations__.items():
-                    field_name = None
-                    field_type = None
-                    bitfield_size = None
                     if len(field_elem) == 2:
                         field_name, field_type = field_elem
+                        bitfield_size = None
                     elif len(field_elem) == 3:
                         field_name, field_type, bitfield_size = field_elem
+                    else:
+                        raise ValueError(
+                            "Number of fields in items() of class object unexpected"
+                        )
                     field_table[field_name] = [field_type, bitfield_size]
             else:
                 raise TypeError("Could not get required class and definition")
