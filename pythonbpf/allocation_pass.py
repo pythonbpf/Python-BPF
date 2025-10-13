@@ -22,19 +22,6 @@ class LocalSymbol:
         yield self.metadata
 
 
-def _is_helper_call(call_node):
-    """Check if a call node is a BPF helper function call."""
-    if isinstance(call_node.func, ast.Name):
-        # Exclude print from requiring temps (handles f-strings differently)
-        func_name = call_node.func.id
-        return HelperHandlerRegistry.has_handler(func_name) and func_name != "print"
-
-    elif isinstance(call_node.func, ast.Attribute):
-        return HelperHandlerRegistry.has_handler(call_node.func.attr)
-
-    return False
-
-
 def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
     """Handle memory allocation for assignment statements."""
 
