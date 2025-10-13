@@ -15,7 +15,6 @@ def LICENSE() -> str:
     return "GPL"
 
 
-# compile()
 b = BPF()
 b.load_and_attach()
 
