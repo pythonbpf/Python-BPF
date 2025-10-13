@@ -112,7 +112,11 @@ def process_vmlinux_post_ast(
                             type_length = elem_type._length_
 
                         if containing_type.__module__ == "vmlinux":
-                            pass
+                            new_dep_node.add_dependent(
+                                elem_type._type_.__name__
+                                if hasattr(elem_type._type_, "__name__")
+                                else str(elem_type._type_)
+                            )
                         elif containing_type.__module__ == ctypes.__name__:
                             if isinstance(elem_type, type):
                                 if issubclass(elem_type, ctypes.Array):
@@ -149,6 +153,11 @@ def process_vmlinux_post_ast(
                                 "Module not supported in recursive resolution"
                             )
                     else:
+                        new_dep_node.add_dependent(
+                            elem_type.__name__
+                            if hasattr(elem_type, "__name__")
+                            else str(elem_type)
+                        )
                         process_vmlinux_post_ast(
                             elem_type, llvm_handler, handler, processing_stack
                         )

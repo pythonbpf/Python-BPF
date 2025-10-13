@@ -12,3 +12,6 @@ class IRGenerator:
             raise ImportError(
                 "Semantic analysis of vmlinux imports failed. Cannot generate IR"
             )
+        for struct in handler:
+            print(struct)
+            print()

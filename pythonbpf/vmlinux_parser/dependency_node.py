@@ -106,6 +106,7 @@ class DependencyNode:
     """
 
     name: str
+    depends_on: Optional[list[str]] = None
     fields: Dict[str, Field] = field(default_factory=dict)
     _ready_cache: Optional[bool] = field(default=None, repr=False)
 
@@ -121,6 +122,8 @@ class DependencyNode:
         ready: bool = False,
     ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
+        if self.depends_on is None:
+            self.depends_on = []
         self.fields[name] = Field(
             name=name,
             type=field_type,
@@ -235,3 +238,9 @@ class DependencyNode:
     def get_not_ready_fields(self) -> Dict[str, Field]:
         """Get all fields that are marked as not ready."""
         return {name: elem for name, elem in self.fields.items() if not elem.ready}
+
+    def add_dependent(self, dep_type):
+        if dep_type in self.depends_on:
+            return
+        else:
+            self.depends_on.append(dep_type)
