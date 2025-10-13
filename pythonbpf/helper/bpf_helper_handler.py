@@ -6,10 +6,10 @@ from .helper_registry import HelperHandlerRegistry
 from .helper_utils import (
     get_or_create_ptr_from_arg,
     get_flags_val,
-    handle_fstring_print,
-    simple_string_print,
     get_data_ptr_and_size,
 )
+from .printk_formatter import simple_string_print, handle_fstring_print
+
 from logging import Logger
 import logging
 
