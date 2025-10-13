@@ -48,7 +48,9 @@ def process_vmlinux_post_ast(
 
     # XXX:Check it's use. It's probably not being used.
     if current_symbol_name in processing_stack:
-        logger.debug(f"Dependency already in processing stack for {current_symbol_name}, skipping")
+        logger.debug(
+            f"Dependency already in processing stack for {current_symbol_name}, skipping"
+        )
         return True
 
     processing_stack.add(current_symbol_name)
@@ -93,7 +95,9 @@ def process_vmlinux_post_ast(
                 if local_module_name == ctypes.__name__:
                     new_dep_node.set_field_bitfield_size(elem_name, elem_bitfield_size)
                     new_dep_node.set_field_ready(elem_name, is_ready=True)
-                    logger.debug(f"Field {elem_name} is direct ctypes type: {elem_type}")
+                    logger.debug(
+                        f"Field {elem_name} is direct ctypes type: {elem_type}"
+                    )
                 elif local_module_name == "vmlinux":
                     new_dep_node.set_field_bitfield_size(elem_name, elem_bitfield_size)
                     logger.debug(
@@ -131,7 +135,9 @@ def process_vmlinux_post_ast(
                         )
                         new_dep_node.set_field_type(elem_name, elem_type)
                         if containing_type.__module__ == "vmlinux":
-                            process_vmlinux_post_ast(containing_type, llvm_handler, handler, processing_stack)
+                            process_vmlinux_post_ast(
+                                containing_type, llvm_handler, handler, processing_stack
+                            )
                             new_dep_node.set_field_ready(elem_name, True)
                         elif containing_type.__module__ == ctypes.__name__:
                             logger.debug(f"Processing ctype internal{containing_type}")
@@ -141,7 +147,9 @@ def process_vmlinux_post_ast(
                                 "Module not supported in recursive resolution"
                             )
                     else:
-                        process_vmlinux_post_ast(elem_type, llvm_handler, handler, processing_stack)
+                        process_vmlinux_post_ast(
+                            elem_type, llvm_handler, handler, processing_stack
+                        )
                         new_dep_node.set_field_ready(elem_name, True)
                 else:
                     raise ValueError(
@@ -151,5 +159,7 @@ def process_vmlinux_post_ast(
     else:
         raise ImportError("UNSUPPORTED Module")
 
-    logging.info(f"{current_symbol_name} processed and handler readiness {handler.is_ready}")
+    logging.info(
+        f"{current_symbol_name} processed and handler readiness {handler.is_ready}"
+    )
     return True
