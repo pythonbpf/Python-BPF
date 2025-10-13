@@ -130,6 +130,33 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
     return output
 
 
+def _run_llc(ll_file, obj_file):
+    """Compile LLVM IR to BPF object file using llc."""
+
+    logger.info(f"Compiling IR to object: {ll_file} -> {obj_file}")
+    result = subprocess.run(
+        [
+            "llc",
+            "-march=bpf",
+            "-filetype=obj",
+            "-O2",
+            str(ll_file),
+            "-o",
+            str(obj_file),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode == 0:
+        logger.info(f"Object file written to {obj_file}")
+        return True
+    else:
+        logger.error(f"llc compilation failed: {result.stderr}")
+        return False
+
+
 def compile(loglevel=logging.INFO) -> bool:
     # Look one level up the stack to the caller of this function
     caller_frame = inspect.stack()[1]
@@ -143,21 +170,7 @@ def compile(loglevel=logging.INFO) -> bool:
         compile_to_ir(str(caller_file), str(ll_file), loglevel=loglevel) and success
     )
 
-    success = bool(
-        subprocess.run(
-            [
-                "llc",
-                "-march=bpf",
-                "-filetype=obj",
-                "-O2",
-                str(ll_file),
-                "-o",
-                str(o_file),
-            ],
-            check=True,
-        )
-        and success
-    )
+    success = _run_llc(ll_file, o_file) and success
 
     logger.info(f"Object written to {o_file}")
     return success
@@ -177,17 +190,6 @@ def BPF(loglevel=logging.INFO) -> BpfProgram:
         f.flush()
         source = f.name
         compile_to_ir(source, str(inter.name), loglevel=loglevel)
-        subprocess.run(
-            [
-                "llc",
-                "-march=bpf",
-                "-filetype=obj",
-                "-O2",
-                str(inter.name),
-                "-o",
-                str(obj_file.name),
-            ],
-            check=True,
-        )
+        _run_llc(str(inter.name), str(obj_file.name))
 
         return BpfProgram(str(obj_file.name))
