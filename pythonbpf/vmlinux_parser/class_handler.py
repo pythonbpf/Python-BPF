@@ -71,6 +71,7 @@ def process_vmlinux_post_ast(
                     if len(field_elem) == 2:
                         field_name, field_type = field_elem
                     elif len(field_elem) == 3:
+                        raise NotImplementedError("Bitfields are not supported in the current version")
                         field_name, field_type, bitfield_size = field_elem
                     field_table[field_name] = [field_type, bitfield_size]
             elif hasattr(class_obj, "__annotations__"):

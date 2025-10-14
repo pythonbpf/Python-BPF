@@ -13,6 +13,7 @@ class Field:
     containing_type: Optional[Any]
     type_size: Optional[int]
     bitfield_size: Optional[int]
+    offset: int
     value: Any = None
     ready: bool = False
 
@@ -59,6 +60,10 @@ class Field:
         self.bitfield_size = bitfield_size
         if mark_ready:
             self.ready = True
+
+    def set_offset(self, offset: int) -> None:
+        """Set the offset of this field"""
+        self.offset = offset
 
 
 @dataclass
@@ -109,6 +114,7 @@ class DependencyNode:
     depends_on: Optional[list[str]] = None
     fields: Dict[str, Field] = field(default_factory=dict)
     _ready_cache: Optional[bool] = field(default=None, repr=False)
+    current_offset: int = 0
 
     def add_field(
         self,
@@ -120,6 +126,7 @@ class DependencyNode:
         ctype_complex_type: Optional[int] = None,
         bitfield_size: Optional[int] = None,
         ready: bool = False,
+        offset: int = 0,
     ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
         if self.depends_on is None:
@@ -133,6 +140,7 @@ class DependencyNode:
             type_size=type_size,
             ctype_complex_type=ctype_complex_type,
             bitfield_size=bitfield_size,
+            offset=offset
         )
         # Invalidate readiness cache
         self._ready_cache = None
@@ -209,9 +217,14 @@ class DependencyNode:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
 
         self.fields[name].set_ready(is_ready)
+        self.fields[name].set_offset(self.current_offset)
+        self.current_offset += self._calculate_size(name)
+
         # Invalidate readiness cache
         self._ready_cache = None
 
+    def _calculate_size(self, name: str) -> int:
+        pass
     @property
     def is_ready(self) -> bool:
         """Check if the node is ready (all fields are ready)."""
