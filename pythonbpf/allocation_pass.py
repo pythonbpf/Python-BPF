@@ -22,24 +22,27 @@ class LocalSymbol:
         yield self.metadata
 
 
+def create_targets_and_rvals(stmt):
+    """Create lists of targets and right-hand values from an assignment statement."""
+    if isinstance(stmt.targets[0], ast.Tuple):
+        if not isinstance(stmt.value, ast.Tuple):
+            logger.warning("Mismatched multi-target assignment, skipping allocation")
+            return
+        targets, rvals = stmt.targets[0].elts, stmt.value.elts
+        if len(targets) != len(rvals):
+            logger.warning("length of LHS != length of RHS, skipping allocation")
+            return
+        return targets, rvals
+    return stmt.targets, [stmt.value]
+
+
 def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
     """Handle memory allocation for assignment statements."""
 
     logger.info(f"Handling assignment for allocation: {ast.dump(stmt)}")
 
     # NOTE: Support multi-target assignments (e.g.: a, b = 1, 2)
-    if isinstance(stmt.targets[0], ast.Tuple):
-        if not isinstance(stmt.value, ast.Tuple):
-            logger.warning("Mismatched multi-target assignment, skipping allocation")
-            return
-        targets = stmt.targets[0].elts
-        rvals = stmt.value.elts
-        if len(targets) != len(rvals):
-            logger.warning("Mismatched multi-target assignment, skipping allocation")
-            return
-    else:
-        targets = stmt.targets
-        rvals = [stmt.value]
+    targets, rvals = create_targets_and_rvals(stmt)
 
     for target, rval in zip(targets, rvals):
         # Skip non-name targets (e.g., struct field assignments)
