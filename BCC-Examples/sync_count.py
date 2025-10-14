@@ -14,10 +14,8 @@ def last() -> HashMap:
 @bpf
 @section("tracepoint/syscalls/sys_enter_sync")
 def do_trace(ctx: c_void_p) -> c_int64:
-    ts_key = 0
-    cnt_key = 1
-    tsp = last.lookup(ts_key)
-    cntp = last.lookup(cnt_key)
+    ts_key, cnt_key = 0, 1
+    tsp, cntp = last.lookup(ts_key), last.lookup(cnt_key)
     if not cntp:
         last.update(cnt_key, 0)
         cntp = last.lookup(cnt_key)
