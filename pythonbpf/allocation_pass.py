@@ -25,41 +25,54 @@ class LocalSymbol:
 def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
     """Handle memory allocation for assignment statements."""
 
-    # Validate assignment
-    if len(stmt.targets) != 1:
-        logger.warning("Multi-target assignment not supported, skipping allocation")
-        return
+    logger.info(f"Handling assignment for allocation: {ast.dump(stmt)}")
 
-    target = stmt.targets[0]
-
-    # Skip non-name targets (e.g., struct field assignments)
-    if isinstance(target, ast.Attribute):
-        logger.debug(f"Struct field assignment to {target.attr}, no allocation needed")
-        return
-
-    if not isinstance(target, ast.Name):
-        logger.warning(f"Unsupported assignment target type: {type(target).__name__}")
-        return
-
-    var_name = target.id
-    rval = stmt.value
-
-    # Skip if already allocated
-    if var_name in local_sym_tab:
-        logger.debug(f"Variable {var_name} already allocated, skipping")
-        return
-
-    # Determine type and allocate based on rval
-    if isinstance(rval, ast.Call):
-        _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab)
-    elif isinstance(rval, ast.Constant):
-        _allocate_for_constant(builder, var_name, rval, local_sym_tab)
-    elif isinstance(rval, ast.BinOp):
-        _allocate_for_binop(builder, var_name, local_sym_tab)
+    # NOTE: Support multi-target assignments (e.g.: a, b = 1, 2)
+    if isinstance(stmt.targets[0], ast.Tuple):
+        if not isinstance(stmt.value, ast.Tuple):
+            logger.warning("Mismatched multi-target assignment, skipping allocation")
+            return
+        targets = stmt.targets[0].elts
+        rvals = stmt.value.elts
+        if len(targets) != len(rvals):
+            logger.warning("Mismatched multi-target assignment, skipping allocation")
+            return
     else:
-        logger.warning(
-            f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
-        )
+        targets = stmt.targets
+        rvals = [stmt.value]
+
+    for target, rval in zip(targets, rvals):
+        # Skip non-name targets (e.g., struct field assignments)
+        if isinstance(target, ast.Attribute):
+            logger.debug(
+                f"Struct field assignment to {target.attr}, no allocation needed"
+            )
+            continue
+
+        if not isinstance(target, ast.Name):
+            logger.warning(
+                f"Unsupported assignment target type: {type(target).__name__}"
+            )
+            continue
+
+        var_name = target.id
+
+        # Skip if already allocated
+        if var_name in local_sym_tab:
+            logger.debug(f"Variable {var_name} already allocated, skipping")
+            continue
+
+        # Determine type and allocate based on rval
+        if isinstance(rval, ast.Call):
+            _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab)
+        elif isinstance(rval, ast.Constant):
+            _allocate_for_constant(builder, var_name, rval, local_sym_tab)
+        elif isinstance(rval, ast.BinOp):
+            _allocate_for_binop(builder, var_name, local_sym_tab)
+        else:
+            logger.warning(
+                f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
+            )
 
 
 def _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab):
