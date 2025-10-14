@@ -24,7 +24,7 @@ def do_trace(ctx: c_void_p) -> c_int64:
         last.delete(key)
     else:
         last.update(key, ktime())
-    return c_int64(0)
+    return 0  # type: ignore [return-value]
 
 
 @bpf
