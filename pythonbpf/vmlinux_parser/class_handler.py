@@ -25,7 +25,7 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
 
 
 def process_vmlinux_post_ast(
-        elem_type_class, llvm_handler, handler: DependencyHandler, processing_stack=None
+    elem_type_class, llvm_handler, handler: DependencyHandler, processing_stack=None
 ):
     # Initialize processing stack on first call
     if processing_stack is None:

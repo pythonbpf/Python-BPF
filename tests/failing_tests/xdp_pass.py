@@ -3,7 +3,6 @@ from pythonbpf.maps import HashMap
 from pythonbpf.helper import XDP_PASS
 from vmlinux import TASK_COMM_LEN  # noqa: F401
 from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
-from vmlinux import struct_posix_cputimers
 from vmlinux import struct_xdp_md
 # from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
 # from vmlinux import struct_ring_buffer_per_cpu  # noqa: F401

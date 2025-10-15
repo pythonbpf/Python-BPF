@@ -35,7 +35,7 @@ class Field:
             self.ready = True
 
     def set_containing_type(
-            self, containing_type: Optional[Any], mark_ready: bool = False
+        self, containing_type: Optional[Any], mark_ready: bool = False
     ) -> None:
         """Set the containing_type of this field and optionally mark it as ready."""
         self.containing_type = containing_type
@@ -49,7 +49,7 @@ class Field:
             self.ready = True
 
     def set_ctype_complex_type(
-            self, ctype_complex_type: Any, mark_ready: bool = False
+        self, ctype_complex_type: Any, mark_ready: bool = False
     ) -> None:
         """Set the ctype_complex_type of this field and optionally mark it as ready."""
         self.ctype_complex_type = ctype_complex_type
@@ -119,16 +119,16 @@ class DependencyNode:
     ctype_struct: Optional[Any] = field(default=None, repr=False)
 
     def add_field(
-            self,
-            name: str,
-            field_type: type,
-            initial_value: Any = None,
-            containing_type: Optional[Any] = None,
-            type_size: Optional[int] = None,
-            ctype_complex_type: Optional[int] = None,
-            bitfield_size: Optional[int] = None,
-            ready: bool = False,
-            offset: int = 0,
+        self,
+        name: str,
+        field_type: type,
+        initial_value: Any = None,
+        containing_type: Optional[Any] = None,
+        type_size: Optional[int] = None,
+        ctype_complex_type: Optional[int] = None,
+        bitfield_size: Optional[int] = None,
+        ready: bool = False,
+        offset: int = 0,
     ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
         if self.depends_on is None:
@@ -180,7 +180,7 @@ class DependencyNode:
         self._ready_cache = None
 
     def set_field_containing_type(
-            self, name: str, containing_type: Any, mark_ready: bool = False
+        self, name: str, containing_type: Any, mark_ready: bool = False
     ) -> None:
         """Set a field's containing_type and optionally mark it as ready."""
         if name not in self.fields:
@@ -191,7 +191,7 @@ class DependencyNode:
         self._ready_cache = None
 
     def set_field_type_size(
-            self, name: str, type_size: Any, mark_ready: bool = False
+        self, name: str, type_size: Any, mark_ready: bool = False
     ) -> None:
         """Set a field's type_size and optionally mark it as ready."""
         if name not in self.fields:
@@ -202,7 +202,7 @@ class DependencyNode:
         self._ready_cache = None
 
     def set_field_ctype_complex_type(
-            self, name: str, ctype_complex_type: Any, mark_ready: bool = False
+        self, name: str, ctype_complex_type: Any, mark_ready: bool = False
     ) -> None:
         """Set a field's ctype_complex_type and optionally mark it as ready."""
         if name not in self.fields:
@@ -213,7 +213,7 @@ class DependencyNode:
         self._ready_cache = None
 
     def set_field_bitfield_size(
-            self, name: str, bitfield_size: Any, mark_ready: bool = False
+        self, name: str, bitfield_size: Any, mark_ready: bool = False
     ) -> None:
         """Set a field's bitfield_size and optionally mark it as ready."""
         if name not in self.fields:
@@ -224,10 +224,10 @@ class DependencyNode:
         self._ready_cache = None
 
     def set_field_ready(
-            self,
-            name: str,
-            is_ready: bool = False,
-            size_of_containing_type: Optional[int] = None,
+        self,
+        name: str,
+        is_ready: bool = False,
+        size_of_containing_type: Optional[int] = None,
     ) -> None:
         """Mark a field as ready or not ready."""
         if name not in self.fields:
@@ -242,7 +242,9 @@ class DependencyNode:
             except AttributeError:
                 # Fallback to manual calculation if field not found in ctype_struct
                 self.fields[name].set_offset(self.current_offset)
-                self.current_offset += self._calculate_size(name, size_of_containing_type)
+                self.current_offset += self._calculate_size(
+                    name, size_of_containing_type
+                )
         else:
             # Manual offset calculation when no ctype_struct is available
             self.fields[name].set_offset(self.current_offset)
@@ -252,7 +254,7 @@ class DependencyNode:
         self._ready_cache = None
 
     def _calculate_size(
-            self, name: str, size_of_containing_type: Optional[int] = None
+        self, name: str, size_of_containing_type: Optional[int] = None
     ) -> int:
         processing_field = self.fields[name]
         # size_of_field will be in bytes
@@ -264,12 +266,12 @@ class DependencyNode:
                 if issubclass(processing_field.ctype_complex_type, ctypes.Array):
                     if processing_field.containing_type.__module__ == ctypes.__name__:
                         if (
-                                processing_field.containing_type is not None
-                                and processing_field.type_size is not None
+                            processing_field.containing_type is not None
+                            and processing_field.type_size is not None
                         ):
                             size_of_field = (
-                                    ctypes.sizeof(processing_field.containing_type)
-                                    * processing_field.type_size
+                                ctypes.sizeof(processing_field.containing_type)
+                                * processing_field.type_size
                             )
                         else:
                             raise RuntimeError(
@@ -278,11 +280,11 @@ class DependencyNode:
                         return size_of_field
                     elif processing_field.containing_type.__module__ == "vmlinux":
                         if (
-                                size_of_containing_type is not None
-                                and processing_field.type_size is not None
+                            size_of_containing_type is not None
+                            and processing_field.type_size is not None
                         ):
                             size_of_field = (
-                                    size_of_containing_type * processing_field.type_size
+                                size_of_containing_type * processing_field.type_size
                             )
                         else:
                             raise RuntimeError(
