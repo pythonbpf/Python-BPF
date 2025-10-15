@@ -4,7 +4,6 @@ from ..dependency_handler import DependencyHandler
 from .debug_info_gen import debug_info_generation
 from ..dependency_node import DependencyNode
 import llvmlite.ir as ir
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +131,7 @@ class IRGenerator:
         field_index: int,
         is_indexed: bool = False,
         index: int = 0,
-        containing_type_size: Optional[int] = None,
+        containing_type_size: int = 0,
     ) -> str:
         if is_indexed:
             name = (
