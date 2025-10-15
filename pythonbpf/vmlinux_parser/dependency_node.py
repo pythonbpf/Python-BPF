@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
+import ctypes
 
 
 # TODO: FIX THE FUCKING TYPE NAME CONVENTION.
@@ -13,6 +14,7 @@ class Field:
     containing_type: Optional[Any]
     type_size: Optional[int]
     bitfield_size: Optional[int]
+    offset: int
     value: Any = None
     ready: bool = False
 
@@ -59,6 +61,10 @@ class Field:
         self.bitfield_size = bitfield_size
         if mark_ready:
             self.ready = True
+
+    def set_offset(self, offset: int) -> None:
+        """Set the offset of this field"""
+        self.offset = offset
 
 
 @dataclass
@@ -109,6 +115,7 @@ class DependencyNode:
     depends_on: Optional[list[str]] = None
     fields: Dict[str, Field] = field(default_factory=dict)
     _ready_cache: Optional[bool] = field(default=None, repr=False)
+    current_offset: int = 0
 
     def add_field(
         self,
@@ -120,6 +127,7 @@ class DependencyNode:
         ctype_complex_type: Optional[int] = None,
         bitfield_size: Optional[int] = None,
         ready: bool = False,
+        offset: int = 0,
     ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
         if self.depends_on is None:
@@ -133,9 +141,13 @@ class DependencyNode:
             type_size=type_size,
             ctype_complex_type=ctype_complex_type,
             bitfield_size=bitfield_size,
+            offset=offset,
         )
         # Invalidate readiness cache
         self._ready_cache = None
+
+    def __sizeof__(self):
+        return self.current_offset
 
     def get_field(self, name: str) -> Field:
         """Get a field by name."""
@@ -203,14 +215,77 @@ class DependencyNode:
         # Invalidate readiness cache
         self._ready_cache = None
 
-    def set_field_ready(self, name: str, is_ready: bool = False) -> None:
+    def set_field_ready(
+        self,
+        name: str,
+        is_ready: bool = False,
+        size_of_containing_type: Optional[int] = None,
+    ) -> None:
         """Mark a field as ready or not ready."""
         if name not in self.fields:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
 
         self.fields[name].set_ready(is_ready)
+        self.fields[name].set_offset(self.current_offset)
+        self.current_offset += self._calculate_size(name, size_of_containing_type)
         # Invalidate readiness cache
         self._ready_cache = None
+
+    def _calculate_size(
+        self, name: str, size_of_containing_type: Optional[int] = None
+    ) -> int:
+        processing_field = self.fields[name]
+        # size_of_field will be in bytes
+        if processing_field.type.__module__ == ctypes.__name__:
+            size_of_field = ctypes.sizeof(processing_field.type)
+            return size_of_field
+        elif processing_field.type.__module__ == "vmlinux":
+            if processing_field.ctype_complex_type is not None:
+                if issubclass(processing_field.ctype_complex_type, ctypes.Array):
+                    if processing_field.containing_type.__module__ == ctypes.__name__:
+                        if (
+                            processing_field.containing_type is not None
+                            and processing_field.type_size is not None
+                        ):
+                            size_of_field = (
+                                ctypes.sizeof(processing_field.containing_type)
+                                * processing_field.type_size
+                            )
+                        else:
+                            raise RuntimeError(
+                                f"{processing_field} has no containing_type or type_size"
+                            )
+                        return size_of_field
+                    elif processing_field.containing_type.__module__ == "vmlinux":
+                        if (
+                            size_of_containing_type is not None
+                            and processing_field.type_size is not None
+                        ):
+                            size_of_field = (
+                                size_of_containing_type * processing_field.type_size
+                            )
+                        else:
+                            raise RuntimeError(
+                                f"{processing_field} has no containing_type or type_size"
+                            )
+                        return size_of_field
+                elif issubclass(processing_field.ctype_complex_type, ctypes._Pointer):
+                    return ctypes.sizeof(ctypes.c_void_p)
+                else:
+                    raise NotImplementedError(
+                        "This subclass of ctype not supported yet"
+                    )
+            else:
+                # search up pre-created stuff and get size
+                if size_of_containing_type is None:
+                    raise RuntimeError(
+                        f"Size of containing type {size_of_containing_type} is None"
+                    )
+                return size_of_containing_type
+
+        else:
+            raise ModuleNotFoundError("Module is not supported for the operation")
+        raise RuntimeError("control should not reach here")
 
     @property
     def is_ready(self) -> bool:
