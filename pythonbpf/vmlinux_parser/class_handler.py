@@ -25,7 +25,7 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
 
 
 def process_vmlinux_post_ast(
-    elem_type_class, llvm_handler, handler: DependencyHandler, processing_stack=None
+        elem_type_class, llvm_handler, handler: DependencyHandler, processing_stack=None
 ):
     # Initialize processing stack on first call
     if processing_stack is None:
@@ -60,6 +60,10 @@ def process_vmlinux_post_ast(
             pass
         else:
             new_dep_node = DependencyNode(name=current_symbol_name)
+
+            # elem_type_class is the actual vmlinux struct/class
+            new_dep_node.set_ctype_struct(elem_type_class)
+
             handler.add_node(new_dep_node)
             class_obj = getattr(imported_module, current_symbol_name)
             # Inspect the class fields
@@ -71,9 +75,6 @@ def process_vmlinux_post_ast(
                     if len(field_elem) == 2:
                         field_name, field_type = field_elem
                     elif len(field_elem) == 3:
-                        raise NotImplementedError(
-                            "Bitfields are not supported in the current version"
-                        )
                         field_name, field_type, bitfield_size = field_elem
                     field_table[field_name] = [field_type, bitfield_size]
             elif hasattr(class_obj, "__annotations__"):
