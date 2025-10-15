@@ -34,6 +34,8 @@ class IRGenerator:
             self.generated.append(struct.name)
 
     def gen_ir(self, struct):
+        # TODO: we add the btf_ama attribute by monkey patching in the end of compilation, but once llvmlite
+        #  accepts our issue, we will resort to normal accessed attribute based attribute addition
         # currently we generate all possible field accesses for CO-RE and put into the assignment table
         debug_info = debug_info_generation(struct, self.llvm_module)
         field_index = 0
