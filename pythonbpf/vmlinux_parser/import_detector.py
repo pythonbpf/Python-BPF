@@ -1,6 +1,6 @@
 import ast
 import logging
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Any
 import importlib
 import inspect
 
@@ -82,7 +82,7 @@ def vmlinux_proc(tree: ast.AST, module):
     # initialise dependency handler
     handler = DependencyHandler()
     # initialise assignment dictionary of name to type
-    assignments: Dict[str, type] = {}
+    assignments: dict[str, tuple[type, Any]] = {}
 
     if not import_statements:
         logger.info("No vmlinux imports found")
@@ -132,10 +132,16 @@ def vmlinux_proc(tree: ast.AST, module):
     return assignments
 
 
-def process_vmlinux_assign(node, module, assignments: Dict[str, type]):
+def process_vmlinux_assign(node, module, assignments: dict[str, tuple[type, Any]]):
     # Check if this is a simple assignment with a constant value
     if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
         target_name = node.targets[0].id
         if isinstance(node.value, ast.Constant):
-            assignments[target_name] = node.value.value
-            logger.info(f"Added assignment: {target_name} = {node.value.value}")
+            assignments[target_name] = (type(node.value.value), node.value.value)
+            logger.info(
+                f"Added assignment: {target_name} = {node.value.value!r} of type {type(node.value.value)}"
+            )
+        else:
+            raise ValueError(f"Unsupported assignment type for {target_name}")
+    else:
+        raise ValueError("Not a simple assignment")

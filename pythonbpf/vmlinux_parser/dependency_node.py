@@ -240,28 +240,47 @@ class DependencyNode:
             size_of_field = ctypes.sizeof(processing_field.type)
             return size_of_field
         elif processing_field.type.__module__ == "vmlinux":
-            size_of_field: int = 0
             if processing_field.ctype_complex_type is not None:
                 if issubclass(processing_field.ctype_complex_type, ctypes.Array):
                     if processing_field.containing_type.__module__ == ctypes.__name__:
-                        size_of_field = (
-                            ctypes.sizeof(processing_field.containing_type)
-                            * processing_field.type_size
-                        )
+                        if (
+                            processing_field.containing_type is not None
+                            and processing_field.type_size is not None
+                        ):
+                            size_of_field = (
+                                ctypes.sizeof(processing_field.containing_type)
+                                * processing_field.type_size
+                            )
+                        else:
+                            raise RuntimeError(
+                                f"{processing_field} has no containing_type or type_size"
+                            )
                         return size_of_field
                     elif processing_field.containing_type.__module__ == "vmlinux":
-                        size_of_field = (
-                            size_of_containing_type * processing_field.type_size
-                        )
+                        if (
+                            size_of_containing_type is not None
+                            and processing_field.type_size is not None
+                        ):
+                            size_of_field = (
+                                size_of_containing_type * processing_field.type_size
+                            )
+                        else:
+                            raise RuntimeError(
+                                f"{processing_field} has no containing_type or type_size"
+                            )
                         return size_of_field
                 elif issubclass(processing_field.ctype_complex_type, ctypes._Pointer):
-                    return ctypes.sizeof(ctypes.pointer())
+                    return ctypes.sizeof(ctypes.c_void_p)
                 else:
                     raise NotImplementedError(
                         "This subclass of ctype not supported yet"
                     )
             else:
                 # search up pre-created stuff and get size
+                if size_of_containing_type is None:
+                    raise RuntimeError(
+                        f"Size of containing type {size_of_containing_type} is None"
+                    )
                 return size_of_containing_type
 
         else:
