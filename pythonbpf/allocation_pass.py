@@ -210,82 +210,66 @@ def _allocate_for_name(builder, var_name, rval, local_sym_tab):
         logger.error(f"Source variable '{source_var}' not found in symbol table")
         return
 
-    # Get type from source variable
-    source_type = local_sym_tab[source_var].ir_type
-    source_metadata = local_sym_tab[source_var].metadata
+    # Get type and metadata from source variable
+    source_symbol = local_sym_tab[source_var]
 
-    # Allocate with same type
-    var = builder.alloca(source_type, name=var_name)
+    # Allocate with same type and alignment
+    var = _allocate_with_type(builder, var_name, source_symbol.ir_type)
+    local_sym_tab[var_name] = LocalSymbol(
+        var, source_symbol.ir_type, source_symbol.metadata
+    )
 
-    # Set alignment based on type
-    if isinstance(source_type, ir.IntType):
-        var.align = source_type.width // 8
-    elif isinstance(source_type, ir.PointerType):
-        var.align = 8
-    elif isinstance(source_type, ir.ArrayType):
-        var.align = (
-            source_type.element.width // 8
-            if isinstance(source_type.element, ir.IntType)
-            else 1
-        )
-    else:
-        var.align = 8  # Default alignment
-
-    local_sym_tab[var_name] = LocalSymbol(var, source_type, source_metadata)
     logger.info(
-        f"Pre-allocated {var_name} from variable {source_var} with type {source_type}"
+        f"Pre-allocated {var_name} from {source_var} with type {source_symbol.ir_type}"
     )
 
 
 def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_tab):
     """Allocate memory for struct field-to-variable assignment (a = dat.fld)."""
     if not isinstance(rval.value, ast.Name):
-        logger.warning(
-            f"Complex attribute access not supported for allocation of {var_name}"
-        )
+        logger.warning(f"Complex attribute access not supported for {var_name}")
         return
 
     struct_var = rval.value.id
     field_name = rval.attr
 
-    # Validate struct exists
+    # Validate struct and field
     if struct_var not in local_sym_tab:
-        logger.error(f"Struct variable '{struct_var}' not found in symbol table")
+        logger.error(f"Struct variable '{struct_var}' not found")
         return
 
     struct_type = local_sym_tab[struct_var].metadata
     if not struct_type or struct_type not in structs_sym_tab:
-        logger.error(f"Struct type '{struct_type}' not found in struct symbol table")
+        logger.error(f"Struct type '{struct_type}' not found")
         return
 
     struct_info = structs_sym_tab[struct_type]
-
-    # Validate field exists
     if field_name not in struct_info.fields:
         logger.error(f"Field '{field_name}' not found in struct '{struct_type}'")
         return
 
-    # Get field type
+    # Allocate with field's type and alignment
     field_type = struct_info.field_type(field_name)
-
-    # Allocate with field's type
-    var = builder.alloca(field_type, name=var_name)
-
-    # Set alignment based on type
-    if isinstance(field_type, ir.IntType):
-        var.align = field_type.width // 8
-    elif isinstance(field_type, ir.PointerType):
-        var.align = 8
-    elif isinstance(field_type, ir.ArrayType):
-        var.align = (
-            field_type.element.width // 8
-            if isinstance(field_type.element, ir.IntType)
-            else 1
-        )
-    else:
-        var.align = 8  # Default alignment
-
+    var = _allocate_with_type(builder, var_name, field_type)
     local_sym_tab[var_name] = LocalSymbol(var, field_type)
+
     logger.info(
         f"Pre-allocated {var_name} from {struct_var}.{field_name} with type {field_type}"
     )
+
+
+def _allocate_with_type(builder, var_name, ir_type):
+    """Allocate variable with appropriate alignment for type."""
+    var = builder.alloca(ir_type, name=var_name)
+    var.align = _get_alignment(ir_type)
+    return var
+
+
+def _get_alignment(ir_type):
+    """Get appropriate alignment for IR type."""
+    if isinstance(ir_type, ir.IntType):
+        return ir_type.width // 8
+    elif isinstance(ir_type, ir.ArrayType) and isinstance(ir_type.element, ir.IntType):
+        return ir_type.element.width // 8
+    else:
+        return 8  # Default: pointer size
