@@ -71,6 +71,17 @@ def handle_variable_assignment(
             logger.info(f"Initialized struct {struct_name} for variable {var_name}")
             return True
 
+    # Special case: struct field char array -> pointer
+    # Handle this before eval_expr to get the pointer, not the value
+    if isinstance(rval, ast.Attribute) and isinstance(rval.value, ast.Name):
+        converted_val = _try_convert_char_array_to_ptr(
+            rval, var_type, builder, local_sym_tab, structs_sym_tab
+        )
+        if converted_val is not None:
+            builder.store(converted_val, var_ptr)
+            logger.info(f"Assigned char array pointer to {var_name}")
+            return True
+
     val_result = eval_expr(
         func, module, builder, rval, local_sym_tab, map_sym_tab, structs_sym_tab
     )
@@ -106,3 +117,52 @@ def handle_variable_assignment(
     builder.store(val, var_ptr)
     logger.info(f"Assigned value to variable {var_name}")
     return True
+
+
+def _try_convert_char_array_to_ptr(
+    rval, var_type, builder, local_sym_tab, structs_sym_tab
+):
+    """Try to convert char array field to i8* pointer"""
+    # Only convert if target is i8*
+    if not (
+        isinstance(var_type, ir.PointerType)
+        and isinstance(var_type.pointee, ir.IntType)
+        and var_type.pointee.width == 8
+    ):
+        return None
+
+    struct_var = rval.value.id
+    field_name = rval.attr
+
+    # Validate struct
+    if struct_var not in local_sym_tab:
+        return None
+
+    struct_type = local_sym_tab[struct_var].metadata
+    if not struct_type or struct_type not in structs_sym_tab:
+        return None
+
+    struct_info = structs_sym_tab[struct_type]
+    if field_name not in struct_info.fields:
+        return None
+
+    field_type = struct_info.field_type(field_name)
+
+    # Check if it's a char array
+    if not (
+        isinstance(field_type, ir.ArrayType)
+        and isinstance(field_type.element, ir.IntType)
+        and field_type.element.width == 8
+    ):
+        return None
+
+    # Get pointer to struct field
+    struct_ptr = local_sym_tab[struct_var].var
+    field_ptr = struct_info.gep(builder, struct_ptr, field_name)
+
+    # GEP to first element: [N x i8]* -> i8*
+    return builder.gep(
+        field_ptr,
+        [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)],
+        inbounds=True,
+    )

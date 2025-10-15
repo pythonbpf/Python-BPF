@@ -248,13 +248,25 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
         logger.error(f"Field '{field_name}' not found in struct '{struct_type}'")
         return
 
-    # Allocate with field's type and alignment
+    # Get field type
     field_type = struct_info.field_type(field_name)
-    var = _allocate_with_type(builder, var_name, field_type)
-    local_sym_tab[var_name] = LocalSymbol(var, field_type)
+
+    # Special case: char array -> allocate as i8* pointer instead
+    if (
+        isinstance(field_type, ir.ArrayType)
+        and isinstance(field_type.element, ir.IntType)
+        and field_type.element.width == 8
+    ):
+        alloc_type = ir.PointerType(ir.IntType(8))
+        logger.info(f"Allocating {var_name} as i8* (pointer to char array)")
+    else:
+        alloc_type = field_type
+
+    var = _allocate_with_type(builder, var_name, alloc_type)
+    local_sym_tab[var_name] = LocalSymbol(var, alloc_type)
 
     logger.info(
-        f"Pre-allocated {var_name} from {struct_var}.{field_name} with type {field_type}"
+        f"Pre-allocated {var_name} from {struct_var}.{field_name} with type {alloc_type}"
     )
 
 
