@@ -215,7 +215,12 @@ class DependencyNode:
         # Invalidate readiness cache
         self._ready_cache = None
 
-    def set_field_ready(self, name: str, is_ready: bool = False, size_of_containing_type: Optional[int] = None) -> None:
+    def set_field_ready(
+        self,
+        name: str,
+        is_ready: bool = False,
+        size_of_containing_type: Optional[int] = None,
+    ) -> None:
         """Mark a field as ready or not ready."""
         if name not in self.fields:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
@@ -226,7 +231,9 @@ class DependencyNode:
         # Invalidate readiness cache
         self._ready_cache = None
 
-    def _calculate_size(self, name: str, size_of_containing_type: Optional[int] = None) -> int:
+    def _calculate_size(
+        self, name: str, size_of_containing_type: Optional[int] = None
+    ) -> int:
         processing_field = self.fields[name]
         # size_of_field will be in bytes
         if processing_field.type.__module__ == ctypes.__name__:
@@ -244,8 +251,7 @@ class DependencyNode:
                         return size_of_field
                     elif processing_field.containing_type.__module__ == "vmlinux":
                         size_of_field = (
-                            size_of_containing_type
-                            * processing_field.type_size
+                            size_of_containing_type * processing_field.type_size
                         )
                         return size_of_field
                 elif issubclass(processing_field.ctype_complex_type, ctypes._Pointer):
