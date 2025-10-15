@@ -72,6 +72,14 @@ def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
             _allocate_for_constant(builder, var_name, rval, local_sym_tab)
         elif isinstance(rval, ast.BinOp):
             _allocate_for_binop(builder, var_name, local_sym_tab)
+        elif isinstance(rval, ast.Name):
+            # Variable-to-variable assignment (b = a)
+            _allocate_for_name(builder, var_name, rval, local_sym_tab)
+        elif isinstance(rval, ast.Attribute):
+            # Struct field-to-variable assignment (a = dat.fld)
+            _allocate_for_attribute(
+                builder, var_name, rval, local_sym_tab, structs_sym_tab
+            )
         else:
             logger.warning(
                 f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
@@ -192,3 +200,92 @@ def allocate_temp_pool(builder, max_temps, local_sym_tab):
         temp_var = builder.alloca(ir.IntType(64), name=temp_name)
         temp_var.align = 8
         local_sym_tab[temp_name] = LocalSymbol(temp_var, ir.IntType(64))
+
+
+def _allocate_for_name(builder, var_name, rval, local_sym_tab):
+    """Allocate memory for variable-to-variable assignment (b = a)."""
+    source_var = rval.id
+
+    if source_var not in local_sym_tab:
+        logger.error(f"Source variable '{source_var}' not found in symbol table")
+        return
+
+    # Get type from source variable
+    source_type = local_sym_tab[source_var].ir_type
+    source_metadata = local_sym_tab[source_var].metadata
+
+    # Allocate with same type
+    var = builder.alloca(source_type, name=var_name)
+
+    # Set alignment based on type
+    if isinstance(source_type, ir.IntType):
+        var.align = source_type.width // 8
+    elif isinstance(source_type, ir.PointerType):
+        var.align = 8
+    elif isinstance(source_type, ir.ArrayType):
+        var.align = (
+            source_type.element.width // 8
+            if isinstance(source_type.element, ir.IntType)
+            else 1
+        )
+    else:
+        var.align = 8  # Default alignment
+
+    local_sym_tab[var_name] = LocalSymbol(var, source_type, source_metadata)
+    logger.info(
+        f"Pre-allocated {var_name} from variable {source_var} with type {source_type}"
+    )
+
+
+def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_tab):
+    """Allocate memory for struct field-to-variable assignment (a = dat.fld)."""
+    if not isinstance(rval.value, ast.Name):
+        logger.warning(
+            f"Complex attribute access not supported for allocation of {var_name}"
+        )
+        return
+
+    struct_var = rval.value.id
+    field_name = rval.attr
+
+    # Validate struct exists
+    if struct_var not in local_sym_tab:
+        logger.error(f"Struct variable '{struct_var}' not found in symbol table")
+        return
+
+    struct_type = local_sym_tab[struct_var].metadata
+    if not struct_type or struct_type not in structs_sym_tab:
+        logger.error(f"Struct type '{struct_type}' not found in struct symbol table")
+        return
+
+    struct_info = structs_sym_tab[struct_type]
+
+    # Validate field exists
+    if field_name not in struct_info.fields:
+        logger.error(f"Field '{field_name}' not found in struct '{struct_type}'")
+        return
+
+    # Get field type
+    field_type = struct_info.field_type(field_name)
+
+    # Allocate with field's type
+    var = builder.alloca(field_type, name=var_name)
+
+    # Set alignment based on type
+    if isinstance(field_type, ir.IntType):
+        var.align = field_type.width // 8
+    elif isinstance(field_type, ir.PointerType):
+        var.align = 8
+    elif isinstance(field_type, ir.ArrayType):
+        var.align = (
+            field_type.element.width // 8
+            if isinstance(field_type.element, ir.IntType)
+            else 1
+        )
+    else:
+        var.align = 8  # Default alignment
+
+    local_sym_tab[var_name] = LocalSymbol(var, field_type)
+    logger.info(
+        f"Pre-allocated {var_name} from {struct_var}.{field_name} with type {field_type}"
+    )
