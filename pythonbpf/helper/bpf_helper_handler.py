@@ -23,6 +23,7 @@ class BPFHelperID(Enum):
     BPF_KTIME_GET_NS = 5
     BPF_PRINTK = 6
     BPF_GET_CURRENT_PID_TGID = 14
+    BPF_GET_CURRENT_COMM = 16
     BPF_PERF_EVENT_OUTPUT = 25
 
 
@@ -232,6 +233,23 @@ def bpf_map_delete_elem_emitter(
     result = builder.call(fn_ptr, [map_void_ptr, key_ptr], tail=False)
 
     return result, None
+
+
+@HelperHandlerRegistry.register("comm")
+def bpf_get_current_comm_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_get_current_comm helper function call.
+    """
+    pass  # Not implemented yet
 
 
 @HelperHandlerRegistry.register("pid")

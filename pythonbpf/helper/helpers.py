@@ -2,17 +2,24 @@ import ctypes
 
 
 def ktime():
+    """get current ktime"""
     return ctypes.c_int64(0)
 
 
 def pid():
+    """get current process id"""
     return ctypes.c_int32(0)
 
 
 def deref(ptr):
-    "dereference a pointer"
+    """dereference a pointer"""
     result = ctypes.cast(ptr, ctypes.POINTER(ctypes.c_void_p)).contents.value
     return result if result is not None else 0
+
+
+def comm(buf):
+    """get current process command name"""
+    return ctypes.c_int64(0)
 
 
 XDP_ABORTED = ctypes.c_int64(0)
