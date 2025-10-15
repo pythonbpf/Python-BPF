@@ -1,4 +1,4 @@
-from pythonbpf import bpf, map, struct, section, bpfglobal, compile
+from pythonbpf import bpf, map, struct, section, bpfglobal, BPF, trace_pipe
 from pythonbpf.helper import ktime, pid, comm
 from pythonbpf.maps import PerfEventArray
 
@@ -23,10 +23,9 @@ def events() -> PerfEventArray:
 @section("tracepoint/syscalls/sys_enter_clone")
 def hello(ctx: c_void_p) -> c_int64:
     dataobj = data_t()
-    strobj = "hellohellohello"
     dataobj.pid, dataobj.ts = pid(), ktime()
     comm(dataobj.comm)
-    print(f"clone called at {dataobj.ts} by pid {dataobj.pid}, comm {strobj}")
+    print(f"clone called at {dataobj.ts} by pid {dataobj.pid}, comm {dataobj.comm}")
     events.output(dataobj)
     return 0  # type: ignore [return-value]
 
@@ -37,4 +36,8 @@ def LICENSE() -> str:
     return "GPL"
 
 
-compile()
+# compile
+BPF().load_and_attach()
+
+print("Tracing clone()... Ctrl-C to end")
+trace_pipe()
