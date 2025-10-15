@@ -19,10 +19,20 @@ from pylibbpf import BpfProgram
 import tempfile
 from logging import Logger
 import logging
+import re
 
 logger: Logger = logging.getLogger(__name__)
 
 VERSION = "v0.1.4"
+
+
+def finalize_module(original_str):
+    """After all IR generation is complete, we monkey patch btf_ama attribute"""
+
+    # Create a string with applied transformation of btf_ama attribute addition to BTF struct field accesses.
+    pattern = r'(@"llvm\.[^"]+:[^"]*" = external global i64, !llvm\.preserve\.access\.index ![0-9]+)'
+    replacement = r'\1 "btf_ama"'
+    return re.sub(pattern, replacement, original_str)
 
 
 def find_bpf_chunks(tree):
@@ -121,10 +131,12 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
 
     module.add_named_metadata("llvm.ident", [f"PythonBPF {VERSION}"])
 
+    module_string = finalize_module(str(module))
+
     logger.info(f"IR written to {output}")
     with open(output, "w") as f:
         f.write(f'source_filename = "{filename}"\n')
-        f.write(str(module))
+        f.write(module_string)
         f.write("\n")
 
     return output
