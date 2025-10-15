@@ -30,6 +30,7 @@ class IRGenerator:
             # this part cannot yet resolve circular dependencies. Gets stuck on an infinite loop during that.
             self.generated.append(struct.name)
 
-
-    def struct_name_generator(self, ):
+    def struct_name_generator(
+        self,
+    ) -> None:
         pass

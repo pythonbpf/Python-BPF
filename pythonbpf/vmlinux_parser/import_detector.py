@@ -129,7 +129,13 @@ def vmlinux_proc(tree: ast.AST, module):
                 )
 
     IRGenerator(module, handler)
+    return assignments
 
 
 def process_vmlinux_assign(node, module, assignments: Dict[str, type]):
-    raise NotImplementedError("Assignment handling has not been implemented yet")
+    # Check if this is a simple assignment with a constant value
+    if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+        target_name = node.targets[0].id
+        if isinstance(node.value, ast.Constant):
+            assignments[target_name] = node.value.value
+            logger.info(f"Added assignment: {target_name} = {node.value.value}")

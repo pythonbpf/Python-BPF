@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
+import ctypes
 
 
 # TODO: FIX THE FUCKING TYPE NAME CONVENTION.
@@ -140,10 +141,13 @@ class DependencyNode:
             type_size=type_size,
             ctype_complex_type=ctype_complex_type,
             bitfield_size=bitfield_size,
-            offset=offset
+            offset=offset,
         )
         # Invalidate readiness cache
         self._ready_cache = None
+
+    def __sizeof__(self):
+        return self.current_offset
 
     def get_field(self, name: str) -> Field:
         """Get a field by name."""
@@ -211,20 +215,53 @@ class DependencyNode:
         # Invalidate readiness cache
         self._ready_cache = None
 
-    def set_field_ready(self, name: str, is_ready: bool = False) -> None:
+    def set_field_ready(self, name: str, is_ready: bool = False, size_of_containing_type: Optional[int] = None) -> None:
         """Mark a field as ready or not ready."""
         if name not in self.fields:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
 
         self.fields[name].set_ready(is_ready)
         self.fields[name].set_offset(self.current_offset)
-        self.current_offset += self._calculate_size(name)
-
+        self.current_offset += self._calculate_size(name, size_of_containing_type)
         # Invalidate readiness cache
         self._ready_cache = None
 
-    def _calculate_size(self, name: str) -> int:
-        pass
+    def _calculate_size(self, name: str, size_of_containing_type: Optional[int] = None) -> int:
+        processing_field = self.fields[name]
+        # size_of_field will be in bytes
+        if processing_field.type.__module__ == ctypes.__name__:
+            size_of_field = ctypes.sizeof(processing_field.type)
+            return size_of_field
+        elif processing_field.type.__module__ == "vmlinux":
+            size_of_field: int = 0
+            if processing_field.ctype_complex_type is not None:
+                if issubclass(processing_field.ctype_complex_type, ctypes.Array):
+                    if processing_field.containing_type.__module__ == ctypes.__name__:
+                        size_of_field = (
+                            ctypes.sizeof(processing_field.containing_type)
+                            * processing_field.type_size
+                        )
+                        return size_of_field
+                    elif processing_field.containing_type.__module__ == "vmlinux":
+                        size_of_field = (
+                            size_of_containing_type
+                            * processing_field.type_size
+                        )
+                        return size_of_field
+                elif issubclass(processing_field.ctype_complex_type, ctypes._Pointer):
+                    return ctypes.sizeof(ctypes.pointer())
+                else:
+                    raise NotImplementedError(
+                        "This subclass of ctype not supported yet"
+                    )
+            else:
+                # search up pre-created stuff and get size
+                return size_of_containing_type
+
+        else:
+            raise ModuleNotFoundError("Module is not supported for the operation")
+        raise RuntimeError("control should not reach here")
+
     @property
     def is_ready(self) -> bool:
         """Check if the node is ready (all fields are ready)."""

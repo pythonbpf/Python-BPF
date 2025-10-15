@@ -71,7 +71,9 @@ def process_vmlinux_post_ast(
                     if len(field_elem) == 2:
                         field_name, field_type = field_elem
                     elif len(field_elem) == 3:
-                        raise NotImplementedError("Bitfields are not supported in the current version")
+                        raise NotImplementedError(
+                            "Bitfields are not supported in the current version"
+                        )
                         field_name, field_type, bitfield_size = field_elem
                     field_table[field_name] = [field_type, bitfield_size]
             elif hasattr(class_obj, "__annotations__"):
@@ -145,7 +147,8 @@ def process_vmlinux_post_ast(
                             process_vmlinux_post_ast(
                                 containing_type, llvm_handler, handler, processing_stack
                             )
-                            new_dep_node.set_field_ready(elem_name, True)
+                            size_of_containing_type  = (handler[containing_type.__name__]).__sizeof__()
+                            new_dep_node.set_field_ready(elem_name, True, size_of_containing_type)
                         elif containing_type.__module__ == ctypes.__name__:
                             logger.debug(f"Processing ctype internal{containing_type}")
                             new_dep_node.set_field_ready(elem_name, True)
@@ -162,7 +165,8 @@ def process_vmlinux_post_ast(
                         process_vmlinux_post_ast(
                             elem_type, llvm_handler, handler, processing_stack
                         )
-                        new_dep_node.set_field_ready(elem_name, True)
+                        size_of_containing_type = (handler[elem_type.__name__]).__sizeof__()
+                        new_dep_node.set_field_ready(elem_name, True, size_of_containing_type)
                 else:
                     raise ValueError(
                         f"{elem_name} with type {elem_type} from module {module_name} not supported in recursive resolver"
