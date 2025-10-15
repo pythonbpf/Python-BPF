@@ -7,6 +7,7 @@ from .helper_utils import (
     get_or_create_ptr_from_arg,
     get_flags_val,
     get_data_ptr_and_size,
+    get_buffer_ptr_and_size,
 )
 from .printk_formatter import simple_string_print, handle_fstring_print
 
@@ -248,8 +249,48 @@ def bpf_get_current_comm_emitter(
 ):
     """
     Emit LLVM IR for bpf_get_current_comm helper function call.
+
+    Accepts: comm(dataobj.field) or comm(my_buffer)
     """
-    pass  # Not implemented yet
+    if not call.args or len(call.args) != 1:
+        raise ValueError(
+            f"comm expects exactly one argument (buffer), got {len(call.args)}"
+        )
+
+    buf_arg = call.args[0]
+
+    # Extract buffer pointer and size
+    buf_ptr, buf_size = get_buffer_ptr_and_size(
+        buf_arg, builder, local_sym_tab, struct_sym_tab
+    )
+
+    # Validate it's a char array
+    if not isinstance(
+        buf_ptr.type.pointee, ir.ArrayType
+    ) or buf_ptr.type.pointee.element != ir.IntType(8):
+        raise ValueError(
+            f"comm expects a char array buffer, got {buf_ptr.type.pointee}"
+        )
+
+    # Cast to void* and call helper
+    buf_void_ptr = builder.bitcast(buf_ptr, ir.PointerType())
+
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [ir.PointerType(), ir.IntType(32)],
+        var_arg=False,
+    )
+    fn_ptr = builder.inttoptr(
+        ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_CURRENT_COMM.value),
+        ir.PointerType(fn_type),
+    )
+
+    result = builder.call(
+        fn_ptr, [buf_void_ptr, ir.Constant(ir.IntType(32), buf_size)], tail=False
+    )
+
+    logger.info(f"Emitted bpf_get_current_comm with {buf_size} byte buffer")
+    return result, None
 
 
 @HelperHandlerRegistry.register("pid")

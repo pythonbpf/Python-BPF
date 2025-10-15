@@ -136,3 +136,57 @@ def get_data_ptr_and_size(data_arg, local_sym_tab, struct_sym_tab):
         raise NotImplementedError(
             "Only simple object names are supported as data in perf event output."
         )
+
+
+def get_buffer_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab):
+    """Extract buffer pointer and size from either a struct field or variable."""
+
+    # Case 1: Struct field (obj.field)
+    if isinstance(buf_arg, ast.Attribute):
+        if not isinstance(buf_arg.value, ast.Name):
+            raise ValueError(
+                "Only simple struct field access supported (e.g., obj.field)"
+            )
+
+        struct_name = buf_arg.value.id
+        field_name = buf_arg.attr
+
+        # Lookup struct
+        if not local_sym_tab or struct_name not in local_sym_tab:
+            raise ValueError(f"Struct '{struct_name}' not found")
+
+        struct_type = local_sym_tab[struct_name].metadata
+        if not struct_sym_tab or struct_type not in struct_sym_tab:
+            raise ValueError(f"Struct type '{struct_type}' not found")
+
+        struct_info = struct_sym_tab[struct_type]
+
+        # Get field pointer and type
+        struct_ptr = local_sym_tab[struct_name].var
+        field_ptr = struct_info.gep(builder, struct_ptr, field_name)
+        field_type = struct_info.field_type(field_name)
+
+        if not isinstance(field_type, ir.ArrayType):
+            raise ValueError(f"Field '{field_name}' must be an array type")
+
+        return field_ptr, field_type.count
+
+    # Case 2: Variable name
+    elif isinstance(buf_arg, ast.Name):
+        var_name = buf_arg.id
+
+        if not local_sym_tab or var_name not in local_sym_tab:
+            raise ValueError(f"Variable '{var_name}' not found")
+
+        var_ptr = local_sym_tab[var_name].var
+        var_type = local_sym_tab[var_name].ir_type
+
+        if not isinstance(var_type, ir.ArrayType):
+            raise ValueError(f"Variable '{var_name}' must be an array type")
+
+        return var_ptr, var_type.count
+
+    else:
+        raise ValueError(
+            "comm expects either a struct field (obj.field) or variable name"
+        )
