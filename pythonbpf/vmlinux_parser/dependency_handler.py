@@ -167,3 +167,7 @@ class DependencyHandler:
         if name not in self._nodes:
             raise KeyError(f"No node with name '{name}' found")
         return self._nodes[name]
+
+    @property
+    def nodes(self):
+        return self._nodes
