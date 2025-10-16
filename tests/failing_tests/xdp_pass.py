@@ -3,14 +3,15 @@ from pythonbpf.maps import HashMap
 from pythonbpf.helper import XDP_PASS
 from vmlinux import TASK_COMM_LEN  # noqa: F401
 
-# from vmlinux import  struct_qspinlock_0_1  # noqa: F401
+from vmlinux import struct_qspinlock  # noqa: F401
+
 # from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
 # from vmlinux import struct_posix_cputimers  # noqa: F401
 from vmlinux import struct_xdp_md
 
 # from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
 # from vmlinux import struct_ring_buffer_per_cpu  # noqa: F401
-from vmlinux import struct_request  # noqa: F401
+# from vmlinux import struct_request  # noqa: F401
 from ctypes import c_int64
 
 # Instructions to how to run this program
