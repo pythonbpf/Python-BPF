@@ -60,6 +60,10 @@ def process_vmlinux_post_ast(
             pass
         else:
             new_dep_node = DependencyNode(name=current_symbol_name)
+
+            # elem_type_class is the actual vmlinux struct/class
+            new_dep_node.set_ctype_struct(elem_type_class)
+
             handler.add_node(new_dep_node)
             class_obj = getattr(imported_module, current_symbol_name)
             # Inspect the class fields
@@ -71,9 +75,6 @@ def process_vmlinux_post_ast(
                     if len(field_elem) == 2:
                         field_name, field_type = field_elem
                     elif len(field_elem) == 3:
-                        raise NotImplementedError(
-                            "Bitfields are not supported in the current version"
-                        )
                         field_name, field_type, bitfield_size = field_elem
                     field_table[field_name] = [field_type, bitfield_size]
             elif hasattr(class_obj, "__annotations__"):
@@ -144,15 +145,35 @@ def process_vmlinux_post_ast(
                         )
                         new_dep_node.set_field_type(elem_name, elem_type)
                         if containing_type.__module__ == "vmlinux":
-                            process_vmlinux_post_ast(
-                                containing_type, llvm_handler, handler, processing_stack
+                            containing_type_name = (
+                                containing_type.__name__
+                                if hasattr(containing_type, "__name__")
+                                else str(containing_type)
                             )
-                            size_of_containing_type = (
-                                handler[containing_type.__name__]
-                            ).__sizeof__()
-                            new_dep_node.set_field_ready(
-                                elem_name, True, size_of_containing_type
-                            )
+
+                            # Check for self-reference or already processed
+                            if containing_type_name == current_symbol_name:
+                                # Self-referential pointer
+                                logger.debug(
+                                    f"Self-referential pointer in {current_symbol_name}.{elem_name}"
+                                )
+                                new_dep_node.set_field_ready(elem_name, True)
+                            elif handler.has_node(containing_type_name):
+                                # Already processed
+                                logger.debug(
+                                    f"Reusing already processed {containing_type_name}"
+                                )
+                                new_dep_node.set_field_ready(elem_name, True)
+                            else:
+                                # Process recursively - THIS WAS MISSING
+                                new_dep_node.add_dependent(containing_type_name)
+                                process_vmlinux_post_ast(
+                                    containing_type,
+                                    llvm_handler,
+                                    handler,
+                                    processing_stack,
+                                )
+                                new_dep_node.set_field_ready(elem_name, True)
                         elif containing_type.__module__ == ctypes.__name__:
                             logger.debug(f"Processing ctype internal{containing_type}")
                             new_dep_node.set_field_ready(elem_name, True)
@@ -169,12 +190,7 @@ def process_vmlinux_post_ast(
                         process_vmlinux_post_ast(
                             elem_type, llvm_handler, handler, processing_stack
                         )
-                        size_of_containing_type = (
-                            handler[elem_type.__name__]
-                        ).__sizeof__()
-                        new_dep_node.set_field_ready(
-                            elem_name, True, size_of_containing_type
-                        )
+                        new_dep_node.set_field_ready(elem_name, True)
                 else:
                     raise ValueError(
                         f"{elem_name} with type {elem_type} from module {module_name} not supported in recursive resolver"
