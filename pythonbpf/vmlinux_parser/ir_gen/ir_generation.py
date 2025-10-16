@@ -49,19 +49,22 @@ class IRGenerator:
 
         try:
             # Process all dependencies first
-            for dependency in struct.depends_on:
-                if dependency not in self.generated:
-                    # Check if dependency exists in handler
-                    if dependency in self.handler.nodes:
-                        dep_node_from_dependency = self.handler[dependency]
-                        # Pass the processing_stack down to track circular refs
-                        self.struct_processor(
-                            dep_node_from_dependency, processing_stack
-                        )
-                    else:
-                        raise RuntimeError(
-                            f"Warning: Dependency {dependency} not found in handler"
-                        )
+            if struct.depends_on is None:
+                pass
+            else:
+                for dependency in struct.depends_on:
+                    if dependency not in self.generated:
+                        # Check if dependency exists in handler
+                        if dependency in self.handler.nodes:
+                            dep_node_from_dependency = self.handler[dependency]
+                            # Pass the processing_stack down to track circular refs
+                            self.struct_processor(
+                                dep_node_from_dependency, processing_stack
+                            )
+                        else:
+                            raise RuntimeError(
+                                f"Warning: Dependency {dependency} not found in handler"
+                            )
 
             # Actual processor logic here after dependencies are resolved
             self.gen_ir(struct)
@@ -152,6 +155,7 @@ class IRGenerator:
             )
             return name
         else:
+            print(self.handler[struct.name])
             raise TypeError(
                 "Name generation cannot occur due to type name not starting with struct"
             )
