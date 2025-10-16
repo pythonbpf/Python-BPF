@@ -160,13 +160,18 @@ def process_vmlinux_post_ast(
                                 new_dep_node.set_field_ready(elem_name, True)
                             elif handler.has_node(containing_type_name):
                                 # Already processed
-                                logger.debug(f"Reusing already processed {containing_type_name}")
+                                logger.debug(
+                                    f"Reusing already processed {containing_type_name}"
+                                )
                                 new_dep_node.set_field_ready(elem_name, True)
                             else:
                                 # Process recursively - THIS WAS MISSING
                                 new_dep_node.add_dependent(containing_type_name)
                                 process_vmlinux_post_ast(
-                                    containing_type, llvm_handler, handler, processing_stack
+                                    containing_type,
+                                    llvm_handler,
+                                    handler,
+                                    processing_stack,
                                 )
                                 new_dep_node.set_field_ready(elem_name, True)
                         elif containing_type.__module__ == ctypes.__name__:
@@ -185,9 +190,7 @@ def process_vmlinux_post_ast(
                         process_vmlinux_post_ast(
                             elem_type, llvm_handler, handler, processing_stack
                         )
-                        new_dep_node.set_field_ready(
-                            elem_name, True
-                        )
+                        new_dep_node.set_field_ready(elem_name, True)
                 else:
                     raise ValueError(
                         f"{elem_name} with type {elem_type} from module {module_name} not supported in recursive resolver"
