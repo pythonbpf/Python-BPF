@@ -6,7 +6,7 @@ from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
 from vmlinux import struct_posix_cputimers  # noqa: F401
 from vmlinux import struct_xdp_md
 # from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
-# from vmlinux import struct_ring_buffer_per_cpu  # noqa: F401
+from vmlinux import struct_ring_buffer_per_cpu  # noqa: F401
 
 from ctypes import c_int64
 

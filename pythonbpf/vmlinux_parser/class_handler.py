@@ -145,15 +145,30 @@ def process_vmlinux_post_ast(
                         )
                         new_dep_node.set_field_type(elem_name, elem_type)
                         if containing_type.__module__ == "vmlinux":
-                            process_vmlinux_post_ast(
-                                containing_type, llvm_handler, handler, processing_stack
+                            containing_type_name = (
+                                containing_type.__name__
+                                if hasattr(containing_type, "__name__")
+                                else str(containing_type)
                             )
-                            size_of_containing_type = (
-                                handler[containing_type.__name__]
-                            ).__sizeof__()
-                            new_dep_node.set_field_ready(
-                                elem_name, True, size_of_containing_type
-                            )
+
+                            # Check for self-reference or already processed
+                            if containing_type_name == current_symbol_name:
+                                # Self-referential pointer
+                                logger.debug(
+                                    f"Self-referential pointer in {current_symbol_name}.{elem_name}"
+                                )
+                                new_dep_node.set_field_ready(elem_name, True)
+                            elif handler.has_node(containing_type_name):
+                                # Already processed
+                                logger.debug(f"Reusing already processed {containing_type_name}")
+                                new_dep_node.set_field_ready(elem_name, True)
+                            else:
+                                # Process recursively - THIS WAS MISSING
+                                new_dep_node.add_dependent(containing_type_name)
+                                process_vmlinux_post_ast(
+                                    containing_type, llvm_handler, handler, processing_stack
+                                )
+                                new_dep_node.set_field_ready(elem_name, True)
                         elif containing_type.__module__ == ctypes.__name__:
                             logger.debug(f"Processing ctype internal{containing_type}")
                             new_dep_node.set_field_ready(elem_name, True)
@@ -170,11 +185,8 @@ def process_vmlinux_post_ast(
                         process_vmlinux_post_ast(
                             elem_type, llvm_handler, handler, processing_stack
                         )
-                        size_of_containing_type = (
-                            handler[elem_type.__name__]
-                        ).__sizeof__()
                         new_dep_node.set_field_ready(
-                            elem_name, True, size_of_containing_type
+                            elem_name, True
                         )
                 else:
                     raise ValueError(
