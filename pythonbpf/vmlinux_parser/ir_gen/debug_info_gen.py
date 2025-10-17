@@ -1,10 +1,14 @@
 from pythonbpf.debuginfo import DebugInfoGenerator
+from ..dependency_node import DependencyNode
 
 
-def debug_info_generation(struct, llvm_module):
+def debug_info_generation(
+    struct: DependencyNode, llvm_module, generated_debug_info: list
+):
     generator = DebugInfoGenerator(llvm_module)
-    # this is sample debug info generation
-    # i64type = generator.get_uint64_type()
+    print("DEBUG1", generated_debug_info)
+    for field in struct.fields:
+        print("DEBUG", field)
 
     struct_type = generator.create_struct_type([], 64 * 4, is_distinct=True)
 
