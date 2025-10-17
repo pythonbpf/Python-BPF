@@ -6,11 +6,12 @@ def debug_info_generation(
     struct: DependencyNode, llvm_module, generated_debug_info: list
 ):
     generator = DebugInfoGenerator(llvm_module)
-    print("DEBUG1", generated_debug_info)
-    for field in struct.fields:
-        print("DEBUG", field)
+    members = []
+    uint32type = generator.get_uint32_type()
+    for field_name, field in struct.fields.items():
+        members.append(generator.create_struct_member(field_name, uint32type, field.offset))
 
-    struct_type = generator.create_struct_type([], 64 * 4, is_distinct=True)
+    struct_type = generator.create_struct_type(members, struct.__sizeof__(), is_distinct=True)
 
     global_var = generator.create_global_var_debug_info(
         struct.name, struct_type, is_local=False
