@@ -59,7 +59,7 @@ def _get_field_debug_type(
         generator: DebugInfoGenerator,
         parent_struct: DependencyNode,
         generated_debug_info: List[Tuple[DependencyNode, Any]]
-) -> Any:
+) -> tuple[Any, int]:
     """
     Determine the appropriate debug type for a field based on its Python/ctypes type.
 
@@ -77,12 +77,12 @@ def _get_field_debug_type(
     if field.ctype_complex_type is not None:
         if issubclass(field.ctype_complex_type, ctypes.Array):
             # Handle array types
-            element_type = _get_basic_debug_type(field.containing_type, generator)
-            return generator.create_array_type(element_type, field.type_size)
+            element_type, base_type_size = _get_basic_debug_type(field.containing_type, generator)
+            return generator.create_array_type(element_type, field.type_size), field.type_size * base_type_size
         elif issubclass(field.ctype_complex_type, ctypes._Pointer):
             # Handle pointer types
-            pointee_type = _get_basic_debug_type(field.containing_type, generator)
-            return generator.create_pointer_type(pointee_type)
+            pointee_type, _ = _get_basic_debug_type(field.containing_type, generator)
+            return generator.create_pointer_type(pointee_type), 64
 
     # Handle other vmlinux types (nested structs)
     if field.type.__module__ == "vmlinux":
@@ -93,13 +93,13 @@ def _get_field_debug_type(
         for existing_struct, debug_info in generated_debug_info:
             if existing_struct.name == struct_name:
                 # Use existing debug info
-                return debug_info
+                return debug_info, existing_struct.__sizeof__()
 
         # If not found, create a forward declaration
         # This will be completed when the actual struct is processed
         logger.warning("Forward declaration in struct created")
         forward_type = generator.create_struct_type([], 0, is_distinct=True)
-        return forward_type
+        return forward_type, 0
 
     # Handle basic C types
     return _get_basic_debug_type(field.type, generator)

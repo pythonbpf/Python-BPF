@@ -1,9 +1,9 @@
-from pythonbpf import bpf, map, section, bpfglobal, compile_to_ir
+from pythonbpf import bpf, map, section, bpfglobal, compile_to_ir, compile
 from pythonbpf.maps import HashMap
 from pythonbpf.helper import XDP_PASS
 from vmlinux import TASK_COMM_LEN  # noqa: F401
 from vmlinux import struct_xdp_md
-# from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
+from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
 from ctypes import c_int64
 
 # Instructions to how to run this program
@@ -26,3 +26,4 @@ def LICENSE() -> str:
 
 
 compile_to_ir("xdp_pass.py", "xdp_pass.ll")
+compile()

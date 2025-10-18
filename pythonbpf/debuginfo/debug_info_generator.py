@@ -111,7 +111,7 @@ class DebugInfoGenerator:
                 "name": name,
                 "file": self.module._file_metadata,
                 "baseType": base_type,
-                "size": getattr(base_type, "size", type_size),
+                "size": type_size,
                 "offset": offset,
             },
         )
