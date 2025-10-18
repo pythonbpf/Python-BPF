@@ -81,6 +81,20 @@ class DebugInfoGenerator:
             },
         )
 
+    def create_array_type_vmlinux(self, type_info: Any, count: int) -> Any:
+        """Create an array type of the given base type with specified count"""
+        base_type, type_sizing = type_info
+        subrange = self.module.add_debug_info("DISubrange", {"count": count})
+        return self.module.add_debug_info(
+            "DICompositeType",
+            {
+                "tag": dc.DW_TAG_array_type,
+                "baseType": base_type,
+                "size": type_sizing,
+                "elements": [subrange],
+            },
+        )
+
     @staticmethod
     def _compute_array_size(base_type: Any, count: int) -> int:
         # Extract size from base_type if possible
@@ -101,7 +115,9 @@ class DebugInfoGenerator:
             },
         )
 
-    def create_struct_member_vmlinux(self, name: str, base_type_with_size: Any, offset: int) -> Any:
+    def create_struct_member_vmlinux(
+        self, name: str, base_type_with_size: Any, offset: int
+    ) -> Any:
         """Create a struct member with the given name, type, and offset"""
         base_type, type_size = base_type_with_size
         return self.module.add_debug_info(

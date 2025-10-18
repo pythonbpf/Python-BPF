@@ -2,12 +2,15 @@ from pythonbpf.debuginfo import DebugInfoGenerator, dwarf_constants as dc
 from ..dependency_node import DependencyNode
 import ctypes
 import logging
-from typing import List, Any, Tuple, Optional
+from typing import List, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
+
 def debug_info_generation(
-        struct: DependencyNode, llvm_module, generated_debug_info: List[Tuple[DependencyNode, Any]]
+    struct: DependencyNode,
+    llvm_module,
+    generated_debug_info: List[Tuple[DependencyNode, Any]],
 ) -> Any:
     """
     Generate DWARF debug information for a struct defined in a DependencyNode.
@@ -54,11 +57,11 @@ def debug_info_generation(
 
 
 def _get_field_debug_type(
-        field_name: str,
-        field,
-        generator: DebugInfoGenerator,
-        parent_struct: DependencyNode,
-        generated_debug_info: List[Tuple[DependencyNode, Any]]
+    field_name: str,
+    field,
+    generator: DebugInfoGenerator,
+    parent_struct: DependencyNode,
+    generated_debug_info: List[Tuple[DependencyNode, Any]],
 ) -> tuple[Any, int]:
     """
     Determine the appropriate debug type for a field based on its Python/ctypes type.
@@ -77,8 +80,12 @@ def _get_field_debug_type(
     if field.ctype_complex_type is not None:
         if issubclass(field.ctype_complex_type, ctypes.Array):
             # Handle array types
-            element_type, base_type_size = _get_basic_debug_type(field.containing_type, generator)
-            return generator.create_array_type(element_type, field.type_size), field.type_size * base_type_size
+            element_type, base_type_size = _get_basic_debug_type(
+                field.containing_type, generator
+            )
+            return generator.create_array_type_vmlinux(
+                (element_type, base_type_size * field.type_size), field.type_size
+            ), field.type_size * base_type_size
         elif issubclass(field.ctype_complex_type, ctypes._Pointer):
             # Handle pointer types
             pointee_type, _ = _get_basic_debug_type(field.containing_type, generator)
@@ -136,7 +143,9 @@ def _get_basic_debug_type(ctype, generator: DebugInfoGenerator) -> Any:
     elif ctype == ctypes.c_longlong or ctype == ctypes.c_int64:
         return generator.get_basic_type("long long", 64, dc.DW_ATE_signed), 64
     elif ctype == ctypes.c_ulonglong or ctype == ctypes.c_uint64:
-        return generator.get_basic_type("unsigned long long", 64, dc.DW_ATE_unsigned), 64
+        return generator.get_basic_type(
+            "unsigned long long", 64, dc.DW_ATE_unsigned
+        ), 64
     elif ctype == ctypes.c_float:
         return generator.get_basic_type("float", 32, dc.DW_ATE_float), 32
     elif ctype == ctypes.c_double:
@@ -147,9 +156,7 @@ def _get_basic_debug_type(ctype, generator: DebugInfoGenerator) -> Any:
         char_type = generator.get_basic_type("char", 8, dc.DW_ATE_signed_char), 8
         return generator.create_pointer_type(char_type)
     elif ctype == ctypes.c_void_p:
-        void_type = generator.module.add_debug_info(
-            "DIBasicType", {"name": "void"}
-        )
+        void_type = generator.module.add_debug_info("DIBasicType", {"name": "void"})
         return generator.create_pointer_type(void_type), 64
     else:
         return generator.get_uint64_type(), 64
