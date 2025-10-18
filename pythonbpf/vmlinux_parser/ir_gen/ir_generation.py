@@ -142,6 +142,7 @@ class IRGenerator:
         index: int = 0,
         containing_type_size: int = 0,
     ) -> str:
+        # TODO: Does not support Unions as well as recursive pointer and array type naming
         if is_indexed:
             name = (
                 "llvm."
