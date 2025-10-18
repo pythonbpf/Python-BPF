@@ -14,6 +14,7 @@ class IRGenerator:
         self.llvm_module = llvm_module
         self.handler: DependencyHandler = handler
         self.generated: list[str] = []
+        self.generated_debug_info: list = []
         if not handler.is_ready:
             raise ImportError(
                 "Semantic analysis of vmlinux imports failed. Cannot generate IR"
@@ -67,18 +68,22 @@ class IRGenerator:
                             )
 
             # Actual processor logic here after dependencies are resolved
-            self.gen_ir(struct)
+            self.generated_debug_info.append(
+                (struct, self.gen_ir(struct, self.generated_debug_info))
+            )
             self.generated.append(struct.name)
 
         finally:
             # Remove from processing stack after we're done
             processing_stack.discard(struct.name)
 
-    def gen_ir(self, struct):
+    def gen_ir(self, struct, generated_debug_info):
         # TODO: we add the btf_ama attribute by monkey patching in the end of compilation, but once llvmlite
         #  accepts our issue, we will resort to normal accessed attribute based attribute addition
         # currently we generate all possible field accesses for CO-RE and put into the assignment table
-        debug_info = debug_info_generation(struct, self.llvm_module)
+        debug_info = debug_info_generation(
+            struct, self.llvm_module, generated_debug_info
+        )
         field_index = 0
         for field_name, field in struct.fields.items():
             # does not take arrays and similar types into consideration yet.
@@ -126,6 +131,7 @@ class IRGenerator:
                 )
                 globvar.linkage = "external"
                 globvar.set_metadata("llvm.preserve.access.index", debug_info)
+        return debug_info
 
     def _struct_name_generator(
         self,

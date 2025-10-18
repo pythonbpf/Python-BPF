@@ -19,7 +19,7 @@ struct {
 SEC("tp/syscalls/sys_enter_setuid")
 int handle_setuid_entry(struct trace_event_raw_sys_enter *ctx) {
   struct event data = {};
-
+  struct blk_integrity_iter it = {};
   // Extract UID from the syscall arguments
   data.uid = (unsigned int)ctx->args[0];
   data.ts = bpf_ktime_get_ns();
