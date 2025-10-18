@@ -99,7 +99,9 @@ def process_vmlinux_post_ast(
                 local_module_name = getattr(elem_type, "__module__", None)
                 new_dep_node.add_field(elem_name, elem_type, ready=False)
                 if local_module_name == ctypes.__name__:
+                    #TODO: need to process pointer to ctype and also CFUNCTYPES here
                     new_dep_node.set_field_bitfield_size(elem_name, elem_bitfield_size)
+                    print(elem_type)
                     new_dep_node.set_field_ready(elem_name, is_ready=True)
                     logger.debug(
                         f"Field {elem_name} is direct ctypes type: {elem_type}"
@@ -127,6 +129,8 @@ def process_vmlinux_post_ast(
                                     ctype_complex_type = ctypes.Array
                                 elif issubclass(elem_type, ctypes._Pointer):
                                     ctype_complex_type = ctypes._Pointer
+                                else:
+                                    raise ImportError("Non Array and Pointer type ctype imports not supported in current version")
                             else:
                                 raise TypeError("Unsupported ctypes subclass")
                         else:

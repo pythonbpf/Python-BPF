@@ -78,7 +78,6 @@ def _get_field_debug_type(
     """
     # Handle complex types (arrays, pointers)
     if field.ctype_complex_type is not None:
-        print(field)
         if issubclass(field.ctype_complex_type, ctypes.Array):
             # Handle array types
             element_type, base_type_size = _get_basic_debug_type(
@@ -90,7 +89,6 @@ def _get_field_debug_type(
         elif issubclass(field.ctype_complex_type, ctypes._Pointer):
             # Handle pointer types
             pointee_type, _ = _get_basic_debug_type(field.containing_type, generator)
-            print("DEBUG", pointee_type)
             return generator.create_pointer_type(pointee_type), 64
 
     # Handle other vmlinux types (nested structs)
