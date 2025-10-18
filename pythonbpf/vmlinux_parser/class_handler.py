@@ -99,32 +99,45 @@ def process_vmlinux_post_ast(
                 local_module_name = getattr(elem_type, "__module__", None)
                 new_dep_node.add_field(elem_name, elem_type, ready=False)
                 if local_module_name == ctypes.__name__:
-                    #TODO: need to process pointer to ctype and also CFUNCTYPES here recursively.
-                    #  for now, function pointers should give an error
+                    # TODO: need to process pointer to ctype and also CFUNCTYPES here recursively. Current processing is a single dereference
                     new_dep_node.set_field_bitfield_size(elem_name, elem_bitfield_size)
 
                     # Process pointer to ctype
-                    if isinstance(elem_type, type) and issubclass(elem_type, ctypes._Pointer):
+                    if isinstance(elem_type, type) and issubclass(
+                        elem_type, ctypes._Pointer
+                    ):
                         # Get the pointed-to type
                         pointed_type = elem_type._type_
                         logger.debug(f"Found pointer to type: {pointed_type}")
                         new_dep_node.set_field_containing_type(elem_name, pointed_type)
-                        new_dep_node.set_field_ctype_complex_type(elem_name, ctypes._Pointer)
+                        new_dep_node.set_field_ctype_complex_type(
+                            elem_name, ctypes._Pointer
+                        )
                         new_dep_node.set_field_ready(elem_name, is_ready=True)
 
                     # Process function pointers (CFUNCTYPE)
-                    elif hasattr(elem_type, '_restype_') and hasattr(elem_type, '_argtypes_'):
+                    elif hasattr(elem_type, "_restype_") and hasattr(
+                        elem_type, "_argtypes_"
+                    ):
                         # This is a CFUNCTYPE or similar
-                        logger.info(f"Function pointer detected for {elem_name} with return type {elem_type._restype_} and arguments {elem_type._argtypes_}")
+                        logger.info(
+                            f"Function pointer detected for {elem_name} with return type {elem_type._restype_} and arguments {elem_type._argtypes_}"
+                        )
                         # Set the field as ready but mark it with special handling
-                        new_dep_node.set_field_ctype_complex_type(elem_name, ctypes.CFUNCTYPE)
+                        new_dep_node.set_field_ctype_complex_type(
+                            elem_name, ctypes.CFUNCTYPE
+                        )
                         new_dep_node.set_field_ready(elem_name, is_ready=True)
-                        logger.warning("Blindly processing CFUNCTYPE ctypes to ensure compilation. Unsupported")
+                        logger.warning(
+                            "Blindly processing CFUNCTYPE ctypes to ensure compilation. Unsupported"
+                        )
 
                     else:
                         # Regular ctype
                         new_dep_node.set_field_ready(elem_name, is_ready=True)
-                        logger.debug(f"Field {elem_name} is direct ctypes type: {elem_type}")
+                        logger.debug(
+                            f"Field {elem_name} is direct ctypes type: {elem_type}"
+                        )
                 elif local_module_name == "vmlinux":
                     new_dep_node.set_field_bitfield_size(elem_name, elem_bitfield_size)
                     logger.debug(
@@ -149,7 +162,9 @@ def process_vmlinux_post_ast(
                                 elif issubclass(elem_type, ctypes._Pointer):
                                     ctype_complex_type = ctypes._Pointer
                                 else:
-                                    raise ImportError("Non Array and Pointer type ctype imports not supported in current version")
+                                    raise ImportError(
+                                        "Non Array and Pointer type ctype imports not supported in current version"
+                                    )
                             else:
                                 raise TypeError("Unsupported ctypes subclass")
                         else:
