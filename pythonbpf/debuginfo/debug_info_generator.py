@@ -101,6 +101,21 @@ class DebugInfoGenerator:
             },
         )
 
+    def create_struct_member_vmlinux(self, name: str, base_type_with_size: Any, offset: int) -> Any:
+        """Create a struct member with the given name, type, and offset"""
+        base_type, type_size = base_type_with_size
+        return self.module.add_debug_info(
+            "DIDerivedType",
+            {
+                "tag": dc.DW_TAG_member,
+                "name": name,
+                "file": self.module._file_metadata,
+                "baseType": base_type,
+                "size": getattr(base_type, "size", type_size),
+                "offset": offset,
+            },
+        )
+
     def create_struct_type(
         self, members: List[Any], size: int, is_distinct: bool
     ) -> Any:
@@ -108,6 +123,22 @@ class DebugInfoGenerator:
         return self.module.add_debug_info(
             "DICompositeType",
             {
+                "tag": dc.DW_TAG_structure_type,
+                "file": self.module._file_metadata,
+                "size": size,
+                "elements": members,
+            },
+            is_distinct=is_distinct,
+        )
+
+    def create_struct_type_with_name(
+        self, name: str, members: List[Any], size: int, is_distinct: bool
+    ) -> Any:
+        """Create a struct type with the given members and size"""
+        return self.module.add_debug_info(
+            "DICompositeType",
+            {
+                "name": name,
                 "tag": dc.DW_TAG_structure_type,
                 "file": self.module._file_metadata,
                 "size": size,

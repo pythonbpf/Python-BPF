@@ -3,7 +3,7 @@ from pythonbpf.maps import HashMap
 from pythonbpf.helper import XDP_PASS
 from vmlinux import TASK_COMM_LEN  # noqa: F401
 from vmlinux import struct_xdp_md
-from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
+# from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
 from ctypes import c_int64
 
 # Instructions to how to run this program
@@ -13,27 +13,9 @@ from ctypes import c_int64
 # 4. Attach object file to any network device with something like ./check.sh xdp examples/xdp_pass.o tailscale0
 # 5. send traffic through the device and observe effects
 
-
-@bpf
-@map
-def count() -> HashMap:
-    return HashMap(key=c_int64, value=c_int64, max_entries=1)
-
-
 @bpf
 @section("xdp")
 def hello_world(ctx: struct_xdp_md) -> c_int64:
-    key = 0
-    one = 1
-    prev = count().lookup(key)
-    if prev:
-        prevval = prev + 1
-        print(f"count: {prevval}")
-        count().update(key, prevval)
-        return XDP_PASS
-    else:
-        count().update(key, one)
-
     return XDP_PASS
 
 
