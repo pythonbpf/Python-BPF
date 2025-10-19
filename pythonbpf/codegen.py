@@ -55,11 +55,11 @@ def processor(source_code, filename, module):
     for func_node in bpf_chunks:
         logger.info(f"Found BPF function/struct: {func_node.name}")
 
-    vmlinux_proc(tree, module)
+    vmlinux_symtab = vmlinux_proc(tree, module)
     populate_global_symbol_table(tree, module)
     license_processing(tree, module)
     globals_processing(tree, module)
-
+    print("DEBUG:", vmlinux_symtab)
     structs_sym_tab = structs_proc(tree, module, bpf_chunks)
     map_sym_tab = maps_proc(tree, module, bpf_chunks)
     func_proc(tree, module, bpf_chunks, map_sym_tab, structs_sym_tab)
