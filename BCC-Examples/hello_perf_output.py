@@ -1,7 +1,6 @@
-from pythonbpf import bpf, map, struct, section, bpfglobal, BPF, trace_pipe
+from pythonbpf import bpf, map, struct, section, bpfglobal, BPF
 from pythonbpf.helper import ktime, pid, comm
 from pythonbpf.maps import PerfEventArray
-
 from ctypes import c_void_p, c_int64, c_uint64
 
 
@@ -25,7 +24,6 @@ def hello(ctx: c_void_p) -> c_int64:
     dataobj = data_t()
     dataobj.pid, dataobj.ts = pid(), ktime()
     comm(dataobj.comm)
-    print(f"clone called at {dataobj.ts} by pid {dataobj.pid}, comm {dataobj.comm}")
     events.output(dataobj)
     return 0  # type: ignore [return-value]
 
@@ -36,8 +34,28 @@ def LICENSE() -> str:
     return "GPL"
 
 
-# compile
-BPF().load_and_attach()
+# Compile and load
+b = BPF()
+b.load()
+attached = b.attach_all()
 
-print("Tracing clone()... Ctrl-C to end")
-trace_pipe()
+start = 0
+
+
+def callback(cpu, event):
+    global start
+    if start == 0:
+        start = event.ts
+    ts = (event.ts - start) / 1e9
+    print(f"[CPU {cpu}] PID: {event.pid}, TS: {ts}, COMM: {event.comm.decode()}")
+
+
+perf = b["events"].open_perf_buffer(callback, struct_name="data_t")
+print("Starting to poll... (Ctrl+C to stop)")
+print("Try running: fork() or clone() system calls to trigger events")
+
+try:
+    while True:
+        b["events"].poll(1000)
+except KeyboardInterrupt:
+    print("Stopping...")
