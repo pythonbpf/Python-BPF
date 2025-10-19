@@ -15,7 +15,7 @@ import os
 import subprocess
 import inspect
 from pathlib import Path
-from pylibbpf import BpfProgram
+from pylibbpf import BpfObject
 import tempfile
 from logging import Logger
 import logging
@@ -158,7 +158,7 @@ def _run_llc(ll_file, obj_file):
         return False
 
 
-def compile(loglevel=logging.INFO) -> bool:
+def compile(loglevel=logging.WARNING) -> bool:
     # Look one level up the stack to the caller of this function
     caller_frame = inspect.stack()[1]
     caller_file = Path(caller_frame.filename).resolve()
@@ -166,7 +166,9 @@ def compile(loglevel=logging.INFO) -> bool:
     ll_file = Path("/tmp") / caller_file.with_suffix(".ll").name
     o_file = caller_file.with_suffix(".o")
 
-    compile_to_ir(str(caller_file), str(ll_file), loglevel=loglevel)
+    _, structs_sym_tab, maps_sym_tab = compile_to_ir(
+        str(caller_file), str(ll_file), loglevel=loglevel
+    )
 
     if not _run_llc(ll_file, o_file):
         logger.error("Compilation to object file failed.")
@@ -176,7 +178,7 @@ def compile(loglevel=logging.INFO) -> bool:
     return True
 
 
-def BPF(loglevel=logging.INFO) -> BpfProgram:
+def BPF(loglevel=logging.WARNING) -> BpfObject:
     caller_frame = inspect.stack()[1]
     src = inspect.getsource(caller_frame.frame)
     with tempfile.NamedTemporaryFile(
@@ -194,6 +196,4 @@ def BPF(loglevel=logging.INFO) -> BpfProgram:
         )
         _run_llc(str(inter.name), str(obj_file.name))
 
-        return BpfProgram(
-            str(obj_file.name), structs=structs_sym_tab, maps=maps_sym_tab
-        )
+        return BpfObject(str(obj_file.name), structs=structs_sym_tab)
