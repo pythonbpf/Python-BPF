@@ -1,6 +1,8 @@
 import logging
 from functools import lru_cache
 import importlib
+
+from .assignment_info import AssignmentInfo
 from .dependency_handler import DependencyHandler
 from .dependency_node import DependencyNode
 import ctypes
@@ -15,17 +17,26 @@ def get_module_symbols(module_name: str):
     return [name for name in dir(imported_module)], imported_module
 
 
-def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
+def process_vmlinux_class(
+    node,
+    llvm_module,
+    handler: DependencyHandler,
+    assignments: dict[str, AssignmentInfo],
+):
     symbols_in_module, imported_module = get_module_symbols("vmlinux")
     if node.name in symbols_in_module:
         vmlinux_type = getattr(imported_module, node.name)
-        process_vmlinux_post_ast(vmlinux_type, llvm_module, handler)
+        process_vmlinux_post_ast(vmlinux_type, llvm_module, handler, assignments)
     else:
         raise ImportError(f"{node.name} not in vmlinux")
 
 
 def process_vmlinux_post_ast(
-    elem_type_class, llvm_handler, handler: DependencyHandler, processing_stack=None
+    elem_type_class,
+    llvm_handler,
+    handler: DependencyHandler,
+    assignments: dict[str, AssignmentInfo],
+    processing_stack=None,
 ):
     # Initialize processing stack on first call
     if processing_stack is None:
@@ -46,7 +57,7 @@ def process_vmlinux_post_ast(
         logger.debug(f"Node {current_symbol_name} already processed and ready")
         return True
 
-    # XXX:Check it's use. It's probably not being used.
+    # XXX:Check its use. It's probably not being used.
     if current_symbol_name in processing_stack:
         logger.debug(
             f"Dependency already in processing stack for {current_symbol_name}, skipping"

@@ -1,6 +1,5 @@
 import ast
 import logging
-from typing import List, Tuple, Any
 import importlib
 import inspect
 
@@ -12,7 +11,7 @@ from .class_handler import process_vmlinux_class
 logger = logging.getLogger(__name__)
 
 
-def detect_import_statement(tree: ast.AST) -> List[Tuple[str, ast.ImportFrom]]:
+def detect_import_statement(tree: ast.AST) -> list[tuple[str, ast.ImportFrom]]:
     """
     Parse AST and detect import statements from vmlinux.
 
@@ -113,7 +112,7 @@ def vmlinux_proc(tree: ast.AST, module):
                     isinstance(mod_node, ast.ClassDef)
                     and mod_node.name == imported_name
                 ):
-                    process_vmlinux_class(mod_node, module, handler)
+                    process_vmlinux_class(mod_node, module, handler, assignments)
                     found = True
                     break
                 if isinstance(mod_node, ast.Assign):
@@ -148,7 +147,7 @@ def process_vmlinux_assign(node, module, assignments: dict[str, AssignmentInfo])
                 value=node.value.value,
                 pointer_level=None,
                 signature=None,
-                members=None
+                members=None,
             )
             logger.info(
                 f"Added assignment: {target_name} = {node.value.value!r} of type {type(node.value.value)}"

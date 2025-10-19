@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Any, Callable, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List, Optional, TypedDict
 from dataclasses import dataclass
 
 from pythonbpf.vmlinux_parser.dependency_node import Field
@@ -12,6 +12,7 @@ class AssignmentType(Enum):
     ARRAY = auto()  # probably won't be used
     FUNCTION_POINTER = auto()
     POINTER = auto()  # again, probably won't be used
+
 
 @dataclass
 class FunctionSignature(TypedDict):
