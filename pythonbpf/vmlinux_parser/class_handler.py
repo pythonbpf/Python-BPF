@@ -2,9 +2,8 @@ import logging
 from functools import lru_cache
 import importlib
 
-from .assignment_info import AssignmentInfo, AssignmentType
 from .dependency_handler import DependencyHandler
-from .dependency_node import DependencyNode, Field
+from .dependency_node import DependencyNode
 import ctypes
 from typing import Optional, Any, Dict
 
@@ -21,12 +20,11 @@ def process_vmlinux_class(
     node,
     llvm_module,
     handler: DependencyHandler,
-    assignments: dict[str, AssignmentInfo],
 ):
     symbols_in_module, imported_module = get_module_symbols("vmlinux")
     if node.name in symbols_in_module:
         vmlinux_type = getattr(imported_module, node.name)
-        process_vmlinux_post_ast(vmlinux_type, llvm_module, handler, assignments)
+        process_vmlinux_post_ast(vmlinux_type, llvm_module, handler)
     else:
         raise ImportError(f"{node.name} not in vmlinux")
 
@@ -35,7 +33,6 @@ def process_vmlinux_post_ast(
     elem_type_class,
     llvm_handler,
     handler: DependencyHandler,
-    assignments: dict[str, AssignmentInfo],
     processing_stack=None,
 ):
     # Initialize processing stack on first call
@@ -103,20 +100,12 @@ def process_vmlinux_post_ast(
             else:
                 raise TypeError("Could not get required class and definition")
 
-            # Create a members dictionary for AssignmentInfo
-            members_dict: Dict[str, tuple[str, Field]] = {}
-
             logger.debug(f"Extracted fields for {current_symbol_name}: {field_table}")
             for elem in field_table.items():
                 elem_name, elem_temp_list = elem
                 [elem_type, elem_bitfield_size] = elem_temp_list
                 local_module_name = getattr(elem_type, "__module__", None)
                 new_dep_node.add_field(elem_name, elem_type, ready=False)
-
-                # Store field reference for struct assignment info
-                field_ref = new_dep_node.get_field(elem_name)
-                if field_ref:
-                    members_dict[elem_name] = (elem_name, field_ref)
 
                 if local_module_name == ctypes.__name__:
                     # TODO: need to process pointer to ctype and also CFUNCTYPES here recursively. Current processing is a single dereference
@@ -229,7 +218,6 @@ def process_vmlinux_post_ast(
                                     containing_type,
                                     llvm_handler,
                                     handler,
-                                    assignments,  # Pass assignments to recursive call
                                     processing_stack,
                                 )
                                 new_dep_node.set_field_ready(elem_name, True)
@@ -250,7 +238,6 @@ def process_vmlinux_post_ast(
                             elem_type,
                             llvm_handler,
                             handler,
-                            assignments,
                             processing_stack,
                         )
                         new_dep_node.set_field_ready(elem_name, True)
@@ -258,17 +245,6 @@ def process_vmlinux_post_ast(
                     raise ValueError(
                         f"{elem_name} with type {elem_type} from module {module_name} not supported in recursive resolver"
                     )
-
-            # Add struct to assignments dictionary
-            assignments[current_symbol_name] = AssignmentInfo(
-                value_type=AssignmentType.STRUCT,
-                python_type=elem_type_class,
-                value=None,
-                pointer_level=None,
-                signature=None,
-                members=members_dict,
-            )
-            logger.info(f"Added struct assignment info for {current_symbol_name}")
 
     else:
         raise ImportError("UNSUPPORTED Module")

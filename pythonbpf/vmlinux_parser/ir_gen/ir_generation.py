@@ -1,5 +1,8 @@
 import ctypes
 import logging
+
+from ..dependency_node import Field
+from ..assignment_info import AssignmentInfo, AssignmentType
 from ..dependency_handler import DependencyHandler
 from .debug_info_gen import debug_info_generation
 from ..dependency_node import DependencyNode
@@ -10,11 +13,13 @@ logger = logging.getLogger(__name__)
 
 class IRGenerator:
     # get the assignments dict and add this stuff to it.
-    def __init__(self, llvm_module, handler: DependencyHandler, assignment=None):
+    def __init__(self, llvm_module, handler: DependencyHandler, assignments):
         self.llvm_module = llvm_module
         self.handler: DependencyHandler = handler
         self.generated: list[str] = []
         self.generated_debug_info: list = []
+        self.generated_field_names: dict[Field, str] = {}
+        self.assignments: dict[str, AssignmentInfo] = assignments
         if not handler.is_ready:
             raise ImportError(
                 "Semantic analysis of vmlinux imports failed. Cannot generate IR"
@@ -67,6 +72,24 @@ class IRGenerator:
                                 f"Warning: Dependency {dependency} not found in handler"
                             )
 
+            # Fill the assignments dictionary with struct information
+            if struct.name not in self.assignments:
+                # Create a members dictionary for AssignmentInfo
+                members_dict = {}
+                for field_name, field in struct.fields.items():
+                    members_dict[field_name] = (self.generated_field_names[field], field)
+
+                # Add struct to assignments dictionary
+                self.assignments[struct.name] = AssignmentInfo(
+                    value_type=AssignmentType.STRUCT,
+                    python_type=struct.ctype_struct,
+                    value=None,
+                    pointer_level=None,
+                    signature=None,
+                    members=members_dict,
+                )
+                logger.info(f"Added struct assignment info for {struct.name}")
+
             # Actual processor logic here after dependencies are resolved
             self.generated_debug_info.append(
                 (struct, self.gen_ir(struct, self.generated_debug_info))
@@ -98,6 +121,7 @@ class IRGenerator:
                         field_co_re_name = self._struct_name_generator(
                             struct, field, field_index, True, i, containing_type_size
                         )
+                        self.generated_field_names[field] = field_co_re_name
                         globvar = ir.GlobalVariable(
                             self.llvm_module, ir.IntType(64), name=field_co_re_name
                         )
@@ -115,6 +139,7 @@ class IRGenerator:
                         field_co_re_name = self._struct_name_generator(
                             struct, field, field_index, True, i, containing_type_size
                         )
+                        self.generated_field_names[field] = field_co_re_name
                         globvar = ir.GlobalVariable(
                             self.llvm_module, ir.IntType(64), name=field_co_re_name
                         )
@@ -125,6 +150,7 @@ class IRGenerator:
                 field_co_re_name = self._struct_name_generator(
                     struct, field, field_index
                 )
+                self.generated_field_names[field] = field_co_re_name
                 field_index += 1
                 globvar = ir.GlobalVariable(
                     self.llvm_module, ir.IntType(64), name=field_co_re_name

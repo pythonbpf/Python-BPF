@@ -112,7 +112,7 @@ def vmlinux_proc(tree: ast.AST, module):
                     isinstance(mod_node, ast.ClassDef)
                     and mod_node.name == imported_name
                 ):
-                    process_vmlinux_class(mod_node, module, handler, assignments)
+                    process_vmlinux_class(mod_node, module, handler)
                     found = True
                     break
                 if isinstance(mod_node, ast.Assign):
@@ -128,7 +128,7 @@ def vmlinux_proc(tree: ast.AST, module):
                     f"{imported_name} not found as ClassDef or Assign in vmlinux"
                 )
 
-    IRGenerator(module, handler)
+    IRGenerator(module, handler, assignments)
     return assignments
 
 
