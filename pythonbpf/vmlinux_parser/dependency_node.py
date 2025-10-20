@@ -39,22 +39,9 @@ class Field:
     def __eq__(self, other):
         """
         Define equality consistent with the hash function.
-        Two fields are equal if they have the same name, type, and offset.
+        Two fields are equal if they have they are the same
         """
-        # DO ther change here
-        if not isinstance(other, Field):
-            return False
-
-        return (
-            self.name == other.name
-            and self.type is other.type
-            and self.ctype_complex_type is other.ctype_complex_type
-            and self.containing_type is other.containing_type
-            and self.type_size == other.type_size
-            and self.bitfield_size == other.bitfield_size
-            and self.offset == other.offset
-            and self.value == other.value
-        )
+        return self is other
 
     def set_ready(self, is_ready: bool = True) -> None:
         """Set the readiness state of this field."""
