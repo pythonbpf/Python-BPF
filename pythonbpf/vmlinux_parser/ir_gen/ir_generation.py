@@ -18,7 +18,7 @@ class IRGenerator:
         self.generated: list[str] = []
         self.generated_debug_info: list = []
         # Use struct_name and field_name as key instead of Field object
-        self.generated_field_names: dict[str, dict[str, str]] = {}
+        self.generated_field_names: dict[str, dict[str, ir.GlobalVariable]] = {}
         self.assignments: dict[str, AssignmentInfo] = assignments
         if not handler.is_ready:
             raise ImportError(
@@ -87,10 +87,10 @@ class IRGenerator:
                         struct.name in self.generated_field_names
                         and field_name in self.generated_field_names[struct.name]
                     ):
-                        field_co_re_name = self.generated_field_names[struct.name][
+                        field_global_variable = self.generated_field_names[struct.name][
                             field_name
                         ]
-                        members_dict[field_name] = (field_co_re_name, field)
+                        members_dict[field_name] = (field_global_variable, field)
                     else:
                         raise ValueError(
                             f"llvm global name not found for struct field {field_name}"
@@ -140,28 +140,28 @@ class IRGenerator:
                         field_co_re_name = self._struct_name_generator(
                             struct, field, field_index, True, 0, containing_type_size
                         )
-                        self.generated_field_names[struct.name][field_name] = (
-                            field_co_re_name
-                        )
                         globvar = ir.GlobalVariable(
                             self.llvm_module, ir.IntType(64), name=field_co_re_name
                         )
                         globvar.linkage = "external"
                         globvar.set_metadata("llvm.preserve.access.index", debug_info)
+                        self.generated_field_names[struct.name][field_name] = (
+                            globvar
+                        )
                         field_index += 1
                         continue
                     for i in range(0, array_size):
                         field_co_re_name = self._struct_name_generator(
                             struct, field, field_index, True, i, containing_type_size
                         )
-                        self.generated_field_names[struct.name][field_name] = (
-                            field_co_re_name
-                        )
                         globvar = ir.GlobalVariable(
                             self.llvm_module, ir.IntType(64), name=field_co_re_name
                         )
                         globvar.linkage = "external"
                         globvar.set_metadata("llvm.preserve.access.index", debug_info)
+                        self.generated_field_names[struct.name][field_name] = (
+                            globvar
+                        )
                     field_index += 1
             elif field.type_size is not None:
                 array_size = field.type_size
@@ -174,26 +174,26 @@ class IRGenerator:
                         field_co_re_name = self._struct_name_generator(
                             struct, field, field_index, True, i, containing_type_size
                         )
-                        self.generated_field_names[struct.name][field_name] = (
-                            field_co_re_name
-                        )
                         globvar = ir.GlobalVariable(
                             self.llvm_module, ir.IntType(64), name=field_co_re_name
                         )
                         globvar.linkage = "external"
                         globvar.set_metadata("llvm.preserve.access.index", debug_info)
+                        self.generated_field_names[struct.name][field_name] = (
+                            globvar
+                        )
                     field_index += 1
             else:
                 field_co_re_name = self._struct_name_generator(
                     struct, field, field_index
                 )
-                self.generated_field_names[struct.name][field_name] = field_co_re_name
                 field_index += 1
                 globvar = ir.GlobalVariable(
                     self.llvm_module, ir.IntType(64), name=field_co_re_name
                 )
                 globvar.linkage = "external"
                 globvar.set_metadata("llvm.preserve.access.index", debug_info)
+                self.generated_field_names[struct.name][field_name] = globvar
         return debug_info
 
     def _struct_name_generator(

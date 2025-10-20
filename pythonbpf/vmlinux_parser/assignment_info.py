@@ -1,6 +1,7 @@
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional, TypedDict
 from dataclasses import dataclass
+import llvmlite.ir as ir
 
 from pythonbpf.vmlinux_parser.dependency_node import Field
 
@@ -32,4 +33,4 @@ class AssignmentInfo(TypedDict):
     # The key of the dict is the name of the field.
     #   Value is a tuple that contains the global variable representing that field
     #   along with all the information about that field as a Field type.
-    members: Optional[Dict[str, tuple[str, Field]]]  # For structs.
+    members: Optional[Dict[str, tuple[ir.GlobalVariable, Field]]]  # For structs.
