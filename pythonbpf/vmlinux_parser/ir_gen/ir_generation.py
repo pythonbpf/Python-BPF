@@ -145,9 +145,7 @@ class IRGenerator:
                         )
                         globvar.linkage = "external"
                         globvar.set_metadata("llvm.preserve.access.index", debug_info)
-                        self.generated_field_names[struct.name][field_name] = (
-                            globvar
-                        )
+                        self.generated_field_names[struct.name][field_name] = globvar
                         field_index += 1
                         continue
                     for i in range(0, array_size):
@@ -159,9 +157,7 @@ class IRGenerator:
                         )
                         globvar.linkage = "external"
                         globvar.set_metadata("llvm.preserve.access.index", debug_info)
-                        self.generated_field_names[struct.name][field_name] = (
-                            globvar
-                        )
+                        self.generated_field_names[struct.name][field_name] = globvar
                     field_index += 1
             elif field.type_size is not None:
                 array_size = field.type_size
@@ -179,9 +175,7 @@ class IRGenerator:
                         )
                         globvar.linkage = "external"
                         globvar.set_metadata("llvm.preserve.access.index", debug_info)
-                        self.generated_field_names[struct.name][field_name] = (
-                            globvar
-                        )
+                        self.generated_field_names[struct.name][field_name] = globvar
                     field_index += 1
             else:
                 field_co_re_name = self._struct_name_generator(
