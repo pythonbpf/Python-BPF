@@ -1,7 +1,6 @@
 import ctypes
 import logging
 
-from ..dependency_node import Field
 from ..assignment_info import AssignmentInfo, AssignmentType
 from ..dependency_handler import DependencyHandler
 from .debug_info_gen import debug_info_generation
@@ -18,7 +17,8 @@ class IRGenerator:
         self.handler: DependencyHandler = handler
         self.generated: list[str] = []
         self.generated_debug_info: list = []
-        self.generated_field_names: dict[Field, str] = {}
+        # Use struct_name and field_name as key instead of Field object
+        self.generated_field_names: dict[str, dict[str, str]] = {}
         self.assignments: dict[str, AssignmentInfo] = assignments
         if not handler.is_ready:
             raise ImportError(
@@ -72,12 +72,30 @@ class IRGenerator:
                                 f"Warning: Dependency {dependency} not found in handler"
                             )
 
+            # Generate IR first to populate field names
+            self.generated_debug_info.append(
+                (struct, self.gen_ir(struct, self.generated_debug_info))
+            )
+
             # Fill the assignments dictionary with struct information
             if struct.name not in self.assignments:
                 # Create a members dictionary for AssignmentInfo
                 members_dict = {}
                 for field_name, field in struct.fields.items():
-                    members_dict[field_name] = (self.generated_field_names[field], field)
+                    # Get the generated field name from our dictionary, or use field_name if not found
+                    if (
+                        struct.name in self.generated_field_names
+                        and field_name in self.generated_field_names[struct.name]
+                    ):
+                        field_co_re_name = self.generated_field_names[struct.name][
+                            field_name
+                        ]
+                        members_dict[field_name] = (field_co_re_name, field)
+                    else:
+                        raise ValueError(
+                            f"llvm global name not found for struct field {field_name}"
+                        )
+                        # members_dict[field_name] = (field_name, field)
 
                 # Add struct to assignments dictionary
                 self.assignments[struct.name] = AssignmentInfo(
@@ -90,10 +108,6 @@ class IRGenerator:
                 )
                 logger.info(f"Added struct assignment info for {struct.name}")
 
-            # Actual processor logic here after dependencies are resolved
-            self.generated_debug_info.append(
-                (struct, self.gen_ir(struct, self.generated_debug_info))
-            )
             self.generated.append(struct.name)
 
         finally:
@@ -108,6 +122,11 @@ class IRGenerator:
             struct, self.llvm_module, generated_debug_info
         )
         field_index = 0
+
+        # Make sure the struct has an entry in our field names dictionary
+        if struct.name not in self.generated_field_names:
+            self.generated_field_names[struct.name] = {}
+
         for field_name, field in struct.fields.items():
             # does not take arrays and similar types into consideration yet.
             if field.ctype_complex_type is not None and issubclass(
@@ -117,11 +136,27 @@ class IRGenerator:
                 containing_type = field.containing_type
                 if containing_type.__module__ == ctypes.__name__:
                     containing_type_size = ctypes.sizeof(containing_type)
+                    if array_size == 0:
+                        field_co_re_name = self._struct_name_generator(
+                            struct, field, field_index, True, 0, containing_type_size
+                        )
+                        self.generated_field_names[struct.name][field_name] = (
+                            field_co_re_name
+                        )
+                        globvar = ir.GlobalVariable(
+                            self.llvm_module, ir.IntType(64), name=field_co_re_name
+                        )
+                        globvar.linkage = "external"
+                        globvar.set_metadata("llvm.preserve.access.index", debug_info)
+                        field_index += 1
+                        continue
                     for i in range(0, array_size):
                         field_co_re_name = self._struct_name_generator(
                             struct, field, field_index, True, i, containing_type_size
                         )
-                        self.generated_field_names[field] = field_co_re_name
+                        self.generated_field_names[struct.name][field_name] = (
+                            field_co_re_name
+                        )
                         globvar = ir.GlobalVariable(
                             self.llvm_module, ir.IntType(64), name=field_co_re_name
                         )
@@ -139,7 +174,9 @@ class IRGenerator:
                         field_co_re_name = self._struct_name_generator(
                             struct, field, field_index, True, i, containing_type_size
                         )
-                        self.generated_field_names[field] = field_co_re_name
+                        self.generated_field_names[struct.name][field_name] = (
+                            field_co_re_name
+                        )
                         globvar = ir.GlobalVariable(
                             self.llvm_module, ir.IntType(64), name=field_co_re_name
                         )
@@ -150,7 +187,7 @@ class IRGenerator:
                 field_co_re_name = self._struct_name_generator(
                     struct, field, field_index
                 )
-                self.generated_field_names[field] = field_co_re_name
+                self.generated_field_names[struct.name][field_name] = field_co_re_name
                 field_index += 1
                 globvar = ir.GlobalVariable(
                     self.llvm_module, ir.IntType(64), name=field_co_re_name

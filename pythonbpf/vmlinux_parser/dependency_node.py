@@ -18,6 +18,44 @@ class Field:
     value: Any = None
     ready: bool = False
 
+    def __hash__(self):
+        """
+        Create a hash based on the immutable attributes that define this field's identity.
+        This allows Field objects to be used as dictionary keys.
+        """
+        # Use a tuple of the fields that uniquely identify this field
+        identity = (
+            self.name,
+            id(self.type),  # Use id for non-hashable types
+            id(self.ctype_complex_type) if self.ctype_complex_type else None,
+            id(self.containing_type) if self.containing_type else None,
+            self.type_size,
+            self.bitfield_size,
+            self.offset,
+            self.value if self.value else None,
+        )
+        return hash(identity)
+
+    def __eq__(self, other):
+        """
+        Define equality consistent with the hash function.
+        Two fields are equal if they have the same name, type, and offset.
+        """
+        # DO ther change here
+        if not isinstance(other, Field):
+            return False
+
+        return (
+            self.name == other.name
+            and self.type is other.type
+            and self.ctype_complex_type is other.ctype_complex_type
+            and self.containing_type is other.containing_type
+            and self.type_size == other.type_size
+            and self.bitfield_size == other.bitfield_size
+            and self.offset == other.offset
+            and self.value == other.value
+        )
+
     def set_ready(self, is_ready: bool = True) -> None:
         """Set the readiness state of this field."""
         self.ready = is_ready
