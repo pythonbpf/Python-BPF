@@ -3,6 +3,7 @@ import logging
 
 from llvmlite import ir
 from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth
+from pythonbpf.expr.vmlinux_registry import VmlinuxHandlerRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,16 @@ def _process_name_in_fval(name_node, fmt_parts, exprs, local_sym_tab):
     if local_sym_tab and name_node.id in local_sym_tab:
         _, var_type, tmp = local_sym_tab[name_node.id]
         _populate_fval(var_type, name_node, fmt_parts, exprs)
+    else:
+        # Try to resolve through vmlinux registry if not in local symbol table
+        result = VmlinuxHandlerRegistry.handle_name(name_node.id)
+        if result:
+            val, var_type = result
+            _populate_fval(var_type, name_node, fmt_parts, exprs)
+        else:
+            raise ValueError(
+                f"Variable '{name_node.id}' not found in symbol table or vmlinux"
+            )
 
 
 def _process_attr_in_fval(attr_node, fmt_parts, exprs, local_sym_tab, struct_sym_tab):
