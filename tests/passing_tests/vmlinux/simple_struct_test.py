@@ -1,4 +1,4 @@
-from pythonbpf import bpf, section, bpfglobal, compile_to_ir, compile
+from pythonbpf import bpf, section, bpfglobal, compile_to_ir
 from vmlinux import TASK_COMM_LEN  # noqa: F401
 from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
 
@@ -27,4 +27,3 @@ def LICENSE() -> str:
 
 
 compile_to_ir("simple_struct_test.py", "simple_struct_test.ll")
-compile()
