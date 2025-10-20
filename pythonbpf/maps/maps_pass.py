@@ -6,6 +6,8 @@ from llvmlite import ir
 from .maps_utils import MapProcessorRegistry
 from .map_types import BPFMapType
 from .map_debug_info import create_map_debug_info, create_ringbuf_debug_info
+from pythonbpf.expr.vmlinux_registry import VmlinuxHandlerRegistry
+
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -51,7 +53,7 @@ def _parse_map_params(rval, expected_args=None):
     """Parse map parameters from call arguments and keywords."""
 
     params = {}
-
+    handler = VmlinuxHandlerRegistry.get_handler()
     # Parse positional arguments
     if expected_args:
         for i, arg_name in enumerate(expected_args):
@@ -65,7 +67,12 @@ def _parse_map_params(rval, expected_args=None):
     # Parse keyword arguments (override positional)
     for keyword in rval.keywords:
         if isinstance(keyword.value, ast.Name):
-            params[keyword.arg] = keyword.value.id
+            name = keyword.value.id
+            if handler and handler.is_vmlinux_enum(name):
+                result = handler.get_vmlinux_enum_value(name)
+                params[keyword.arg] = result if result is not None else name
+            else:
+                params[keyword.arg] = name
         elif isinstance(keyword.value, ast.Constant):
             params[keyword.arg] = keyword.value.value
 

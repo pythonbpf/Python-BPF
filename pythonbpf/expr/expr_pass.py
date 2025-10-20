@@ -349,6 +349,7 @@ def _handle_unary_op(
         neg_one = ir.Constant(ir.IntType(64), -1)
         result = builder.mul(operand, neg_one)
         return result, ir.IntType(64)
+    return None
 
 
 # ============================================================================

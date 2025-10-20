@@ -54,6 +54,14 @@ class VmlinuxHandler:
             return ir.Constant(ir.IntType(64), value), ir.IntType(64)
         return None
 
+    def get_vmlinux_enum_value(self, name):
+        """Handle vmlinux enum constants by returning LLVM IR constants"""
+        if self.is_vmlinux_enum(name):
+            value = self.vmlinux_symtab[name]["value"]
+            logger.info(f"The value of vmlinux enum {name} = {value}")
+            return value
+        return None
+
     def handle_vmlinux_struct(self, struct_name, module, builder):
         """Handle vmlinux struct initializations"""
         if self.is_vmlinux_struct(struct_name):

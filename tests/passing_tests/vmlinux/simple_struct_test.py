@@ -1,13 +1,26 @@
 import logging
 
-from pythonbpf import bpf, section, bpfglobal, compile_to_ir
+from pythonbpf import bpf, section, bpfglobal, compile_to_ir, map
 from pythonbpf import compile  # noqa: F401
 from vmlinux import TASK_COMM_LEN  # noqa: F401
 from vmlinux import struct_trace_event_raw_sys_enter  # noqa: F401
+from ctypes import c_uint64, c_int32, c_int64
+from pythonbpf.maps import HashMap
 
 # from vmlinux import struct_uinput_device
 # from vmlinux import struct_blk_integrity_iter
-from ctypes import c_int64
+
+
+@bpf
+@map
+def mymap() -> HashMap:
+    return HashMap(key=c_int32, value=c_uint64, max_entries=TASK_COMM_LEN)
+
+
+@bpf
+@map
+def mymap2() -> HashMap:
+    return HashMap(key=c_int32, value=c_uint64, max_entries=18)
 
 
 # Instructions to how to run this program
@@ -21,7 +34,7 @@ from ctypes import c_int64
 def hello_world(ctx: struct_trace_event_raw_sys_enter) -> c_int64:
     a = 2 + TASK_COMM_LEN + TASK_COMM_LEN
     print(f"Hello, World{TASK_COMM_LEN} and {a}")
-    return c_int64(TASK_COMM_LEN)
+    return c_int64(TASK_COMM_LEN + 2)
 
 
 @bpf
@@ -31,4 +44,4 @@ def LICENSE() -> str:
 
 
 compile_to_ir("simple_struct_test.py", "simple_struct_test.ll", loglevel=logging.DEBUG)
-compile()
+# compile()
