@@ -37,9 +37,10 @@ def LICENSE() -> str:
     return "GPL"
 
 
-# compile
+# Compile and load
 b = BPF()
-b.load_and_attach()
+b.load()
+b.attach_all()
 
 print("Tracing for quick sync's... Ctrl-C to end")
 
