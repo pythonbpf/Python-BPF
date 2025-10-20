@@ -356,9 +356,7 @@ def process_func_body(
         builder.ret(ir.Constant(ir.IntType(64), 0))
 
 
-def process_bpf_chunk(
-    func_node, module, return_type, map_sym_tab, structs_sym_tab
-):
+def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_tab):
     """Process a single BPF chunk (function) and emit corresponding LLVM IR."""
 
     func_name = func_node.name
@@ -420,7 +418,7 @@ def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab):
             module,
             ctypes_to_ir(infer_return_type(func_node)),
             map_sym_tab,
-            structs_sym_tab
+            structs_sym_tab,
         )
 
 

@@ -71,7 +71,7 @@ class VmlinuxHandler:
         """Handle access to vmlinux struct fields"""
         # Check if it's a variable of vmlinux struct type
         if struct_var_name in local_sym_tab:
-            var_info = local_sym_tab[struct_var_name]
+            var_info = local_sym_tab[struct_var_name]  # noqa: F841
             # Need to check if this variable is a vmlinux struct
             # This will depend on how you track vmlinux struct types in your symbol table
             logger.info(
