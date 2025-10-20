@@ -5,6 +5,7 @@ from llvmlite import ir
 from dataclasses import dataclass
 from typing import Any
 from pythonbpf.helper import HelperHandlerRegistry
+from .expr import VmlinuxHandlerRegistry
 from pythonbpf.type_deducer import ctypes_to_ir
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,15 @@ def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
     if var_name in local_sym_tab:
         logger.debug(f"Variable {var_name} already allocated, skipping")
         return
+
+    # When allocating a variable, check if it's a vmlinux struct type
+    if isinstance(stmt.value, ast.Name) and VmlinuxHandlerRegistry.is_vmlinux_struct(
+        stmt.value.id
+    ):
+        # Handle vmlinux struct allocation
+        # This requires more implementation
+        print(stmt.value)
+        pass
 
     # Determine type and allocate based on rval
     if isinstance(rval, ast.Call):

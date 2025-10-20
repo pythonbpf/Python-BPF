@@ -16,8 +16,8 @@ from ctypes import c_int64
 @bpf
 @section("tracepoint/syscalls/sys_enter_execve")
 def hello_world(ctx: struct_trace_event_raw_sys_enter) -> c_int64:
-    print("Hello, World!")
-    return c_int64(0)
+    print("Hello, World")
+    return c_int64(TASK_COMM_LEN)
 
 
 @bpf

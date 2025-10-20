@@ -311,7 +311,13 @@ def process_stmt(
 
 
 def process_func_body(
-    module, builder, func_node, func, ret_type, map_sym_tab, structs_sym_tab, vmlinux_symtab
+    module,
+    builder,
+    func_node,
+    func,
+    ret_type,
+    map_sym_tab,
+    structs_sym_tab,
 ):
     """Process the body of a bpf function"""
     # TODO: A lot.  We just have print -> bpf_trace_printk for now
@@ -350,7 +356,9 @@ def process_func_body(
         builder.ret(ir.Constant(ir.IntType(64), 0))
 
 
-def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_tab, vmlinux_symtab):
+def process_bpf_chunk(
+    func_node, module, return_type, map_sym_tab, structs_sym_tab
+):
     """Process a single BPF chunk (function) and emit corresponding LLVM IR."""
 
     func_name = func_node.name
@@ -384,7 +392,13 @@ def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_t
     builder = ir.IRBuilder(block)
 
     process_func_body(
-        module, builder, func_node, func, ret_type, map_sym_tab, structs_sym_tab, vmlinux_symtab
+        module,
+        builder,
+        func_node,
+        func,
+        ret_type,
+        map_sym_tab,
+        structs_sym_tab,
     )
     return func
 
@@ -394,7 +408,7 @@ def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_t
 # ============================================================================
 
 
-def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab, vmlinux_symtab):
+def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab):
     for func_node in chunks:
         if is_global_function(func_node):
             continue
@@ -406,8 +420,7 @@ def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab, vmlinux_symtab
             module,
             ctypes_to_ir(infer_return_type(func_node)),
             map_sym_tab,
-            structs_sym_tab,
-            vmlinux_symtab
+            structs_sym_tab
         )
 
 
