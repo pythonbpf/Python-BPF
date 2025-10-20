@@ -1,14 +1,14 @@
 from pythonbpf import bpf, map, struct, section, bpfglobal, BPF
 from pythonbpf.helper import ktime, pid, comm
 from pythonbpf.maps import PerfEventArray
-from ctypes import c_void_p, c_int64, c_uint64
+from ctypes import c_void_p, c_int64
 
 
 @bpf
 @struct
 class data_t:
-    pid: c_uint64
-    ts: c_uint64
+    pid: c_int64
+    ts: c_int64
     comm: str(16)  # type: ignore [valid-type]
 
 
