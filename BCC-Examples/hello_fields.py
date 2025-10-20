@@ -15,9 +15,10 @@ def LICENSE() -> str:
     return "GPL"
 
 
-# compile
+# Compile and load
 b = BPF()
-b.load_and_attach()
+b.load()
+b.attach_all()
 
 # header
 print(f"{'TIME(s)':<18} {'COMM':<16} {'PID':<6} {'MESSAGE'}")
