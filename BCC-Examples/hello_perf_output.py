@@ -37,7 +37,7 @@ def LICENSE() -> str:
 # Compile and load
 b = BPF()
 b.load()
-attached = b.attach_all()
+b.attach_all()
 
 start = 0
 
