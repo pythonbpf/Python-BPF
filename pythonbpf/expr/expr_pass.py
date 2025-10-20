@@ -12,6 +12,7 @@ from .type_normalization import (
     get_base_type_and_depth,
     deref_to_depth,
 )
+from .vmlinux_registry import VmlinuxHandlerRegistry
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -27,8 +28,12 @@ def _handle_name_expr(expr: ast.Name, local_sym_tab: Dict, builder: ir.IRBuilder
         val = builder.load(var)
         return val, local_sym_tab[expr.id].ir_type
     else:
-        logger.info(f"Undefined variable {expr.id}")
-        return None
+        # Check if it's a vmlinux enum/constant
+        vmlinux_result = VmlinuxHandlerRegistry.handle_name(expr.id)
+        if vmlinux_result is not None:
+            return vmlinux_result
+
+        raise SyntaxError(f"Undefined variable {expr.id}")
 
 
 def _handle_constant_expr(module, builder, expr: ast.Constant):
@@ -74,6 +79,13 @@ def _handle_attribute_expr(
                 val = builder.load(gep)
                 field_type = metadata.field_type(attr_name)
                 return val, field_type
+
+        # Try vmlinux handler as fallback
+        vmlinux_result = VmlinuxHandlerRegistry.handle_attribute(
+            expr, local_sym_tab, None, builder
+        )
+        if vmlinux_result is not None:
+            return vmlinux_result
     return None
 
 
@@ -130,7 +142,12 @@ def get_operand_value(
             logger.info(f"var is {var}, base_type is {base_type}, depth is {depth}")
             val = deref_to_depth(func, builder, var, depth)
             return val
-        raise ValueError(f"Undefined variable: {operand.id}")
+        else:
+            # Check if it's a vmlinux enum/constant
+            vmlinux_result = VmlinuxHandlerRegistry.handle_name(operand.id)
+            if vmlinux_result is not None:
+                val, _ = vmlinux_result
+                return val
     elif isinstance(operand, ast.Constant):
         if isinstance(operand.value, int):
             cst = ir.Constant(ir.IntType(64), int(operand.value))
@@ -332,6 +349,7 @@ def _handle_unary_op(
         neg_one = ir.Constant(ir.IntType(64), -1)
         result = builder.mul(operand, neg_one)
         return result, ir.IntType(64)
+    return None
 
 
 # ============================================================================

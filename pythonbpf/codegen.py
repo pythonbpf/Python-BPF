@@ -5,6 +5,8 @@ from .functions import func_proc
 from .maps import maps_proc
 from .structs import structs_proc
 from .vmlinux_parser import vmlinux_proc
+from pythonbpf.vmlinux_parser.vmlinux_exports_handler import VmlinuxHandler
+from .expr import VmlinuxHandlerRegistry
 from .globals_pass import (
     globals_list_creation,
     globals_processing,
@@ -56,10 +58,13 @@ def processor(source_code, filename, module):
         logger.info(f"Found BPF function/struct: {func_node.name}")
 
     vmlinux_symtab = vmlinux_proc(tree, module)
+    if vmlinux_symtab:
+        handler = VmlinuxHandler.initialize(vmlinux_symtab)
+        VmlinuxHandlerRegistry.set_handler(handler)
+
     populate_global_symbol_table(tree, module)
     license_processing(tree, module)
     globals_processing(tree, module)
-    print("DEBUG:", vmlinux_symtab)
     structs_sym_tab = structs_proc(tree, module, bpf_chunks)
     map_sym_tab = maps_proc(tree, module, bpf_chunks)
     func_proc(tree, module, bpf_chunks, map_sym_tab, structs_sym_tab)
