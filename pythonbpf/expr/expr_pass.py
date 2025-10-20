@@ -142,7 +142,12 @@ def get_operand_value(
             logger.info(f"var is {var}, base_type is {base_type}, depth is {depth}")
             val = deref_to_depth(func, builder, var, depth)
             return val
-        raise ValueError(f"Undefined variable: {operand.id}")
+        else:
+            # Check if it's a vmlinux enum/constant
+            vmlinux_result = VmlinuxHandlerRegistry.handle_name(operand.id)
+            if vmlinux_result is not None:
+                val, _ = vmlinux_result
+                return val
     elif isinstance(operand, ast.Constant):
         if isinstance(operand.value, int):
             cst = ir.Constant(ir.IntType(64), int(operand.value))
