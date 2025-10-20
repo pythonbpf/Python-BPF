@@ -15,6 +15,9 @@ def LICENSE() -> str:
     return "GPL"
 
 
-BPF().load_and_attach()
+# Compile and load
+b = BPF()
+b.load()
+b.attach_all()
 print("Tracing sys_sync()... Ctrl-C to end.")
 trace_pipe()
