@@ -65,11 +65,11 @@ def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
         if var_name in local_sym_tab:
             logger.debug(f"Variable {var_name} already allocated, skipping")
             continue
-            
+
         # When allocating a variable, check if it's a vmlinux struct type
-        if isinstance(stmt.value, ast.Name) and VmlinuxHandlerRegistry.is_vmlinux_struct(
-            stmt.value.id
-        ):
+        if isinstance(
+            stmt.value, ast.Name
+        ) and VmlinuxHandlerRegistry.is_vmlinux_struct(stmt.value.id):
             # Handle vmlinux struct allocation
             # This requires more implementation
             print(stmt.value)
@@ -94,6 +94,7 @@ def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
             logger.warning(
                 f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
             )
+
 
 def _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab):
     """Allocate memory for variable assigned from a call."""
