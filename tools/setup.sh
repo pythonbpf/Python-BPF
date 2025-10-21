@@ -1,34 +1,35 @@
 #!/bin/bash
 
-echo "===================================================================="
-echo "                         ⚠️  WARNING ⚠️"
-echo "   This script will run kernel-level BPF programs."
-echo "   BPF programs run with kernel privileges and could potentially"
-echo "   affect system stability if not used properly."
-echo ""
-echo "   PLEASE REVIEW THE SOURCE CODE BEFORE RUNNING:"
-echo "   https://github.com/pythonbpf/python-bpf"
-echo "===================================================================="
-echo
-
-echo "This script will:"
-echo "1. Check and install required dependencies (libelf, clang, python, bpftool)"
-echo "2. Download example programs from the Python-BPF GitHub repository"
-echo "3. Create a Python virtual environment with necessary packages"
-echo "4. Start a Jupyter notebook server"
-echo
-
-read -p "Would you like to continue? (y/N) " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Script execution cancelled."
-    exit 1
-fi
+print_warning() {
+  echo -e "\033[1;33m$1\033[0m"
+}
+print_info() {
+  echo -e "\033[1;32m$1\033[0m"
+}
 
 if [ "$EUID" -ne 0 ]; then
     echo "Please run this script with sudo."
     exit 1
 fi
+
+print_warning "===================================================================="
+print_warning "                         WARNING                                     "
+print_warning "   This script will run kernel-level BPF programs.                   "
+print_warning "   BPF programs run with kernel privileges and could potentially     "
+print_warning "   affect system stability if not used properly.                     "
+print_warning "                                                                     "
+print_warning "   This is a non-interactive version for curl piping.                "
+print_warning "   The script will proceed automatically with installation.          "
+print_warning "===================================================================="
+echo
+
+print_info "This script will:"
+echo "1. Check and install required dependencies (libelf, clang, python, bpftool)"
+echo "2. Download example programs from the Python-BPF GitHub repository"
+echo "3. Create a Python virtual environment with necessary packages"
+echo "4. Set up a Jupyter notebook server"
+echo "Starting in 5 seconds. Press Ctrl+C to cancel..."
+sleep 5
 
 WORK_DIR="/tmp/python_bpf_setup"
 REAL_USER=$(logname || echo "$SUDO_USER")
@@ -143,7 +144,7 @@ mkdir -p examples
 cd examples || exit 1
 
 echo "Fetching example files list..."
-FILES=$(curl -s "https://api.github.com/repos/pythonbpf/Python-BPF/contents/examples" | grep -o '"path":"examples/[^"]*"' | awk -F'"' '{print $4}')
+FILES=$(curl -s "https://api.github.com/repos/pythonbpf/Python-BPF/contents/examples" | grep -o '"path": "examples/[^"]*"' | awk -F'"' '{print $4}')
 
 if [ -z "$FILES" ]; then
     echo "Failed to fetch file list from repository. Using fallback method..."
@@ -192,7 +193,7 @@ EOF
 chmod +x "$WORK_DIR/start_jupyter.sh"
 chown "$REAL_USER:$(id -gn "$REAL_USER")" "$WORK_DIR/start_jupyter.sh"
 
-echo "========================================================"
-echo "Setup complete! To start Jupyter Notebook, run:"
-echo "$ sudo $WORK_DIR/start_jupyter.sh"
-echo ""
+print_info "========================================================"
+print_info "Setup complete! To start Jupyter Notebook, run:"
+print_info "$ sudo $WORK_DIR/start_jupyter.sh"
+print_info "========================================================"
