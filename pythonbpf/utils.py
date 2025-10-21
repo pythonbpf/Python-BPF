@@ -7,6 +7,8 @@ def trace_pipe():
         subprocess.run(["cat", "/sys/kernel/tracing/trace_pipe"])
     except KeyboardInterrupt:
         print("Tracing stopped.")
+    except (FileNotFoundError, PermissionError) as e:
+        print(f"Error accessing trace_pipe: {e}. Try running as root.")
 
 
 def trace_fields():
