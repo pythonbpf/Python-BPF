@@ -310,7 +310,13 @@ def process_stmt(
 
 
 def process_func_body(
-    module, builder, func_node, func, ret_type, map_sym_tab, structs_sym_tab
+    module,
+    builder,
+    func_node,
+    func,
+    ret_type,
+    map_sym_tab,
+    structs_sym_tab,
 ):
     """Process the body of a bpf function"""
     # TODO: A lot.  We just have print -> bpf_trace_printk for now
@@ -383,7 +389,13 @@ def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_t
     builder = ir.IRBuilder(block)
 
     process_func_body(
-        module, builder, func_node, func, ret_type, map_sym_tab, structs_sym_tab
+        module,
+        builder,
+        func_node,
+        func,
+        ret_type,
+        map_sym_tab,
+        structs_sym_tab,
     )
     return func
 

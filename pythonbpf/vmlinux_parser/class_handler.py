@@ -1,6 +1,7 @@
 import logging
 from functools import lru_cache
 import importlib
+
 from .dependency_handler import DependencyHandler
 from .dependency_node import DependencyNode
 import ctypes
@@ -15,7 +16,11 @@ def get_module_symbols(module_name: str):
     return [name for name in dir(imported_module)], imported_module
 
 
-def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
+def process_vmlinux_class(
+    node,
+    llvm_module,
+    handler: DependencyHandler,
+):
     symbols_in_module, imported_module = get_module_symbols("vmlinux")
     if node.name in symbols_in_module:
         vmlinux_type = getattr(imported_module, node.name)
@@ -25,7 +30,10 @@ def process_vmlinux_class(node, llvm_module, handler: DependencyHandler):
 
 
 def process_vmlinux_post_ast(
-    elem_type_class, llvm_handler, handler: DependencyHandler, processing_stack=None
+    elem_type_class,
+    llvm_handler,
+    handler: DependencyHandler,
+    processing_stack=None,
 ):
     # Initialize processing stack on first call
     if processing_stack is None:
@@ -46,7 +54,7 @@ def process_vmlinux_post_ast(
         logger.debug(f"Node {current_symbol_name} already processed and ready")
         return True
 
-    # XXX:Check it's use. It's probably not being used.
+    # XXX:Check its use. It's probably not being used.
     if current_symbol_name in processing_stack:
         logger.debug(
             f"Dependency already in processing stack for {current_symbol_name}, skipping"
@@ -60,6 +68,10 @@ def process_vmlinux_post_ast(
             pass
         else:
             new_dep_node = DependencyNode(name=current_symbol_name)
+
+            # elem_type_class is the actual vmlinux struct/class
+            new_dep_node.set_ctype_struct(elem_type_class)
+
             handler.add_node(new_dep_node)
             class_obj = getattr(imported_module, current_symbol_name)
             # Inspect the class fields
@@ -94,12 +106,47 @@ def process_vmlinux_post_ast(
                 [elem_type, elem_bitfield_size] = elem_temp_list
                 local_module_name = getattr(elem_type, "__module__", None)
                 new_dep_node.add_field(elem_name, elem_type, ready=False)
+
                 if local_module_name == ctypes.__name__:
+                    # TODO: need to process pointer to ctype and also CFUNCTYPES here recursively. Current processing is a single dereference
                     new_dep_node.set_field_bitfield_size(elem_name, elem_bitfield_size)
-                    new_dep_node.set_field_ready(elem_name, is_ready=True)
-                    logger.debug(
-                        f"Field {elem_name} is direct ctypes type: {elem_type}"
-                    )
+
+                    # Process pointer to ctype
+                    if isinstance(elem_type, type) and issubclass(
+                        elem_type, ctypes._Pointer
+                    ):
+                        # Get the pointed-to type
+                        pointed_type = elem_type._type_
+                        logger.debug(f"Found pointer to type: {pointed_type}")
+                        new_dep_node.set_field_containing_type(elem_name, pointed_type)
+                        new_dep_node.set_field_ctype_complex_type(
+                            elem_name, ctypes._Pointer
+                        )
+                        new_dep_node.set_field_ready(elem_name, is_ready=True)
+
+                    # Process function pointers (CFUNCTYPE)
+                    elif hasattr(elem_type, "_restype_") and hasattr(
+                        elem_type, "_argtypes_"
+                    ):
+                        # This is a CFUNCTYPE or similar
+                        logger.info(
+                            f"Function pointer detected for {elem_name} with return type {elem_type._restype_} and arguments {elem_type._argtypes_}"
+                        )
+                        # Set the field as ready but mark it with special handling
+                        new_dep_node.set_field_ctype_complex_type(
+                            elem_name, ctypes.CFUNCTYPE
+                        )
+                        new_dep_node.set_field_ready(elem_name, is_ready=True)
+                        logger.warning(
+                            "Blindly processing CFUNCTYPE ctypes to ensure compilation. Unsupported"
+                        )
+
+                    else:
+                        # Regular ctype
+                        new_dep_node.set_field_ready(elem_name, is_ready=True)
+                        logger.debug(
+                            f"Field {elem_name} is direct ctypes type: {elem_type}"
+                        )
                 elif local_module_name == "vmlinux":
                     new_dep_node.set_field_bitfield_size(elem_name, elem_bitfield_size)
                     logger.debug(
@@ -112,13 +159,21 @@ def process_vmlinux_post_ast(
                             type_length = elem_type._length_
 
                         if containing_type.__module__ == "vmlinux":
-                            pass
+                            new_dep_node.add_dependent(
+                                elem_type._type_.__name__
+                                if hasattr(elem_type._type_, "__name__")
+                                else str(elem_type._type_)
+                            )
                         elif containing_type.__module__ == ctypes.__name__:
                             if isinstance(elem_type, type):
                                 if issubclass(elem_type, ctypes.Array):
                                     ctype_complex_type = ctypes.Array
                                 elif issubclass(elem_type, ctypes._Pointer):
                                     ctype_complex_type = ctypes._Pointer
+                                else:
+                                    raise ImportError(
+                                        "Non Array and Pointer type ctype imports not supported in current version"
+                                    )
                             else:
                                 raise TypeError("Unsupported ctypes subclass")
                         else:
@@ -137,10 +192,35 @@ def process_vmlinux_post_ast(
                         )
                         new_dep_node.set_field_type(elem_name, elem_type)
                         if containing_type.__module__ == "vmlinux":
-                            process_vmlinux_post_ast(
-                                containing_type, llvm_handler, handler, processing_stack
+                            containing_type_name = (
+                                containing_type.__name__
+                                if hasattr(containing_type, "__name__")
+                                else str(containing_type)
                             )
-                            new_dep_node.set_field_ready(elem_name, True)
+
+                            # Check for self-reference or already processed
+                            if containing_type_name == current_symbol_name:
+                                # Self-referential pointer
+                                logger.debug(
+                                    f"Self-referential pointer in {current_symbol_name}.{elem_name}"
+                                )
+                                new_dep_node.set_field_ready(elem_name, True)
+                            elif handler.has_node(containing_type_name):
+                                # Already processed
+                                logger.debug(
+                                    f"Reusing already processed {containing_type_name}"
+                                )
+                                new_dep_node.set_field_ready(elem_name, True)
+                            else:
+                                # Process recursively - THIS WAS MISSING
+                                new_dep_node.add_dependent(containing_type_name)
+                                process_vmlinux_post_ast(
+                                    containing_type,
+                                    llvm_handler,
+                                    handler,
+                                    processing_stack,
+                                )
+                                new_dep_node.set_field_ready(elem_name, True)
                         elif containing_type.__module__ == ctypes.__name__:
                             logger.debug(f"Processing ctype internal{containing_type}")
                             new_dep_node.set_field_ready(elem_name, True)
@@ -149,8 +229,16 @@ def process_vmlinux_post_ast(
                                 "Module not supported in recursive resolution"
                             )
                     else:
+                        new_dep_node.add_dependent(
+                            elem_type.__name__
+                            if hasattr(elem_type, "__name__")
+                            else str(elem_type)
+                        )
                         process_vmlinux_post_ast(
-                            elem_type, llvm_handler, handler, processing_stack
+                            elem_type,
+                            llvm_handler,
+                            handler,
+                            processing_stack,
                         )
                         new_dep_node.set_field_ready(elem_name, True)
                 else:
@@ -161,7 +249,7 @@ def process_vmlinux_post_ast(
     else:
         raise ImportError("UNSUPPORTED Module")
 
-    logging.info(
+    logger.info(
         f"{current_symbol_name} processed and handler readiness {handler.is_ready}"
     )
     return True

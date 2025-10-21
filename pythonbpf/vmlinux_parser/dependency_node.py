@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
+import ctypes
 
 
 # TODO: FIX THE FUCKING TYPE NAME CONVENTION.
@@ -13,8 +14,34 @@ class Field:
     containing_type: Optional[Any]
     type_size: Optional[int]
     bitfield_size: Optional[int]
+    offset: int
     value: Any = None
     ready: bool = False
+
+    def __hash__(self):
+        """
+        Create a hash based on the immutable attributes that define this field's identity.
+        This allows Field objects to be used as dictionary keys.
+        """
+        # Use a tuple of the fields that uniquely identify this field
+        identity = (
+            self.name,
+            id(self.type),  # Use id for non-hashable types
+            id(self.ctype_complex_type) if self.ctype_complex_type else None,
+            id(self.containing_type) if self.containing_type else None,
+            self.type_size,
+            self.bitfield_size,
+            self.offset,
+            self.value if self.value else None,
+        )
+        return hash(identity)
+
+    def __eq__(self, other):
+        """
+        Define equality consistent with the hash function.
+        Two fields are equal if they have they are the same
+        """
+        return self is other
 
     def set_ready(self, is_ready: bool = True) -> None:
         """Set the readiness state of this field."""
@@ -59,6 +86,10 @@ class Field:
         self.bitfield_size = bitfield_size
         if mark_ready:
             self.ready = True
+
+    def set_offset(self, offset: int) -> None:
+        """Set the offset of this field"""
+        self.offset = offset
 
 
 @dataclass
@@ -106,8 +137,11 @@ class DependencyNode:
     """
 
     name: str
+    depends_on: Optional[list[str]] = None
     fields: Dict[str, Field] = field(default_factory=dict)
     _ready_cache: Optional[bool] = field(default=None, repr=False)
+    current_offset: int = 0
+    ctype_struct: Optional[Any] = field(default=None, repr=False)
 
     def add_field(
         self,
@@ -119,8 +153,11 @@ class DependencyNode:
         ctype_complex_type: Optional[int] = None,
         bitfield_size: Optional[int] = None,
         ready: bool = False,
+        offset: int = 0,
     ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
+        if self.depends_on is None:
+            self.depends_on = []
         self.fields[name] = Field(
             name=name,
             type=field_type,
@@ -130,9 +167,20 @@ class DependencyNode:
             type_size=type_size,
             ctype_complex_type=ctype_complex_type,
             bitfield_size=bitfield_size,
+            offset=offset,
         )
         # Invalidate readiness cache
         self._ready_cache = None
+
+    def set_ctype_struct(self, ctype_struct: Any) -> None:
+        """Set the ctypes structure for automatic offset calculation."""
+        self.ctype_struct = ctype_struct
+
+    def __sizeof__(self):
+        # If we have a ctype_struct, use its size
+        if self.ctype_struct is not None:
+            return ctypes.sizeof(self.ctype_struct)
+        return self.current_offset
 
     def get_field(self, name: str) -> Field:
         """Get a field by name."""
@@ -200,14 +248,111 @@ class DependencyNode:
         # Invalidate readiness cache
         self._ready_cache = None
 
-    def set_field_ready(self, name: str, is_ready: bool = False) -> None:
+    def set_field_ready(
+        self,
+        name: str,
+        is_ready: bool = False,
+        size_of_containing_type: Optional[int] = None,
+    ) -> None:
         """Mark a field as ready or not ready."""
         if name not in self.fields:
             raise KeyError(f"Field '{name}' does not exist in node '{self.name}'")
 
         self.fields[name].set_ready(is_ready)
+
+        # Use ctypes built-in offset if available
+        if self.ctype_struct is not None:
+            try:
+                self.fields[name].set_offset(getattr(self.ctype_struct, name).offset)
+            except AttributeError:
+                # Fallback to manual calculation if field not found in ctype_struct
+                self.fields[name].set_offset(self.current_offset)
+                self.current_offset += self._calculate_size(
+                    name, size_of_containing_type
+                )
+        else:
+            # Manual offset calculation when no ctype_struct is available
+            self.fields[name].set_offset(self.current_offset)
+            self.current_offset += self._calculate_size(name, size_of_containing_type)
+
         # Invalidate readiness cache
         self._ready_cache = None
+
+    def _calculate_size(
+        self, name: str, size_of_containing_type: Optional[int] = None
+    ) -> int:
+        processing_field = self.fields[name]
+        # size_of_field will be in bytes
+        if processing_field.type.__module__ == ctypes.__name__:
+            size_of_field = ctypes.sizeof(processing_field.type)
+            return size_of_field
+        elif processing_field.type.__module__ == "vmlinux":
+            if processing_field.ctype_complex_type is not None:
+                if issubclass(processing_field.ctype_complex_type, ctypes.Array):
+                    if processing_field.containing_type.__module__ == ctypes.__name__:
+                        if (
+                            processing_field.containing_type is not None
+                            and processing_field.type_size is not None
+                        ):
+                            size_of_field = (
+                                ctypes.sizeof(processing_field.containing_type)
+                                * processing_field.type_size
+                            )
+                        else:
+                            raise RuntimeError(
+                                f"{processing_field} has no containing_type or type_size"
+                            )
+                        return size_of_field
+                    elif processing_field.containing_type.__module__ == "vmlinux":
+                        if (
+                            size_of_containing_type is not None
+                            and processing_field.type_size is not None
+                        ):
+                            size_of_field = (
+                                size_of_containing_type * processing_field.type_size
+                            )
+                        else:
+                            raise RuntimeError(
+                                f"{processing_field} has no containing_type or type_size"
+                            )
+                        return size_of_field
+                elif issubclass(processing_field.ctype_complex_type, ctypes._Pointer):
+                    return ctypes.sizeof(ctypes.c_void_p)
+                else:
+                    raise NotImplementedError(
+                        "This subclass of ctype not supported yet"
+                    )
+            elif processing_field.type_size is not None:
+                # Handle vmlinux types with type_size but no ctype_complex_type
+                # This means it's a direct vmlinux struct field (not array/pointer wrapped)
+                # The type_size should already contain the full size of the struct
+                # But if there's a containing_type from vmlinux, we need that size
+                if processing_field.containing_type is not None:
+                    if processing_field.containing_type.__module__ == "vmlinux":
+                        # For vmlinux containing types, we need the pre-calculated size
+                        if size_of_containing_type is not None:
+                            return size_of_containing_type * processing_field.type_size
+                        else:
+                            raise RuntimeError(
+                                f"Field {name}: vmlinux containing_type requires size_of_containing_type"
+                            )
+                    else:
+                        raise ModuleNotFoundError(
+                            f"Containing type module {processing_field.containing_type.__module__} not supported"
+                        )
+                else:
+                    raise RuntimeError("Wrong type found with no containing type")
+            else:
+                # No ctype_complex_type and no type_size, must rely on size_of_containing_type
+                if size_of_containing_type is None:
+                    raise RuntimeError(
+                        f"Size of containing type {size_of_containing_type} is None"
+                    )
+                return size_of_containing_type
+
+        else:
+            raise ModuleNotFoundError("Module is not supported for the operation")
+        raise RuntimeError("control should not reach here")
 
     @property
     def is_ready(self) -> bool:
@@ -235,3 +380,9 @@ class DependencyNode:
     def get_not_ready_fields(self) -> Dict[str, Field]:
         """Get all fields that are marked as not ready."""
         return {name: elem for name, elem in self.fields.items() if not elem.ready}
+
+    def add_dependent(self, dep_type):
+        if dep_type in self.depends_on:
+            return
+        else:
+            self.depends_on.append(dep_type)

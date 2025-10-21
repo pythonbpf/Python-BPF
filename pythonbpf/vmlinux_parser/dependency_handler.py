@@ -147,3 +147,27 @@ class DependencyHandler:
             int: The number of nodes
         """
         return len(self._nodes)
+
+    def __getitem__(self, name: str) -> DependencyNode:
+        """
+        Get a node by name using dictionary-style access.
+
+        Args:
+            name: The name of the node to retrieve
+
+        Returns:
+            DependencyNode: The node with the given name
+
+        Raises:
+            KeyError: If no node with the given name exists
+
+        Example:
+            node = handler["some-dep_node_name"]
+        """
+        if name not in self._nodes:
+            raise KeyError(f"No node with name '{name}' found")
+        return self._nodes[name]
+
+    @property
+    def nodes(self):
+        return self._nodes

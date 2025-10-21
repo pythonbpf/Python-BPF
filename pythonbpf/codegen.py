@@ -5,6 +5,8 @@ from .functions import func_proc
 from .maps import maps_proc
 from .structs import structs_proc
 from .vmlinux_parser import vmlinux_proc
+from pythonbpf.vmlinux_parser.vmlinux_exports_handler import VmlinuxHandler
+from .expr import VmlinuxHandlerRegistry
 from .globals_pass import (
     globals_list_creation,
     globals_processing,
@@ -19,10 +21,20 @@ from pylibbpf import BpfObject
 import tempfile
 from logging import Logger
 import logging
+import re
 
 logger: Logger = logging.getLogger(__name__)
 
-VERSION = "v0.1.4"
+VERSION = "v0.1.5"
+
+
+def finalize_module(original_str):
+    """After all IR generation is complete, we monkey patch btf_ama attribute"""
+
+    # Create a string with applied transformation of btf_ama attribute addition to BTF struct field accesses.
+    pattern = r'(@"llvm\.[^"]+:[^"]*" = external global i64, !llvm\.preserve\.access\.index ![0-9]+)'
+    replacement = r'\1 "btf_ama"'
+    return re.sub(pattern, replacement, original_str)
 
 
 def find_bpf_chunks(tree):
@@ -45,11 +57,14 @@ def processor(source_code, filename, module):
     for func_node in bpf_chunks:
         logger.info(f"Found BPF function/struct: {func_node.name}")
 
-    vmlinux_proc(tree, module)
+    vmlinux_symtab = vmlinux_proc(tree, module)
+    if vmlinux_symtab:
+        handler = VmlinuxHandler.initialize(vmlinux_symtab)
+        VmlinuxHandlerRegistry.set_handler(handler)
+
     populate_global_symbol_table(tree, module)
     license_processing(tree, module)
     globals_processing(tree, module)
-
     structs_sym_tab = structs_proc(tree, module, bpf_chunks)
     map_sym_tab = maps_proc(tree, module, bpf_chunks)
     func_proc(tree, module, bpf_chunks, map_sym_tab, structs_sym_tab)
@@ -122,10 +137,12 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
 
     module.add_named_metadata("llvm.ident", [f"PythonBPF {VERSION}"])
 
+    module_string = finalize_module(str(module))
+
     logger.info(f"IR written to {output}")
     with open(output, "w") as f:
         f.write(f'source_filename = "{filename}"\n')
-        f.write(str(module))
+        f.write(module_string)
         f.write("\n")
 
     return output, structs_sym_tab, maps_sym_tab

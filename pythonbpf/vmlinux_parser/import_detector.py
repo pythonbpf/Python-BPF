@@ -1,17 +1,17 @@
 import ast
 import logging
-from typing import List, Tuple, Dict
 import importlib
 import inspect
 
+from .assignment_info import AssignmentInfo, AssignmentType
 from .dependency_handler import DependencyHandler
-from .ir_generation import IRGenerator
+from .ir_gen import IRGenerator
 from .class_handler import process_vmlinux_class
 
 logger = logging.getLogger(__name__)
 
 
-def detect_import_statement(tree: ast.AST) -> List[Tuple[str, ast.ImportFrom]]:
+def detect_import_statement(tree: ast.AST) -> list[tuple[str, ast.ImportFrom]]:
     """
     Parse AST and detect import statements from vmlinux.
 
@@ -82,7 +82,7 @@ def vmlinux_proc(tree: ast.AST, module):
     # initialise dependency handler
     handler = DependencyHandler()
     # initialise assignment dictionary of name to type
-    assignments: Dict[str, type] = {}
+    assignments: dict[str, AssignmentInfo] = {}
 
     if not import_statements:
         logger.info("No vmlinux imports found")
@@ -128,8 +128,35 @@ def vmlinux_proc(tree: ast.AST, module):
                     f"{imported_name} not found as ClassDef or Assign in vmlinux"
                 )
 
-    IRGenerator(module, handler)
+    IRGenerator(module, handler, assignments)
+    return assignments
 
 
-def process_vmlinux_assign(node, module, assignments: Dict[str, type]):
-    raise NotImplementedError("Assignment handling has not been implemented yet")
+def process_vmlinux_assign(node, module, assignments: dict[str, AssignmentInfo]):
+    """Process assignments from vmlinux module."""
+    # Only handle single-target assignments
+    if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+        target_name = node.targets[0].id
+
+        # Handle constant value assignments
+        if isinstance(node.value, ast.Constant):
+            # Fixed: using proper TypedDict creation syntax with named arguments
+            assignments[target_name] = AssignmentInfo(
+                value_type=AssignmentType.CONSTANT,
+                python_type=type(node.value.value),
+                value=node.value.value,
+                pointer_level=None,
+                signature=None,
+                members=None,
+            )
+            logger.info(
+                f"Added assignment: {target_name} = {node.value.value!r} of type {type(node.value.value)}"
+            )
+
+        # Handle other assignment types that we may need to support
+        else:
+            logger.warning(
+                f"Unsupported assignment type for {target_name}: {ast.dump(node.value)}"
+            )
+    else:
+        raise ValueError("Not a simple assignment")
