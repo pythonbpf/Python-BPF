@@ -27,11 +27,11 @@ def create_targets_and_rvals(stmt):
     if isinstance(stmt.targets[0], ast.Tuple):
         if not isinstance(stmt.value, ast.Tuple):
             logger.warning("Mismatched multi-target assignment, skipping allocation")
-            return
+            return [], []
         targets, rvals = stmt.targets[0].elts, stmt.value.elts
         if len(targets) != len(rvals):
             logger.warning("length of LHS != length of RHS, skipping allocation")
-            return
+            return [], []
         return targets, rvals
     return stmt.targets, [stmt.value]
 
