@@ -236,7 +236,7 @@ def get_char_array_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab)
         var_ptr = local_sym_tab[var_name].var
         var_type = local_sym_tab[var_name].ir_type
 
-        if not isinstance(var_type, ir.PointerType) and not isinstance(
+        if not isinstance(var_type, ir.PointerType) or not isinstance(
             var_type.pointee, ir.IntType(8)
         ):
             raise ValueError("Expected str ptr variable")
