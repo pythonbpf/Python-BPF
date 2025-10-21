@@ -43,7 +43,7 @@ Python-BPF is an LLVM IR generator for eBPF programs written in Python. It uses 
 ## Try It Out!
 Run
 ```bash
-curl -s https://raw.githubusercontent.com/pythonbpf/Python-BPF/refs/heads/master/tools/setup.sh | sudo bash 
+curl -s https://raw.githubusercontent.com/pythonbpf/Python-BPF/refs/heads/master/tools/setup.sh | sudo bash
 ```
 
 ## Installation
