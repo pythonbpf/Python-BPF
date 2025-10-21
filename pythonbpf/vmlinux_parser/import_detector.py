@@ -77,28 +77,9 @@ def detect_import_statement(tree: ast.AST) -> list[tuple[str, ast.ImportFrom]]:
     return vmlinux_imports
 
 
-def bpf_passthrough_gen(module):
-    i32_ty = ir.IntType(32)
-    ptr_ty = ir.PointerType(ir.IntType(8))
-    fnty = ir.FunctionType(ptr_ty, [i32_ty, ptr_ty])
-
-    # Declare the intrinsic
-    passthrough = ir.Function(module, fnty, "llvm.bpf.passthrough.p0.p0")
-
-    # Set function attributes
-    # TODO: the ones commented are supposed to be there but cannot be added due to llvmlite limitations at the moment
-    # passthrough.attributes.add("nofree")
-    # passthrough.attributes.add("nosync")
-    passthrough.attributes.add("nounwind")
-    # passthrough.attributes.add("memory(none)")
-
-    return passthrough
-
-
 def vmlinux_proc(tree: ast.AST, module):
     import_statements = detect_import_statement(tree)
 
-    bpf_passthrough_gen(module)
     # initialise dependency handler
     handler = DependencyHandler()
     # initialise assignment dictionary of name to type

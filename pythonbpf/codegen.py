@@ -36,6 +36,23 @@ def finalize_module(original_str):
     replacement = r'\1 "btf_ama"'
     return re.sub(pattern, replacement, original_str)
 
+def bpf_passthrough_gen(module):
+    i32_ty = ir.IntType(32)
+    ptr_ty = ir.PointerType(ir.IntType(8))
+    fnty = ir.FunctionType(ptr_ty, [i32_ty, ptr_ty])
+
+    # Declare the intrinsic
+    passthrough = ir.Function(module, fnty, "llvm.bpf.passthrough.p0.p0")
+
+    # Set function attributes
+    # TODO: the ones commented are supposed to be there but cannot be added due to llvmlite limitations at the moment
+    # passthrough.attributes.add("nofree")
+    # passthrough.attributes.add("nosync")
+    passthrough.attributes.add("nounwind")
+    # passthrough.attributes.add("memory(none)")
+
+    return passthrough
+
 
 def find_bpf_chunks(tree):
     """Find all functions decorated with @bpf in the AST."""
@@ -56,6 +73,8 @@ def processor(source_code, filename, module):
     bpf_chunks = find_bpf_chunks(tree)
     for func_node in bpf_chunks:
         logger.info(f"Found BPF function/struct: {func_node.name}")
+
+    bpf_passthrough_gen(module)
 
     vmlinux_symtab = vmlinux_proc(tree, module)
     if vmlinux_symtab:
