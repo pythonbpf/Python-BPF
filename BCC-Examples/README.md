@@ -1,6 +1,6 @@
 ## BCC examples ported to PythonBPF
 
-This repository contains examples of BCC tutorial examples that have been ported to use **PythonBPF**.
+This folder contains examples of BCC tutorial examples that have been ported to use **PythonBPF**.
 
 ## Requirements
 - install `pythonbpf` and `pylibbpf` using pip.
