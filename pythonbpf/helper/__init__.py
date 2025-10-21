@@ -1,7 +1,7 @@
 from .helper_registry import HelperHandlerRegistry
 from .helper_utils import reset_scratch_pool
-from .bpf_helper_handler import handle_helper_call
-from .helpers import ktime, pid, deref, XDP_DROP, XDP_PASS
+from .bpf_helper_handler import handle_helper_call, emit_probe_read_kernel_str_call
+from .helpers import ktime, pid, deref, comm, probe_read_str, XDP_DROP, XDP_PASS
 
 
 # Register the helper handler with expr module
@@ -59,9 +59,12 @@ __all__ = [
     "HelperHandlerRegistry",
     "reset_scratch_pool",
     "handle_helper_call",
+    "emit_probe_read_kernel_str_call",
     "ktime",
     "pid",
     "deref",
+    "comm",
+    "probe_read_str",
     "XDP_DROP",
     "XDP_PASS",
 ]

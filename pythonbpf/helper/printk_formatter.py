@@ -184,6 +184,15 @@ def _populate_fval(ftype, node, fmt_parts, exprs):
             raise NotImplementedError(
                 f"Unsupported pointer target type in f-string: {target}"
             )
+    elif isinstance(ftype, ir.ArrayType):
+        if isinstance(ftype.element, ir.IntType) and ftype.element.width == 8:
+            # Char array
+            fmt_parts.append("%s")
+            exprs.append(node)
+        else:
+            raise NotImplementedError(
+                f"Unsupported array element type in f-string: {ftype.element}"
+            )
     else:
         raise NotImplementedError(f"Unsupported field type in f-string: {ftype}")
 
@@ -208,44 +217,100 @@ def _create_format_string_global(fmt_str, func, module, builder):
 
 def _prepare_expr_args(expr, func, module, builder, local_sym_tab, struct_sym_tab):
     """Evaluate and prepare an expression to use as an arg for bpf_printk."""
-    val, _ = eval_expr(
-        func,
-        module,
-        builder,
-        expr,
-        local_sym_tab,
-        None,
-        struct_sym_tab,
+
+    # Special case: struct field char array needs pointer to first element
+    char_array_ptr = _get_struct_char_array_ptr(
+        expr, builder, local_sym_tab, struct_sym_tab
+    )
+    if char_array_ptr:
+        return char_array_ptr
+
+    # Regular expression evaluation
+    val, _ = eval_expr(func, module, builder, expr, local_sym_tab, None, struct_sym_tab)
+
+    if not val:
+        logger.warning("Failed to evaluate expression for bpf_printk, defaulting to 0")
+        return ir.Constant(ir.IntType(64), 0)
+
+    # Convert value to bpf_printk compatible type
+    if isinstance(val.type, ir.PointerType):
+        return _handle_pointer_arg(val, func, builder)
+    elif isinstance(val.type, ir.IntType):
+        return _handle_int_arg(val, builder)
+    else:
+        logger.warning(f"Unsupported type {val.type} in bpf_printk, defaulting to 0")
+        return ir.Constant(ir.IntType(64), 0)
+
+
+def _get_struct_char_array_ptr(expr, builder, local_sym_tab, struct_sym_tab):
+    """Get pointer to first element of char array in struct field, or None."""
+    if not (isinstance(expr, ast.Attribute) and isinstance(expr.value, ast.Name)):
+        return None
+
+    var_name = expr.value.id
+    field_name = expr.attr
+
+    # Check if it's a valid struct field
+    if not (
+        local_sym_tab
+        and var_name in local_sym_tab
+        and struct_sym_tab
+        and local_sym_tab[var_name].metadata in struct_sym_tab
+    ):
+        return None
+
+    struct_type = local_sym_tab[var_name].metadata
+    struct_info = struct_sym_tab[struct_type]
+
+    if field_name not in struct_info.fields:
+        return None
+
+    field_type = struct_info.field_type(field_name)
+
+    # Check if it's a char array
+    is_char_array = (
+        isinstance(field_type, ir.ArrayType)
+        and isinstance(field_type.element, ir.IntType)
+        and field_type.element.width == 8
     )
 
-    if val:
-        if isinstance(val.type, ir.PointerType):
-            target, depth = get_base_type_and_depth(val.type)
-            if isinstance(target, ir.IntType):
-                if target.width >= 32:
-                    val = deref_to_depth(func, builder, val, depth)
-                    val = builder.sext(val, ir.IntType(64))
-                elif target.width == 8 and depth == 1:
-                    # NOTE: i8* is string, no need to deref
-                    pass
+    if not is_char_array:
+        return None
 
-            else:
-                logger.warning(
-                    "Only int and ptr supported in bpf_printk args. Others default to 0."
-                )
-                val = ir.Constant(ir.IntType(64), 0)
-        elif isinstance(val.type, ir.IntType):
-            if val.type.width < 64:
-                val = builder.sext(val, ir.IntType(64))
-        else:
-            logger.warning(
-                "Only int and ptr supported in bpf_printk args. Others default to 0."
-            )
-            val = ir.Constant(ir.IntType(64), 0)
-        return val
-    else:
-        logger.warning(
-            "Failed to evaluate expression for bpf_printk argument. "
-            "It will be converted to 0."
-        )
+    # Get field pointer and GEP to first element: [N x i8]* -> i8*
+    struct_ptr = local_sym_tab[var_name].var
+    field_ptr = struct_info.gep(builder, struct_ptr, field_name)
+
+    return builder.gep(
+        field_ptr,
+        [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)],
+        inbounds=True,
+    )
+
+
+def _handle_pointer_arg(val, func, builder):
+    """Convert pointer type for bpf_printk."""
+    target, depth = get_base_type_and_depth(val.type)
+
+    if not isinstance(target, ir.IntType):
+        logger.warning("Only int pointers supported in bpf_printk, defaulting to 0")
         return ir.Constant(ir.IntType(64), 0)
+
+    # i8* is string - use as-is
+    if target.width == 8 and depth == 1:
+        return val
+
+    # Integer pointers: dereference and sign-extend to i64
+    if target.width >= 32:
+        val = deref_to_depth(func, builder, val, depth)
+        return builder.sext(val, ir.IntType(64))
+
+    logger.warning("Unsupported pointer width in bpf_printk, defaulting to 0")
+    return ir.Constant(ir.IntType(64), 0)
+
+
+def _handle_int_arg(val, builder):
+    """Convert integer type for bpf_printk (sign-extend to i64)."""
+    if val.type.width < 64:
+        return builder.sext(val, ir.IntType(64))
+    return val

@@ -12,7 +12,11 @@ from pythonbpf.assign_pass import (
     handle_variable_assignment,
     handle_struct_field_assignment,
 )
-from pythonbpf.allocation_pass import handle_assign_allocation, allocate_temp_pool
+from pythonbpf.allocation_pass import (
+    handle_assign_allocation,
+    allocate_temp_pool,
+    create_targets_and_rvals,
+)
 
 from .return_utils import handle_none_return, handle_xdp_return, is_xdp_name
 from .function_metadata import get_probe_string, is_global_function, infer_return_type
@@ -140,48 +144,43 @@ def handle_assign(
 ):
     """Handle assignment statements in the function body."""
 
-    # TODO: Support this later
-    # GH #37
-    if len(stmt.targets) != 1:
-        logger.error("Multi-target assignment is not supported for now")
-        return
+    # NOTE: Support multi-target assignments (e.g.: a, b = 1, 2)
+    targets, rvals = create_targets_and_rvals(stmt)
 
-    target = stmt.targets[0]
-    rval = stmt.value
+    for target, rval in zip(targets, rvals):
+        if isinstance(target, ast.Name):
+            # NOTE: Simple variable assignment case: x = 5
+            var_name = target.id
+            result = handle_variable_assignment(
+                func,
+                module,
+                builder,
+                var_name,
+                rval,
+                local_sym_tab,
+                map_sym_tab,
+                structs_sym_tab,
+            )
+            if not result:
+                logger.error(f"Failed to handle assignment to {var_name}")
+            continue
 
-    if isinstance(target, ast.Name):
-        # NOTE: Simple variable assignment case: x = 5
-        var_name = target.id
-        result = handle_variable_assignment(
-            func,
-            module,
-            builder,
-            var_name,
-            rval,
-            local_sym_tab,
-            map_sym_tab,
-            structs_sym_tab,
-        )
-        if not result:
-            logger.error(f"Failed to handle assignment to {var_name}")
-        return
+        if isinstance(target, ast.Attribute):
+            # NOTE: Struct field assignment case: pkt.field = value
+            handle_struct_field_assignment(
+                func,
+                module,
+                builder,
+                target,
+                rval,
+                local_sym_tab,
+                map_sym_tab,
+                structs_sym_tab,
+            )
+            continue
 
-    if isinstance(target, ast.Attribute):
-        # NOTE: Struct field assignment case: pkt.field = value
-        handle_struct_field_assignment(
-            func,
-            module,
-            builder,
-            target,
-            rval,
-            local_sym_tab,
-            map_sym_tab,
-            structs_sym_tab,
-        )
-        return
-
-    # Unsupported target type
-    logger.error(f"Unsupported assignment target: {ast.dump(target)}")
+        # Unsupported target type
+        logger.error(f"Unsupported assignment target: {ast.dump(target)}")
 
 
 def handle_cond(
