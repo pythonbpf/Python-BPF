@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 import llvmlite.ir as ir
 
@@ -16,7 +16,7 @@ class AssignmentType(Enum):
 
 
 @dataclass
-class FunctionSignature(TypedDict):
+class FunctionSignature:
     return_type: str
     param_types: List[str]
     varargs: bool
@@ -24,7 +24,7 @@ class FunctionSignature(TypedDict):
 
 # Thew name of the assignment will be in the dict that uses this class
 @dataclass
-class AssignmentInfo(TypedDict):
+class AssignmentInfo:
     value_type: AssignmentType
     python_type: type
     value: Optional[Any]
