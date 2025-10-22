@@ -1,4 +1,4 @@
-from pythonbpf import bpf, section, bpfglobal, BPF
+from pythonbpf import bpf, section, bpfglobal, BPF, trace_pipe
 from ctypes import c_void_p, c_int64
 
 # Instructions to how to run this program
@@ -21,10 +21,6 @@ def LICENSE() -> str:
 
 
 b = BPF()
-b.load_and_attach()
-if b.is_loaded() and b.is_attached():
-    print("Successfully loaded and attached")
-else:
-    print("Could not load successfully")
-
-# Now cat /sys/kernel/debug/tracing/trace_pipe to see results of the execve syscall.
+b.load()
+b.attach_all()
+trace_pipe()
