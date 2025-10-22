@@ -17,7 +17,7 @@ import os
 import subprocess
 import inspect
 from pathlib import Path
-from pylibbpf import BpfProgram
+from pylibbpf import BpfObject
 import tempfile
 from logging import Logger
 import logging
@@ -25,7 +25,7 @@ import re
 
 logger: Logger = logging.getLogger(__name__)
 
-VERSION = "v0.1.5"
+VERSION = "v0.1.6"
 
 
 def finalize_module(original_str):
@@ -90,6 +90,7 @@ def processor(source_code, filename, module):
     func_proc(tree, module, bpf_chunks, map_sym_tab, structs_sym_tab)
 
     globals_list_creation(tree, module)
+    return structs_sym_tab, map_sym_tab
 
 
 def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
@@ -115,7 +116,7 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
             True,
         )
 
-    processor(source, filename, module)
+    structs_sym_tab, maps_sym_tab = processor(source, filename, module)
 
     wchar_size = module.add_metadata(
         [
@@ -164,7 +165,7 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
         f.write(module_string)
         f.write("\n")
 
-    return output
+    return output, structs_sym_tab, maps_sym_tab
 
 
 def _run_llc(ll_file, obj_file):
@@ -194,7 +195,7 @@ def _run_llc(ll_file, obj_file):
         return False
 
 
-def compile(loglevel=logging.INFO) -> bool:
+def compile(loglevel=logging.WARNING) -> bool:
     # Look one level up the stack to the caller of this function
     caller_frame = inspect.stack()[1]
     caller_file = Path(caller_frame.filename).resolve()
@@ -202,18 +203,19 @@ def compile(loglevel=logging.INFO) -> bool:
     ll_file = Path("/tmp") / caller_file.with_suffix(".ll").name
     o_file = caller_file.with_suffix(".o")
 
-    success = True
-    success = (
-        compile_to_ir(str(caller_file), str(ll_file), loglevel=loglevel) and success
+    _, structs_sym_tab, maps_sym_tab = compile_to_ir(
+        str(caller_file), str(ll_file), loglevel=loglevel
     )
 
-    success = _run_llc(ll_file, o_file) and success
+    if not _run_llc(ll_file, o_file):
+        logger.error("Compilation to object file failed.")
+        return False
 
     logger.info(f"Object written to {o_file}")
-    return success
+    return True
 
 
-def BPF(loglevel=logging.INFO) -> BpfProgram:
+def BPF(loglevel=logging.WARNING) -> BpfObject:
     caller_frame = inspect.stack()[1]
     src = inspect.getsource(caller_frame.frame)
     with tempfile.NamedTemporaryFile(
@@ -226,7 +228,9 @@ def BPF(loglevel=logging.INFO) -> BpfProgram:
         f.write(src)
         f.flush()
         source = f.name
-        compile_to_ir(source, str(inter.name), loglevel=loglevel)
+        _, structs_sym_tab, maps_sym_tab = compile_to_ir(
+            source, str(inter.name), loglevel=loglevel
+        )
         _run_llc(str(inter.name), str(obj_file.name))
 
-        return BpfProgram(str(obj_file.name))
+        return BpfObject(str(obj_file.name), structs=structs_sym_tab)

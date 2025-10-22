@@ -7,6 +7,9 @@ from .helper_utils import (
     get_or_create_ptr_from_arg,
     get_flags_val,
     get_data_ptr_and_size,
+    get_buffer_ptr_and_size,
+    get_char_array_ptr_and_size,
+    get_ptr_from_arg,
 )
 from .printk_formatter import simple_string_print, handle_fstring_print
 
@@ -23,7 +26,9 @@ class BPFHelperID(Enum):
     BPF_KTIME_GET_NS = 5
     BPF_PRINTK = 6
     BPF_GET_CURRENT_PID_TGID = 14
+    BPF_GET_CURRENT_COMM = 16
     BPF_PERF_EVENT_OUTPUT = 25
+    BPF_PROBE_READ_KERNEL_STR = 115
 
 
 @HelperHandlerRegistry.register("ktime")
@@ -234,6 +239,63 @@ def bpf_map_delete_elem_emitter(
     return result, None
 
 
+@HelperHandlerRegistry.register("comm")
+def bpf_get_current_comm_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_get_current_comm helper function call.
+
+    Accepts: comm(dataobj.field) or comm(my_buffer)
+    """
+    if not call.args or len(call.args) != 1:
+        raise ValueError(
+            f"comm expects exactly one argument (buffer), got {len(call.args)}"
+        )
+
+    buf_arg = call.args[0]
+
+    # Extract buffer pointer and size
+    buf_ptr, buf_size = get_buffer_ptr_and_size(
+        buf_arg, builder, local_sym_tab, struct_sym_tab
+    )
+
+    # Validate it's a char array
+    if not isinstance(
+        buf_ptr.type.pointee, ir.ArrayType
+    ) or buf_ptr.type.pointee.element != ir.IntType(8):
+        raise ValueError(
+            f"comm expects a char array buffer, got {buf_ptr.type.pointee}"
+        )
+
+    # Cast to void* and call helper
+    buf_void_ptr = builder.bitcast(buf_ptr, ir.PointerType())
+
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [ir.PointerType(), ir.IntType(32)],
+        var_arg=False,
+    )
+    fn_ptr = builder.inttoptr(
+        ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_CURRENT_COMM.value),
+        ir.PointerType(fn_type),
+    )
+
+    result = builder.call(
+        fn_ptr, [buf_void_ptr, ir.Constant(ir.IntType(32), buf_size)], tail=False
+    )
+
+    logger.info(f"Emitted bpf_get_current_comm with {buf_size} byte buffer")
+    return result, None
+
+
 @HelperHandlerRegistry.register("pid")
 def bpf_get_current_pid_tgid_emitter(
     call,
@@ -307,6 +369,68 @@ def bpf_perf_event_output_handler(
         fn_ptr, [ctx_ptr, map_void_ptr, flags_val, data_void_ptr, size_val], tail=False
     )
     return result, None
+
+
+def emit_probe_read_kernel_str_call(builder, dst_ptr, dst_size, src_ptr):
+    """Emit LLVM IR call to bpf_probe_read_kernel_str"""
+
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [ir.PointerType(), ir.IntType(32), ir.PointerType()],
+        var_arg=False,
+    )
+    fn_ptr = builder.inttoptr(
+        ir.Constant(ir.IntType(64), BPFHelperID.BPF_PROBE_READ_KERNEL_STR.value),
+        ir.PointerType(fn_type),
+    )
+
+    result = builder.call(
+        fn_ptr,
+        [
+            builder.bitcast(dst_ptr, ir.PointerType()),
+            ir.Constant(ir.IntType(32), dst_size),
+            builder.bitcast(src_ptr, ir.PointerType()),
+        ],
+        tail=False,
+    )
+
+    logger.info(f"Emitted bpf_probe_read_kernel_str (size={dst_size})")
+    return result
+
+
+@HelperHandlerRegistry.register("probe_read_str")
+def bpf_probe_read_kernel_str_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """Emit LLVM IR for bpf_probe_read_kernel_str helper."""
+
+    if len(call.args) != 2:
+        raise ValueError(
+            f"probe_read_str expects 2 args (dst, src), got {len(call.args)}"
+        )
+
+    # Get destination buffer (char array -> i8*)
+    dst_ptr, dst_size = get_char_array_ptr_and_size(
+        call.args[0], builder, local_sym_tab, struct_sym_tab
+    )
+
+    # Get source pointer (evaluate expression)
+    src_ptr, src_type = get_ptr_from_arg(
+        call.args[1], func, module, builder, local_sym_tab, map_sym_tab, struct_sym_tab
+    )
+
+    # Emit the helper call
+    result = emit_probe_read_kernel_str_call(builder, dst_ptr, dst_size, src_ptr)
+
+    logger.info(f"Emitted bpf_probe_read_kernel_str (size={dst_size})")
+    return result, ir.IntType(64)
 
 
 def handle_helper_call(

@@ -4,6 +4,7 @@ import logging
 from llvmlite import ir
 from pythonbpf.expr import (
     get_operand_value,
+    eval_expr,
 )
 
 logger = logging.getLogger(__name__)
@@ -136,3 +137,140 @@ def get_data_ptr_and_size(data_arg, local_sym_tab, struct_sym_tab):
         raise NotImplementedError(
             "Only simple object names are supported as data in perf event output."
         )
+
+
+def get_buffer_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab):
+    """Extract buffer pointer and size from either a struct field or variable."""
+
+    # Case 1: Struct field (obj.field)
+    if isinstance(buf_arg, ast.Attribute):
+        if not isinstance(buf_arg.value, ast.Name):
+            raise ValueError(
+                "Only simple struct field access supported (e.g., obj.field)"
+            )
+
+        struct_name = buf_arg.value.id
+        field_name = buf_arg.attr
+
+        # Lookup struct
+        if not local_sym_tab or struct_name not in local_sym_tab:
+            raise ValueError(f"Struct '{struct_name}' not found")
+
+        struct_type = local_sym_tab[struct_name].metadata
+        if not struct_sym_tab or struct_type not in struct_sym_tab:
+            raise ValueError(f"Struct type '{struct_type}' not found")
+
+        struct_info = struct_sym_tab[struct_type]
+
+        # Get field pointer and type
+        struct_ptr = local_sym_tab[struct_name].var
+        field_ptr = struct_info.gep(builder, struct_ptr, field_name)
+        field_type = struct_info.field_type(field_name)
+
+        if not isinstance(field_type, ir.ArrayType):
+            raise ValueError(f"Field '{field_name}' must be an array type")
+
+        return field_ptr, field_type.count
+
+    # Case 2: Variable name
+    elif isinstance(buf_arg, ast.Name):
+        var_name = buf_arg.id
+
+        if not local_sym_tab or var_name not in local_sym_tab:
+            raise ValueError(f"Variable '{var_name}' not found")
+
+        var_ptr = local_sym_tab[var_name].var
+        var_type = local_sym_tab[var_name].ir_type
+
+        if not isinstance(var_type, ir.ArrayType):
+            raise ValueError(f"Variable '{var_name}' must be an array type")
+
+        return var_ptr, var_type.count
+
+    else:
+        raise ValueError(
+            "comm expects either a struct field (obj.field) or variable name"
+        )
+
+
+def get_char_array_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab):
+    """Get pointer to char array and its size."""
+
+    # Struct field: obj.field
+    if isinstance(buf_arg, ast.Attribute) and isinstance(buf_arg.value, ast.Name):
+        var_name = buf_arg.value.id
+        field_name = buf_arg.attr
+
+        if not (local_sym_tab and var_name in local_sym_tab):
+            raise ValueError(f"Variable '{var_name}' not found")
+
+        struct_type = local_sym_tab[var_name].metadata
+        if not (struct_sym_tab and struct_type in struct_sym_tab):
+            raise ValueError(f"Struct type '{struct_type}' not found")
+
+        struct_info = struct_sym_tab[struct_type]
+        if field_name not in struct_info.fields:
+            raise ValueError(f"Field '{field_name}' not found")
+
+        field_type = struct_info.field_type(field_name)
+        if not _is_char_array(field_type):
+            raise ValueError("Expected char array field")
+
+        struct_ptr = local_sym_tab[var_name].var
+        field_ptr = struct_info.gep(builder, struct_ptr, field_name)
+
+        # GEP to first element: [N x i8]* -> i8*
+        buf_ptr = builder.gep(
+            field_ptr,
+            [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)],
+            inbounds=True,
+        )
+        return buf_ptr, field_type.count
+
+    elif isinstance(buf_arg, ast.Name):
+        # NOTE: We shouldn't be doing this as we can't get size info
+        var_name = buf_arg.id
+        if not (local_sym_tab and var_name in local_sym_tab):
+            raise ValueError(f"Variable '{var_name}' not found")
+
+        var_ptr = local_sym_tab[var_name].var
+        var_type = local_sym_tab[var_name].ir_type
+
+        if not isinstance(var_type, ir.PointerType) or not isinstance(
+            var_type.pointee, ir.IntType(8)
+        ):
+            raise ValueError("Expected str ptr variable")
+
+        return var_ptr, 256  # Size unknown for str ptr, using 256 as default
+
+    else:
+        raise ValueError("Expected struct field or variable name")
+
+
+def _is_char_array(ir_type):
+    """Check if IR type is [N x i8]."""
+    return (
+        isinstance(ir_type, ir.ArrayType)
+        and isinstance(ir_type.element, ir.IntType)
+        and ir_type.element.width == 8
+    )
+
+
+def get_ptr_from_arg(
+    arg, func, module, builder, local_sym_tab, map_sym_tab, struct_sym_tab
+):
+    """Evaluate argument and return pointer value"""
+
+    result = eval_expr(
+        func, module, builder, arg, local_sym_tab, map_sym_tab, struct_sym_tab
+    )
+
+    if not result:
+        raise ValueError("Failed to evaluate argument")
+
+    val, val_type = result
+
+    if not isinstance(val_type, ir.PointerType):
+        raise ValueError(f"Expected pointer type, got {val_type}")
+
+    return val, val_type

@@ -2,6 +2,7 @@ import ast
 import logging
 from llvmlite import ir
 from pythonbpf.expr import eval_expr
+from pythonbpf.helper import emit_probe_read_kernel_str_call
 
 logger = logging.getLogger(__name__)
 
@@ -27,25 +28,80 @@ def handle_struct_field_assignment(
 
     # Get field pointer and evaluate value
     field_ptr = struct_info.gep(builder, local_sym_tab[var_name].var, field_name)
-    val = eval_expr(
+    field_type = struct_info.field_type(field_name)
+    val_result = eval_expr(
         func, module, builder, rval, local_sym_tab, map_sym_tab, structs_sym_tab
     )
 
-    if val is None:
+    if val_result is None:
         logger.error(f"Failed to evaluate value for {var_name}.{field_name}")
         return
 
-    # TODO: Handle string assignment to char array (not a priority)
-    field_type = struct_info.field_type(field_name)
-    if isinstance(field_type, ir.ArrayType) and val[1] == ir.PointerType(ir.IntType(8)):
-        logger.warning(
-            f"String to char array assignment not implemented for {var_name}.{field_name}"
+    val, val_type = val_result
+
+    # Special case: i8* string to [N x i8] char array
+    if _is_char_array(field_type) and _is_i8_ptr(val_type):
+        _copy_string_to_char_array(
+            func,
+            module,
+            builder,
+            val,
+            field_ptr,
+            field_type,
+            local_sym_tab,
+            map_sym_tab,
+            structs_sym_tab,
         )
+        logger.info(f"Copied string to char array {var_name}.{field_name}")
         return
 
-    # Store the value
-    builder.store(val[0], field_ptr)
+    # Regular assignment
+    builder.store(val, field_ptr)
     logger.info(f"Assigned to struct field {var_name}.{field_name}")
+
+
+def _copy_string_to_char_array(
+    func,
+    module,
+    builder,
+    src_ptr,
+    dst_ptr,
+    array_type,
+    local_sym_tab,
+    map_sym_tab,
+    struct_sym_tab,
+):
+    """Copy string (i8*) to char array ([N x i8]) using bpf_probe_read_kernel_str"""
+
+    array_size = array_type.count
+
+    # Get pointer to first element: [N x i8]* -> i8*
+    dst_i8_ptr = builder.gep(
+        dst_ptr,
+        [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)],
+        inbounds=True,
+    )
+
+    # Use the shared emitter function
+    emit_probe_read_kernel_str_call(builder, dst_i8_ptr, array_size, src_ptr)
+
+
+def _is_char_array(ir_type):
+    """Check if type is [N x i8]."""
+    return (
+        isinstance(ir_type, ir.ArrayType)
+        and isinstance(ir_type.element, ir.IntType)
+        and ir_type.element.width == 8
+    )
+
+
+def _is_i8_ptr(ir_type):
+    """Check if type is i8*."""
+    return (
+        isinstance(ir_type, ir.PointerType)
+        and isinstance(ir_type.pointee, ir.IntType)
+        and ir_type.pointee.width == 8
+    )
 
 
 def handle_variable_assignment(
@@ -69,6 +125,17 @@ def handle_variable_assignment(
 
             builder.store(ir.Constant(ir_struct, None), var_ptr)
             logger.info(f"Initialized struct {struct_name} for variable {var_name}")
+            return True
+
+    # Special case: struct field char array -> pointer
+    # Handle this before eval_expr to get the pointer, not the value
+    if isinstance(rval, ast.Attribute) and isinstance(rval.value, ast.Name):
+        converted_val = _try_convert_char_array_to_ptr(
+            rval, var_type, builder, local_sym_tab, structs_sym_tab
+        )
+        if converted_val is not None:
+            builder.store(converted_val, var_ptr)
+            logger.info(f"Assigned char array pointer to {var_name}")
             return True
 
     val_result = eval_expr(
@@ -106,3 +173,52 @@ def handle_variable_assignment(
     builder.store(val, var_ptr)
     logger.info(f"Assigned value to variable {var_name}")
     return True
+
+
+def _try_convert_char_array_to_ptr(
+    rval, var_type, builder, local_sym_tab, structs_sym_tab
+):
+    """Try to convert char array field to i8* pointer"""
+    # Only convert if target is i8*
+    if not (
+        isinstance(var_type, ir.PointerType)
+        and isinstance(var_type.pointee, ir.IntType)
+        and var_type.pointee.width == 8
+    ):
+        return None
+
+    struct_var = rval.value.id
+    field_name = rval.attr
+
+    # Validate struct
+    if struct_var not in local_sym_tab:
+        return None
+
+    struct_type = local_sym_tab[struct_var].metadata
+    if not struct_type or struct_type not in structs_sym_tab:
+        return None
+
+    struct_info = structs_sym_tab[struct_type]
+    if field_name not in struct_info.fields:
+        return None
+
+    field_type = struct_info.field_type(field_name)
+
+    # Check if it's a char array
+    if not (
+        isinstance(field_type, ir.ArrayType)
+        and isinstance(field_type.element, ir.IntType)
+        and field_type.element.width == 8
+    ):
+        return None
+
+    # Get pointer to struct field
+    struct_ptr = local_sym_tab[struct_var].var
+    field_ptr = struct_info.gep(builder, struct_ptr, field_name)
+
+    # GEP to first element: [N x i8]* -> i8*
+    return builder.gep(
+        field_ptr,
+        [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)],
+        inbounds=True,
+    )

@@ -23,53 +23,77 @@ class LocalSymbol:
         yield self.metadata
 
 
+def create_targets_and_rvals(stmt):
+    """Create lists of targets and right-hand values from an assignment statement."""
+    if isinstance(stmt.targets[0], ast.Tuple):
+        if not isinstance(stmt.value, ast.Tuple):
+            logger.warning("Mismatched multi-target assignment, skipping allocation")
+            return [], []
+        targets, rvals = stmt.targets[0].elts, stmt.value.elts
+        if len(targets) != len(rvals):
+            logger.warning("length of LHS != length of RHS, skipping allocation")
+            return [], []
+        return targets, rvals
+    return stmt.targets, [stmt.value]
+
+
 def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
     """Handle memory allocation for assignment statements."""
 
-    # Validate assignment
-    if len(stmt.targets) != 1:
-        logger.warning("Multi-target assignment not supported, skipping allocation")
-        return
+    logger.info(f"Handling assignment for allocation: {ast.dump(stmt)}")
 
-    target = stmt.targets[0]
+    # NOTE: Support multi-target assignments (e.g.: a, b = 1, 2)
+    targets, rvals = create_targets_and_rvals(stmt)
 
-    # Skip non-name targets (e.g., struct field assignments)
-    if isinstance(target, ast.Attribute):
-        logger.debug(f"Struct field assignment to {target.attr}, no allocation needed")
-        return
+    for target, rval in zip(targets, rvals):
+        # Skip non-name targets (e.g., struct field assignments)
+        if isinstance(target, ast.Attribute):
+            logger.debug(
+                f"Struct field assignment to {target.attr}, no allocation needed"
+            )
+            continue
 
-    if not isinstance(target, ast.Name):
-        logger.warning(f"Unsupported assignment target type: {type(target).__name__}")
-        return
+        if not isinstance(target, ast.Name):
+            logger.warning(
+                f"Unsupported assignment target type: {type(target).__name__}"
+            )
+            continue
 
-    var_name = target.id
-    rval = stmt.value
+        var_name = target.id
 
-    # Skip if already allocated
-    if var_name in local_sym_tab:
-        logger.debug(f"Variable {var_name} already allocated, skipping")
-        return
+        # Skip if already allocated
+        if var_name in local_sym_tab:
+            logger.debug(f"Variable {var_name} already allocated, skipping")
+            continue
 
-    # When allocating a variable, check if it's a vmlinux struct type
-    if isinstance(rval, ast.Name) and VmlinuxHandlerRegistry.is_vmlinux_struct(
-        stmt.value.id
-    ):
-        # Handle vmlinux struct allocation
-        # This requires more implementation
-        print(stmt.value)
-        pass
+        # When allocating a variable, check if it's a vmlinux struct type
+        if isinstance(
+            stmt.value, ast.Name
+        ) and VmlinuxHandlerRegistry.is_vmlinux_struct(stmt.value.id):
+            # Handle vmlinux struct allocation
+            # This requires more implementation
+            print(stmt.value)
+            pass
 
-    # Determine type and allocate based on rval
-    if isinstance(rval, ast.Call):
-        _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab)
-    elif isinstance(rval, ast.Constant):
-        _allocate_for_constant(builder, var_name, rval, local_sym_tab)
-    elif isinstance(rval, ast.BinOp):
-        _allocate_for_binop(builder, var_name, local_sym_tab)
-    else:
-        logger.warning(
-            f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
-        )
+        # Determine type and allocate based on rval
+        if isinstance(rval, ast.Call):
+            _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab)
+        elif isinstance(rval, ast.Constant):
+            _allocate_for_constant(builder, var_name, rval, local_sym_tab)
+        elif isinstance(rval, ast.BinOp):
+            _allocate_for_binop(builder, var_name, local_sym_tab)
+        elif isinstance(rval, ast.Name):
+            # Variable-to-variable assignment (b = a)
+            _allocate_for_name(builder, var_name, rval, local_sym_tab)
+        elif isinstance(rval, ast.Attribute):
+            # Struct field-to-variable assignment (a = dat.fld)
+            _allocate_for_attribute(
+                builder, var_name, rval, local_sym_tab, structs_sym_tab
+            )
+        else:
+            logger.warning(
+                f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
+            )
 
 
 def _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab):
@@ -186,3 +210,88 @@ def allocate_temp_pool(builder, max_temps, local_sym_tab):
         temp_var = builder.alloca(ir.IntType(64), name=temp_name)
         temp_var.align = 8
         local_sym_tab[temp_name] = LocalSymbol(temp_var, ir.IntType(64))
+
+
+def _allocate_for_name(builder, var_name, rval, local_sym_tab):
+    """Allocate memory for variable-to-variable assignment (b = a)."""
+    source_var = rval.id
+
+    if source_var not in local_sym_tab:
+        logger.error(f"Source variable '{source_var}' not found in symbol table")
+        return
+
+    # Get type and metadata from source variable
+    source_symbol = local_sym_tab[source_var]
+
+    # Allocate with same type and alignment
+    var = _allocate_with_type(builder, var_name, source_symbol.ir_type)
+    local_sym_tab[var_name] = LocalSymbol(
+        var, source_symbol.ir_type, source_symbol.metadata
+    )
+
+    logger.info(
+        f"Pre-allocated {var_name} from {source_var} with type {source_symbol.ir_type}"
+    )
+
+
+def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_tab):
+    """Allocate memory for struct field-to-variable assignment (a = dat.fld)."""
+    if not isinstance(rval.value, ast.Name):
+        logger.warning(f"Complex attribute access not supported for {var_name}")
+        return
+
+    struct_var = rval.value.id
+    field_name = rval.attr
+
+    # Validate struct and field
+    if struct_var not in local_sym_tab:
+        logger.error(f"Struct variable '{struct_var}' not found")
+        return
+
+    struct_type = local_sym_tab[struct_var].metadata
+    if not struct_type or struct_type not in structs_sym_tab:
+        logger.error(f"Struct type '{struct_type}' not found")
+        return
+
+    struct_info = structs_sym_tab[struct_type]
+    if field_name not in struct_info.fields:
+        logger.error(f"Field '{field_name}' not found in struct '{struct_type}'")
+        return
+
+    # Get field type
+    field_type = struct_info.field_type(field_name)
+
+    # Special case: char array -> allocate as i8* pointer instead
+    if (
+        isinstance(field_type, ir.ArrayType)
+        and isinstance(field_type.element, ir.IntType)
+        and field_type.element.width == 8
+    ):
+        alloc_type = ir.PointerType(ir.IntType(8))
+        logger.info(f"Allocating {var_name} as i8* (pointer to char array)")
+    else:
+        alloc_type = field_type
+
+    var = _allocate_with_type(builder, var_name, alloc_type)
+    local_sym_tab[var_name] = LocalSymbol(var, alloc_type)
+
+    logger.info(
+        f"Pre-allocated {var_name} from {struct_var}.{field_name} with type {alloc_type}"
+    )
+
+
+def _allocate_with_type(builder, var_name, ir_type):
+    """Allocate variable with appropriate alignment for type."""
+    var = builder.alloca(ir_type, name=var_name)
+    var.align = _get_alignment(ir_type)
+    return var
+
+
+def _get_alignment(ir_type):
+    """Get appropriate alignment for IR type."""
+    if isinstance(ir_type, ir.IntType):
+        return ir_type.width // 8
+    elif isinstance(ir_type, ir.ArrayType) and isinstance(ir_type.element, ir.IntType):
+        return ir_type.element.width // 8
+    else:
+        return 8  # Default: pointer size
