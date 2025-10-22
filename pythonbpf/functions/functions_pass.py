@@ -330,18 +330,6 @@ def process_func_body(
 
     local_sym_tab = {}
 
-    # pre-allocate dynamic variables
-    local_sym_tab = allocate_mem(
-        module,
-        builder,
-        func_node.body,
-        func,
-        ret_type,
-        map_sym_tab,
-        local_sym_tab,
-        structs_sym_tab,
-    )
-
     # Add the context parameter (first function argument) to the local symbol table
     if func_node.args.args and len(func_node.args.args) > 0:
         context_arg = func_node.args.args[0]
@@ -370,6 +358,18 @@ def process_func_body(
 
             local_sym_tab[context_name] = context_type
             logger.info(f"Added argument '{context_name}' to local symbol table")
+
+    # pre-allocate dynamic variables
+    local_sym_tab = allocate_mem(
+        module,
+        builder,
+        func_node.body,
+        func,
+        ret_type,
+        map_sym_tab,
+        local_sym_tab,
+        structs_sym_tab,
+    )
 
     logger.info(f"Local symbol table: {local_sym_tab.keys()}")
 
