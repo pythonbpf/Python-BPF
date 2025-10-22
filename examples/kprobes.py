@@ -1,4 +1,4 @@
-from pythonbpf import bpf, section, bpfglobal, BPF
+from pythonbpf import bpf, section, bpfglobal, BPF, trace_pipe
 from ctypes import c_void_p, c_int64
 
 
@@ -23,7 +23,7 @@ def LICENSE() -> str:
 
 
 b = BPF()
-b.load_and_attach()
-while True:
-    print("running")
-# Now cat /sys/kernel/debug/tracing/trace_pipe to see results of unlink kprobe.
+b.load()
+b.attach_all()
+print("running")
+trace_pipe()
