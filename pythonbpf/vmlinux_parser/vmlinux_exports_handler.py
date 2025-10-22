@@ -39,6 +39,16 @@ class VmlinuxHandler:
             and self.vmlinux_symtab[name]["value_type"] == AssignmentType.CONSTANT
         )
 
+    def get_vmlinux_struct_type(self, name):
+        """Check if name is a vmlinux struct type"""
+        if (
+            name in self.vmlinux_symtab
+            and self.vmlinux_symtab[name]["value_type"] == AssignmentType.STRUCT
+        ):
+            return self.vmlinux_symtab[name]["python_type"]
+        else:
+            raise ValueError(f"{name} is not a vmlinux struct type")
+
     def is_vmlinux_struct(self, name):
         """Check if name is a vmlinux struct"""
         return (

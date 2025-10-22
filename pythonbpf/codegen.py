@@ -36,6 +36,7 @@ def finalize_module(original_str):
     replacement = r'\1 "btf_ama"'
     return re.sub(pattern, replacement, original_str)
 
+
 def bpf_passthrough_gen(module):
     i32_ty = ir.IntType(32)
     ptr_ty = ir.PointerType(ir.IntType(8))

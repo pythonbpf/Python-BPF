@@ -7,7 +7,12 @@ from pythonbpf.helper import (
     reset_scratch_pool,
 )
 from pythonbpf.type_deducer import ctypes_to_ir
-from pythonbpf.expr import eval_expr, handle_expr, convert_to_bool
+from pythonbpf.expr import (
+    eval_expr,
+    handle_expr,
+    convert_to_bool,
+    VmlinuxHandlerRegistry,
+)
 from pythonbpf.assign_pass import (
     handle_variable_assignment,
     handle_struct_field_assignment,
@@ -336,6 +341,35 @@ def process_func_body(
         local_sym_tab,
         structs_sym_tab,
     )
+
+    # Add the context parameter (first function argument) to the local symbol table
+    if func_node.args.args and len(func_node.args.args) > 0:
+        context_arg = func_node.args.args[0]
+        context_name = context_arg.arg
+
+        if hasattr(context_arg, "annotation") and context_arg.annotation:
+            if isinstance(context_arg.annotation, ast.Name):
+                context_type_name = context_arg.annotation.id
+            elif isinstance(context_arg.annotation, ast.Attribute):
+                context_type_name = context_arg.annotation.attr
+            else:
+                raise TypeError(
+                    f"Unsupported annotation type: {ast.dump(context_arg.annotation)}"
+                )
+            if VmlinuxHandlerRegistry.is_vmlinux_struct(context_type_name):
+                resolved_type = VmlinuxHandlerRegistry.get_struct_type(
+                    context_type_name
+                )
+                context_type = {"type": ir.PointerType(resolved_type), "ptr": True}
+            else:
+                try:
+                    resolved_type = ctypes_to_ir(context_type_name)
+                    context_type = {"type": ir.PointerType(resolved_type), "ptr": True}
+                except Exception:
+                    raise TypeError(f"Type '{context_type_name}' not declared")
+
+            local_sym_tab[context_name] = context_type
+            logger.info(f"Added argument '{context_name}' to local symbol table")
 
     logger.info(f"Local symbol table: {local_sym_tab.keys()}")
 

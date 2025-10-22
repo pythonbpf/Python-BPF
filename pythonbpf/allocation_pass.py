@@ -51,7 +51,7 @@ def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
         return
 
     # When allocating a variable, check if it's a vmlinux struct type
-    if isinstance(stmt.value, ast.Name) and VmlinuxHandlerRegistry.is_vmlinux_struct(
+    if isinstance(rval, ast.Name) and VmlinuxHandlerRegistry.is_vmlinux_struct(
         stmt.value.id
     ):
         # Handle vmlinux struct allocation

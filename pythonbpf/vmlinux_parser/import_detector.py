@@ -2,7 +2,6 @@ import ast
 import logging
 import importlib
 import inspect
-import llvmlite.ir as ir
 
 from .assignment_info import AssignmentInfo, AssignmentType
 from .dependency_handler import DependencyHandler
