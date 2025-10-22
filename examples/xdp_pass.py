@@ -23,14 +23,14 @@ def count() -> HashMap:
 def hello_world(ctx: c_void_p) -> c_int64:
     key = 0
     one = 1
-    prev = count().lookup(key)
+    prev = count.lookup(key)
     if prev:
         prevval = prev + 1
         print(f"count: {prevval}")
-        count().update(key, prevval)
+        count.update(key, prevval)
         return XDP_PASS
     else:
-        count().update(key, one)
+        count.update(key, one)
 
     return XDP_PASS
 
