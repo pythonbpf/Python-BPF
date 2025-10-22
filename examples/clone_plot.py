@@ -3,7 +3,6 @@ import time
 from pythonbpf import bpf, map, section, bpfglobal, BPF
 from pythonbpf.helper import pid
 from pythonbpf.maps import HashMap
-from pylibbpf import BpfMap
 from ctypes import c_void_p, c_int64, c_uint64, c_int32
 import matplotlib.pyplot as plt
 
@@ -26,14 +25,14 @@ def hist() -> HashMap:
 def hello(ctx: c_void_p) -> c_int64:
     process_id = pid()
     one = 1
-    prev = hist().lookup(process_id)
+    prev = hist.lookup(process_id)
     if prev:
         previous_value = prev + 1
         print(f"count: {previous_value} with {process_id}")
-        hist().update(process_id, previous_value)
+        hist.update(process_id, previous_value)
         return c_int64(0)
     else:
-        hist().update(process_id, one)
+        hist.update(process_id, one)
     return c_int64(0)
 
 
@@ -44,12 +43,12 @@ def LICENSE() -> str:
 
 
 b = BPF()
-b.load_and_attach()
-hist = BpfMap(b, hist)
+b.load()
+b.attach_all()
 print("Recording")
 time.sleep(10)
 
-counts = list(hist.values())
+counts = list(b["hist"].values())
 
 plt.hist(counts, bins=20)
 plt.xlabel("Clone calls per PID")
