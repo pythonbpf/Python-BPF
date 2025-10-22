@@ -144,7 +144,8 @@ mkdir -p examples
 cd examples || exit 1
 
 echo "Fetching example files list..."
-FILES=$(curl -s "https://api.github.com/repos/pythonbpf/Python-BPF/contents/examples" | grep -o '"path": "examples/[^"]*"' | awk -F'"' '{print $4}')
+FILES=$(curl -s "https://api.github.com/repos/pythonbpf/Python-BPF/contents/examples" | grep -E -o '"path": "examples/[^"]*(\.md|\.ipynb|\.py)"' | awk -F'"' '{print $4}')
+BCC_EXAMPLES=$(curl -s "https://api.github.com/repos/pythonbpf/Python-BPF/contents/BCC-Examples" | grep -E -o '"path": "BCC-Examples/[^"]*(\.md|\.ipynb|\.py)"' | awk -F'"' '{print $4}')
 
 if [ -z "$FILES" ]; then
     echo "Failed to fetch file list from repository. Using fallback method..."
@@ -166,11 +167,20 @@ if [ -z "$FILES" ]; then
         curl -s -O "https://raw.githubusercontent.com/pythonbpf/Python-BPF/master/examples/$example"
     done
 else
+    mkdir examples && cd examples
     for file in $FILES; do
         filename=$(basename "$file")
         echo "Downloading: $filename"
         curl -s -o "$filename" "https://raw.githubusercontent.com/pythonbpf/Python-BPF/master/$file"
     done
+    cd ..
+    mkdir BCC-Examples && cd BCC-Examples
+    for file in $BCC_EXAMPLES; do
+        filename=$(basename "$file")
+        echo "Downloading: $filename"
+        curl -s -o "$filename" "https://raw.githubusercontent.com/pythonbpf/Python-BPF/master/$file"
+    done
+    cd ..
 fi
 
 cd "$WORK_DIR" || exit 1
