@@ -21,17 +21,17 @@ def last() -> HashMap:
 @section("tracepoint/syscalls/sys_enter_execve")
 def do_trace(ctx: c_void_p) -> c_int64:
     key = 0
-    tsp = last().lookup(key)
+    tsp = last.lookup(key)
     if tsp:
         kt = ktime()
         delta = kt - tsp
         if delta < 1000000000:
             time_ms = delta // 1000000
             print(f"Execve syscall entered within last second, last {time_ms} ms ago")
-        last().delete(key)
+        last.delete(key)
     else:
         kt = ktime()
-        last().update(key, kt)
+        last.update(key, kt)
     return c_int64(0)
 
 
