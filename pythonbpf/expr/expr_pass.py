@@ -72,20 +72,23 @@ def _handle_attribute_expr(
         if var_name in local_sym_tab:
             var_ptr, var_type, var_metadata = local_sym_tab[var_name]
             logger.info(f"Loading attribute {attr_name} from variable {var_name}")
-            logger.info(f"Variable type: {var_type}, Variable ptr: {var_ptr}")
+            logger.info(f"Variable type: {var_type}, Variable ptr: {var_ptr}, Variable Metadata: {var_metadata}")
+            if hasattr(var_metadata, "__module__") and var_metadata.__module__ == "vmlinux":
+                # Try vmlinux handler when var_metadata is not a string, but has a module attribute.
+                # This has been done to keep everything separate in vmlinux struct handling.
+                vmlinux_result = VmlinuxHandlerRegistry.handle_attribute(
+                    expr, local_sym_tab, None, builder
+                )
+                if vmlinux_result is not None:
+                    return vmlinux_result
+                else:
+                    raise RuntimeError("Vmlinux struct did not process successfully")
             metadata = structs_sym_tab[var_metadata]
             if attr_name in metadata.fields:
                 gep = metadata.gep(builder, var_ptr, attr_name)
                 val = builder.load(gep)
                 field_type = metadata.field_type(attr_name)
                 return val, field_type
-
-        # Try vmlinux handler as fallback
-        vmlinux_result = VmlinuxHandlerRegistry.handle_attribute(
-            expr, local_sym_tab, None, builder
-        )
-        if vmlinux_result is not None:
-            return vmlinux_result
     return None
 
 

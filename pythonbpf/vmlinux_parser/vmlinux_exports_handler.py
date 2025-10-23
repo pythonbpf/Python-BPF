@@ -87,17 +87,15 @@ class VmlinuxHandler:
         self, struct_var_name, field_name, module, builder, local_sym_tab
     ):
         """Handle access to vmlinux struct fields"""
-        # Check if it's a variable of vmlinux struct type
         if struct_var_name in local_sym_tab:
-            var_info = local_sym_tab[struct_var_name]  # noqa: F841
-            # Need to check if this variable is a vmlinux struct
-            # This will depend on how you track vmlinux struct types in your symbol table
+            var_info = local_sym_tab[struct_var_name]
             logger.info(
                 f"Attempting to access field {field_name} of possible vmlinux struct {struct_var_name}"
             )
             # Return pointer to field and field type
             return None
-        return None
+        else:
+            raise RuntimeError("Variable accessed not found in symbol table")
 
     def has_field(self, struct_name, field_name):
         """Check if a vmlinux struct has a specific field"""
