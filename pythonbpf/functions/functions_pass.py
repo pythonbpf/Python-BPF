@@ -348,9 +348,7 @@ def process_func_body(
                 resolved_type = VmlinuxHandlerRegistry.get_struct_type(
                     context_type_name
                 )
-                context_type = LocalSymbol(
-                    None, ir.PointerType(resolved_type), resolved_type
-                )
+                context_type = LocalSymbol(None, None, resolved_type)
                 local_sym_tab[context_name] = context_type
                 logger.info(f"Added argument '{context_name}' to local symbol table")
 

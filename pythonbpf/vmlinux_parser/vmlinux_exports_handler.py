@@ -93,8 +93,11 @@ class VmlinuxHandler:
             logger.info(
                 f"Attempting to access field {field_name} of possible vmlinux struct {struct_var_name}"
             )
-            print(var_info.ir_type)
-            print(self.get_field_type(struct_var_name, field_name))
+            python_type: type = var_info.metadata
+            globvar_ir, field_data = self.get_field_type(
+                python_type.__name__, field_name
+            )
+
             # Return pointer to field and field type
             return None
         else:
