@@ -2,26 +2,13 @@ import ast
 import logging
 
 from llvmlite import ir
-from dataclasses import dataclass
-from typing import Any
+from .local_symbol import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
 from pythonbpf.type_deducer import ctypes_to_ir
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class LocalSymbol:
-    var: ir.AllocaInstr
-    ir_type: ir.Type
-    metadata: Any = None
-
-    def __iter__(self):
-        yield self.var
-        yield self.ir_type
-        yield self.metadata
 
 
 def create_targets_and_rvals(stmt):

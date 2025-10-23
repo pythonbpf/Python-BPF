@@ -1,6 +1,7 @@
 import logging
 from llvmlite import ir
 
+from pythonbpf.local_symbol import LocalSymbol
 from pythonbpf.vmlinux_parser.assignment_info import AssignmentType
 
 logger = logging.getLogger(__name__)
@@ -88,10 +89,12 @@ class VmlinuxHandler:
     ):
         """Handle access to vmlinux struct fields"""
         if struct_var_name in local_sym_tab:
-            var_info = local_sym_tab[struct_var_name]
+            var_info: LocalSymbol = local_sym_tab[struct_var_name]
             logger.info(
                 f"Attempting to access field {field_name} of possible vmlinux struct {struct_var_name}"
             )
+            print(var_info.ir_type)
+            print(self.get_field_type(struct_var_name, field_name))
             # Return pointer to field and field type
             return None
         else:

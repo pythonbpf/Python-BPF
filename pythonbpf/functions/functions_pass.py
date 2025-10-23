@@ -351,18 +351,8 @@ def process_func_body(
                 context_type = LocalSymbol(
                     None, ir.PointerType(resolved_type), resolved_type
                 )
-            else:
-                try:
-                    resolved_type = ctypes_to_ir(context_type_name)
-                    logger.error("THIS SHOULD NOT HAPPEN. I THINK. PROBABLY.")
-                    context_type = LocalSymbol(
-                        None, ir.PointerType(resolved_type), resolved_type
-                    )
-                except Exception:
-                    raise TypeError(f"Type '{context_type_name}' not declared")
-
-            local_sym_tab[context_name] = context_type
-            logger.info(f"Added argument '{context_name}' to local symbol table")
+                local_sym_tab[context_name] = context_type
+                logger.info(f"Added argument '{context_name}' to local symbol table")
 
     # pre-allocate dynamic variables
     local_sym_tab = allocate_mem(
