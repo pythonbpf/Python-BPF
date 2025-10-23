@@ -70,5 +70,6 @@ def hello_world(ctx: c_void_p) -> c_int64:
 def LICENSE() -> str:
     return "GPL"
 
+
 compile_to_ir("comprehensive.py", "comprehensive.ll")
-# compile()
+compile()

@@ -72,8 +72,13 @@ def _handle_attribute_expr(
         if var_name in local_sym_tab:
             var_ptr, var_type, var_metadata = local_sym_tab[var_name]
             logger.info(f"Loading attribute {attr_name} from variable {var_name}")
-            logger.info(f"Variable type: {var_type}, Variable ptr: {var_ptr}, Variable Metadata: {var_metadata}")
-            if hasattr(var_metadata, "__module__") and var_metadata.__module__ == "vmlinux":
+            logger.info(
+                f"Variable type: {var_type}, Variable ptr: {var_ptr}, Variable Metadata: {var_metadata}"
+            )
+            if (
+                hasattr(var_metadata, "__module__")
+                and var_metadata.__module__ == "vmlinux"
+            ):
                 # Try vmlinux handler when var_metadata is not a string, but has a module attribute.
                 # This has been done to keep everything separate in vmlinux struct handling.
                 vmlinux_result = VmlinuxHandlerRegistry.handle_attribute(

@@ -19,17 +19,8 @@ There is no point of
 SEC("tp/syscalls/sys_enter_execve")
 int handle_setuid_entry(struct trace_event_raw_sys_enter *ctx) {
   // Access each argument separately with clear variable assignments
-  unsigned long arg0 = ctx->args[0];
-  bpf_printk("args[0]: %u", arg0);
-
-  unsigned long arg1 = ctx->args[1];
-  bpf_printk("args[1]: %u", arg1);
-
-  // Remove the duplicate access to args[1]
-
-  unsigned long arg2 = ctx->args[2];
-  bpf_printk("args[3]: %u", arg2);
-  bpf_printk("args[4]: %u", ctx->args[2]);
+  long int arg0 = ctx->id;
+  bpf_printk("args[0]: %d", arg0);
 
   return 0;
 }
