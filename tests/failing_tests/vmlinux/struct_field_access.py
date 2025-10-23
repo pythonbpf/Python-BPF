@@ -17,7 +17,7 @@ def hello_world(ctx: struct_trace_event_raw_sys_enter) -> c_int64:
     a = 2 + TASK_COMM_LEN + TASK_COMM_LEN
     b = ctx.id
     print(f"Hello, World{TASK_COMM_LEN} and {a}")
-    print(f"This is context field {b}")
+    # print(f"This is context field {b}")
     return c_int64(TASK_COMM_LEN + 2)
 
 

@@ -20,7 +20,7 @@ from pythonbpf.assign_pass import (
 from pythonbpf.allocation_pass import (
     handle_assign_allocation,
     allocate_temp_pool,
-    create_targets_and_rvals,
+    create_targets_and_rvals, LocalSymbol,
 )
 
 from .return_utils import handle_none_return, handle_xdp_return, is_xdp_name
@@ -347,11 +347,12 @@ def process_func_body(
                 resolved_type = VmlinuxHandlerRegistry.get_struct_type(
                     context_type_name
                 )
-                context_type = {"type": ir.PointerType(resolved_type), "ptr": True}
+                context_type = LocalSymbol(None, ir.PointerType(resolved_type), resolved_type)
             else:
                 try:
                     resolved_type = ctypes_to_ir(context_type_name)
-                    context_type = {"type": ir.PointerType(resolved_type), "ptr": True}
+                    logger.error("THIS SHOULD NOT HAPPEN. I THINK. PROBABLY.")
+                    context_type = LocalSymbol(None, ir.PointerType(resolved_type), resolved_type)
                 except Exception:
                     raise TypeError(f"Type '{context_type_name}' not declared")
 

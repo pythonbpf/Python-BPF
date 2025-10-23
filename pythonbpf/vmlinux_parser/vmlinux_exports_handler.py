@@ -98,3 +98,23 @@ class VmlinuxHandler:
             # Return pointer to field and field type
             return None
         return None
+
+    def has_field(self, struct_name, field_name):
+        """Check if a vmlinux struct has a specific field"""
+        if self.is_vmlinux_struct(struct_name):
+            python_type = self.vmlinux_symtab[struct_name]["python_type"]
+            return hasattr(python_type, field_name)
+        return False
+
+    def get_field_type(self, vmlinux_struct_name, field_name):
+        """Get the type of a field in a vmlinux struct"""
+        if self.is_vmlinux_struct(vmlinux_struct_name):
+            python_type = self.vmlinux_symtab[vmlinux_struct_name]["python_type"]
+            if hasattr(python_type, field_name):
+                return self.vmlinux_symtab[vmlinux_struct_name]["members"][field_name]
+            else:
+                raise ValueError(
+                    f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
+                )
+        else:
+            raise ValueError(f"{vmlinux_struct_name} is not a vmlinux struct")

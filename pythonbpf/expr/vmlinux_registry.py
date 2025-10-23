@@ -52,3 +52,18 @@ class VmlinuxHandlerRegistry:
         if cls._handler is None:
             return None
         return cls._handler.get_vmlinux_struct_type(name)
+
+    @classmethod
+    def has_field(cls, vmlinux_struct_name, field_name):
+        """Check if a vmlinux struct has a specific field"""
+        if cls._handler is None:
+            return False
+        return cls._handler.has_field(vmlinux_struct_name, field_name)
+
+    @classmethod
+    def get_field_type(cls, vmlinux_struct_name, field_name):
+        """Get the type of a field in a vmlinux struct"""
+        if cls._handler is None:
+            return None
+        assert isinstance(cls._handler, VmlinuxHandler)
+        return cls._handler.get_field_type(vmlinux_struct_name, field_name)
