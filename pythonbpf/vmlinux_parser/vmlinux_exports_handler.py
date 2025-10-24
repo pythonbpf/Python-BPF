@@ -97,7 +97,16 @@ class VmlinuxHandler:
             globvar_ir, field_data = self.get_field_type(
                 python_type.__name__, field_name
             )
-
+            # field_index = self.get_field_index(python_type.__name__, field_name)
+            offset = builder.load(globvar_ir)
+            i8_ptr_type = ir.IntType(8).as_pointer()
+            byte_ptr = builder.bitcast(var_info.var, i8_ptr_type)
+            print(byte_ptr)
+            # Step 3: GEP with the offset to get field pointer
+            field_ptr_i8 = builder.gep(
+                byte_ptr, [ir.Constant(ir.IntType(32), 0), offset], inbounds=False
+            )
+            print(field_ptr_i8)
             # Return pointer to field and field type
             return None
         else:
@@ -116,6 +125,21 @@ class VmlinuxHandler:
             python_type = self.vmlinux_symtab[vmlinux_struct_name]["python_type"]
             if hasattr(python_type, field_name):
                 return self.vmlinux_symtab[vmlinux_struct_name]["members"][field_name]
+            else:
+                raise ValueError(
+                    f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
+                )
+        else:
+            raise ValueError(f"{vmlinux_struct_name} is not a vmlinux struct")
+
+    def get_field_index(self, vmlinux_struct_name, field_name):
+        """Get the type of a field in a vmlinux struct"""
+        if self.is_vmlinux_struct(vmlinux_struct_name):
+            python_type = self.vmlinux_symtab[vmlinux_struct_name]["python_type"]
+            if hasattr(python_type, field_name):
+                return list(
+                    self.vmlinux_symtab[vmlinux_struct_name]["members"].keys()
+                ).index(field_name)
             else:
                 raise ValueError(
                     f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
