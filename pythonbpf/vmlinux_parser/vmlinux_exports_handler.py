@@ -37,16 +37,16 @@ class VmlinuxHandler:
         """Check if name is a vmlinux enum constant"""
         return (
             name in self.vmlinux_symtab
-            and self.vmlinux_symtab[name]["value_type"] == AssignmentType.CONSTANT
+            and self.vmlinux_symtab[name].value_type == AssignmentType.CONSTANT
         )
 
     def get_vmlinux_struct_type(self, name):
         """Check if name is a vmlinux struct type"""
         if (
             name in self.vmlinux_symtab
-            and self.vmlinux_symtab[name]["value_type"] == AssignmentType.STRUCT
+            and self.vmlinux_symtab[name].value_type == AssignmentType.STRUCT
         ):
-            return self.vmlinux_symtab[name]["python_type"]
+            return self.vmlinux_symtab[name].python_type
         else:
             raise ValueError(f"{name} is not a vmlinux struct type")
 
@@ -54,13 +54,13 @@ class VmlinuxHandler:
         """Check if name is a vmlinux struct"""
         return (
             name in self.vmlinux_symtab
-            and self.vmlinux_symtab[name]["value_type"] == AssignmentType.STRUCT
+            and self.vmlinux_symtab[name].value_type == AssignmentType.STRUCT
         )
 
     def handle_vmlinux_enum(self, name):
         """Handle vmlinux enum constants by returning LLVM IR constants"""
         if self.is_vmlinux_enum(name):
-            value = self.vmlinux_symtab[name]["value"]
+            value = self.vmlinux_symtab[name].value
             logger.info(f"Resolving vmlinux enum {name} = {value}")
             return ir.Constant(ir.IntType(64), value), ir.IntType(64)
         return None
@@ -68,7 +68,7 @@ class VmlinuxHandler:
     def get_vmlinux_enum_value(self, name):
         """Handle vmlinux enum constants by returning LLVM IR constants"""
         if self.is_vmlinux_enum(name):
-            value = self.vmlinux_symtab[name]["value"]
+            value = self.vmlinux_symtab[name].value
             logger.info(f"The value of vmlinux enum {name} = {value}")
             return value
         return None
@@ -115,16 +115,16 @@ class VmlinuxHandler:
     def has_field(self, struct_name, field_name):
         """Check if a vmlinux struct has a specific field"""
         if self.is_vmlinux_struct(struct_name):
-            python_type = self.vmlinux_symtab[struct_name]["python_type"]
+            python_type = self.vmlinux_symtab[struct_name].python_type
             return hasattr(python_type, field_name)
         return False
 
     def get_field_type(self, vmlinux_struct_name, field_name):
         """Get the type of a field in a vmlinux struct"""
         if self.is_vmlinux_struct(vmlinux_struct_name):
-            python_type = self.vmlinux_symtab[vmlinux_struct_name]["python_type"]
+            python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
             if hasattr(python_type, field_name):
-                return self.vmlinux_symtab[vmlinux_struct_name]["members"][field_name]
+                return self.vmlinux_symtab[vmlinux_struct_name].members[field_name]
             else:
                 raise ValueError(
                     f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
@@ -135,10 +135,10 @@ class VmlinuxHandler:
     def get_field_index(self, vmlinux_struct_name, field_name):
         """Get the type of a field in a vmlinux struct"""
         if self.is_vmlinux_struct(vmlinux_struct_name):
-            python_type = self.vmlinux_symtab[vmlinux_struct_name]["python_type"]
+            python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
             if hasattr(python_type, field_name):
                 return list(
-                    self.vmlinux_symtab[vmlinux_struct_name]["members"].keys()
+                    self.vmlinux_symtab[vmlinux_struct_name].members.keys()
                 ).index(field_name)
             else:
                 raise ValueError(
