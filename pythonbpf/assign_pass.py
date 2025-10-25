@@ -3,6 +3,8 @@ import logging
 from llvmlite import ir
 from pythonbpf.expr import eval_expr
 from pythonbpf.helper import emit_probe_read_kernel_str_call
+from pythonbpf.type_deducer import ctypes_to_ir
+from pythonbpf.vmlinux_parser.dependency_node import Field
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +150,16 @@ def handle_variable_assignment(
     val, val_type = val_result
     logger.info(f"Evaluated value for {var_name}: {val} of type {val_type}, {var_type}")
     if val_type != var_type:
-        if isinstance(val_type, ir.IntType) and isinstance(var_type, ir.IntType):
+        if isinstance(val_type, Field):
+            logger.info("Handling assignment to struct field")
+            #TODO: handling only ctype struct fields for now. Handle other stuff too later.
+            if var_type == ctypes_to_ir(val_type.type.__name__):
+                builder.store(val, var_ptr)
+                logger.info(f"Assigned ctype struct field to {var_name}")
+                return True
+            logger.error(f"Failed to assign ctype struct field to {var_name}: {val_type} != {var_type}")
+            return False
+        elif isinstance(val_type, ir.IntType) and isinstance(var_type, ir.IntType):
             # Allow implicit int widening
             if val_type.width < var_type.width:
                 val = builder.sext(val, var_type)

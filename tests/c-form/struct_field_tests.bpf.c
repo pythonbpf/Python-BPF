@@ -19,8 +19,8 @@ There is no point of
 SEC("tp/syscalls/sys_enter_execve")
 int handle_setuid_entry(struct trace_event_raw_sys_enter *ctx) {
   // Access each argument separately with clear variable assignments
-  long int arg0 = ctx->id;
-  bpf_printk("args[0]: %d", arg0);
+  long int id = ctx->id;
+  bpf_printk("This is context field %d", id);
   /*
    * the IR to aim for is
    * %2 = alloca ptr, align 8

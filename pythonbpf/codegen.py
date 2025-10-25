@@ -157,7 +157,8 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
 
     module.add_named_metadata("llvm.ident", [f"PythonBPF {VERSION}"])
 
-    module_string = finalize_module(str(module))
+    module_string: str = finalize_module(str(module))
+    module_string += '\ndeclare ptr @llvm.preserve.struct.access.index.p0.p0(ptr, i32 immarg, i32 immarg) "nocallback" "nofree" "nosync" "nounwind" "willreturn" "memory(none)"'
 
     logger.info(f"IR written to {output}")
     with open(output, "w") as f:

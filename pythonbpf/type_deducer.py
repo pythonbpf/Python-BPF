@@ -13,6 +13,8 @@ mapping = {
     "c_float": ir.FloatType(),
     "c_double": ir.DoubleType(),
     "c_void_p": ir.IntType(64),
+    "c_long": ir.IntType(64),
+    "c_longlong": ir.IntType(64),
     # Not so sure about this one
     "str": ir.PointerType(ir.IntType(8)),
 }

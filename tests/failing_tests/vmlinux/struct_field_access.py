@@ -14,11 +14,9 @@ from ctypes import c_int64, c_void_p  # noqa: F401
 @bpf
 @section("tracepoint/syscalls/sys_enter_execve")
 def hello_world(ctx: struct_trace_event_raw_sys_enter) -> c_int64:
-    a = 2 + TASK_COMM_LEN + TASK_COMM_LEN
     b = ctx.id
-    print(f"Hello, World{TASK_COMM_LEN} and {a}")
     print(f"This is context field {b}")
-    return c_int64(TASK_COMM_LEN + 2)
+    return c_int64(0)
 
 
 @bpf
@@ -28,4 +26,4 @@ def LICENSE() -> str:
 
 
 compile_to_ir("struct_field_access.py", "struct_field_access.ll", loglevel=logging.INFO)
-# compile()
+compile()

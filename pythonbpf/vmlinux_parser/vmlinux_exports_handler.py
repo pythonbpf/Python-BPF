@@ -73,17 +73,6 @@ class VmlinuxHandler:
             return value
         return None
 
-    def handle_vmlinux_struct(self, struct_name, module, builder):
-        """Handle vmlinux struct initializations"""
-        if self.is_vmlinux_struct(struct_name):
-            # TODO: Implement core-specific struct handling
-            # This will be more complex and depends on the BTF information
-            logger.info(f"Handling vmlinux struct {struct_name}")
-            # Return struct type and allocated pointer
-            # This is a stub, actual implementation will be more complex
-            return None
-        return None
-
     def handle_vmlinux_struct_field(
         self, struct_var_name, field_name, module, builder, local_sym_tab
     ):
@@ -97,26 +86,82 @@ class VmlinuxHandler:
             globvar_ir, field_data = self.get_field_type(
                 python_type.__name__, field_name
             )
-
-            # Load the offset value
-            offset = builder.load(globvar_ir)
-
-            # Convert pointer to integer
-            i64_type = ir.IntType(64)
-            ptr_as_int = builder.ptrtoint(var_info.var, i64_type)
-
-            # Add the offset
-            field_addr = builder.add(ptr_as_int, offset)
-
-            # Convert back to pointer
-            i8_ptr_type = ir.IntType(8).as_pointer()
-            field_ptr_i8 = builder.inttoptr(field_addr, i8_ptr_type)
-            logger.info(f"field_ptr_i8: {field_ptr_i8}")
-
+            builder.function.args[0].type = ir.PointerType(ir.IntType(8))
+            print(builder.function.args[0])
+            field_ptr = self.load_ctx_field(builder, builder.function.args[0], globvar_ir)
+            print(field_ptr)
             # Return pointer to field and field type
-            return field_ptr_i8, field_data
+            return field_ptr, field_data
         else:
             raise RuntimeError("Variable accessed not found in symbol table")
+
+    @staticmethod
+    def load_ctx_field(builder, ctx_arg, offset_global):
+        """
+        Generate LLVM IR to load a field from BPF context using offset.
+
+        Args:
+            builder: llvmlite IRBuilder instance
+            ctx_arg: The context pointer argument (ptr/i8*)
+            offset_global: Global variable containing the field offset (i64)
+
+        Returns:
+            The loaded value (i64 register)
+        """
+
+        # Load the offset value
+        offset = builder.load(offset_global)
+
+        # Ensure ctx_arg is treated as i8* (byte pointer)
+        i8_type = ir.IntType(8)
+        i8_ptr_type = ir.PointerType(i8_type)
+
+        # Cast ctx_arg to i8* if it isn't already
+        if str(ctx_arg.type) != str(i8_ptr_type):
+            ctx_i8_ptr = builder.bitcast(ctx_arg, i8_ptr_type)
+        else:
+            ctx_i8_ptr = ctx_arg
+
+        # GEP with explicit type - this is the key fix
+        field_ptr = builder.gep(
+            ctx_i8_ptr,
+            [offset],
+            inbounds=False,
+        )
+
+        # Get or declare the BPF passthrough intrinsic
+        module = builder.function.module
+
+        try:
+            passthrough_fn = module.globals.get('llvm.bpf.passthrough.p0.p0')
+            if passthrough_fn is None:
+                raise KeyError
+        except (KeyError, AttributeError):
+            passthrough_type = ir.FunctionType(
+                i8_ptr_type,
+                [ir.IntType(32), i8_ptr_type]
+            )
+            passthrough_fn = ir.Function(
+                module,
+                passthrough_type,
+                name='llvm.bpf.passthrough.p0.p0'
+            )
+
+        # Call passthrough to satisfy BPF verifier
+        verified_ptr = builder.call(
+            passthrough_fn,
+            [ir.Constant(ir.IntType(32), 0), field_ptr],
+        )
+
+        # Bitcast to i64* (assuming field is 64-bit, adjust if needed)
+        i64_ptr_type = ir.PointerType(ir.IntType(64))
+        typed_ptr = builder.bitcast(verified_ptr, i64_ptr_type)
+
+        # Load and return the value
+        value = builder.load(typed_ptr)
+
+        return value
+
 
     def has_field(self, struct_name, field_name):
         """Check if a vmlinux struct has a specific field"""
