@@ -97,18 +97,24 @@ class VmlinuxHandler:
             globvar_ir, field_data = self.get_field_type(
                 python_type.__name__, field_name
             )
-            # field_index = self.get_field_index(python_type.__name__, field_name)
+
+            # Load the offset value
             offset = builder.load(globvar_ir)
+
+            # Convert pointer to integer
+            i64_type = ir.IntType(64)
+            ptr_as_int = builder.ptrtoint(var_info.var, i64_type)
+
+            # Add the offset
+            field_addr = builder.add(ptr_as_int, offset)
+
+            # Convert back to pointer
             i8_ptr_type = ir.IntType(8).as_pointer()
-            byte_ptr = builder.bitcast(var_info.var, i8_ptr_type)
-            print(byte_ptr)
-            # Step 3: GEP with the offset to get field pointer
-            field_ptr_i8 = builder.gep(
-                byte_ptr, [ir.Constant(ir.IntType(32), 0), offset], inbounds=False
-            )
-            print(field_ptr_i8)
+            field_ptr_i8 = builder.inttoptr(field_addr, i8_ptr_type)
+            logger.info(f"field_ptr_i8: {field_ptr_i8}")
+
             # Return pointer to field and field type
-            return None
+            return field_ptr_i8, field_data
         else:
             raise RuntimeError("Variable accessed not found in symbol table")
 
