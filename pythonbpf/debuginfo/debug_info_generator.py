@@ -184,3 +184,20 @@ class DebugInfoGenerator:
             "DIGlobalVariableExpression",
             {"var": global_var, "expr": self.module.add_debug_info("DIExpression", {})},
         )
+
+    def get_int64_type(self):
+        return self.get_basic_type("long", 64, dc.DW_ATE_signed)
+
+    def create_subroutine_type(self, return_type, param_types):
+        """
+        Create a DISubroutineType given return type and list of parameter types.
+        Equivalent to: !DISubroutineType(types: !{ret, args...})
+        """
+        type_array = [return_type]
+        if isinstance(param_types, (list, tuple)):
+            type_array.extend(param_types)
+        else:
+            type_array.append(param_types)
+        return self.module.add_debug_info("DISubroutineType", {"types": type_array})
+
+
