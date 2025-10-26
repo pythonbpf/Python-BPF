@@ -39,7 +39,7 @@ def finalize_module(original_str):
 
 def bpf_passthrough_gen(module):
     i32_ty = ir.IntType(32)
-    ptr_ty = ir.PointerType(ir.IntType(64))
+    ptr_ty = ir.PointerType(ir.IntType(8))
     fnty = ir.FunctionType(ptr_ty, [i32_ty, ptr_ty])
 
     # Declare the intrinsic

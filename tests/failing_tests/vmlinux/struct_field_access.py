@@ -13,10 +13,10 @@ from ctypes import c_int64, c_int32, c_void_p  # noqa: F401
 
 @bpf
 @section("tracepoint/syscalls/sys_enter_execve")
-def hello_world(ctx: struct_trace_event_raw_sys_enter) -> c_int32:
+def hello_world(ctx: struct_trace_event_raw_sys_enter) -> c_int64:
     b = ctx.id
     print(f"This is context field {b}")
-    return c_int32(0)
+    return c_int64(0)
 
 
 @bpf
