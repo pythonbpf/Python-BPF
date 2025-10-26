@@ -40,6 +40,12 @@ class VmlinuxHandlerRegistry:
         return None
 
     @classmethod
+    def get_struct_debug_info(cls, name):
+        if cls._handler is None:
+            return False
+        return cls._handler.get_struct_debug_info(name)
+
+    @classmethod
     def is_vmlinux_struct(cls, name):
         """Check if a name refers to a vmlinux struct"""
         if cls._handler is None:

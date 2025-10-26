@@ -33,3 +33,4 @@ class AssignmentInfo:
     #   Value is a tuple that contains the global variable representing that field
     #   along with all the information about that field as a Field type.
     members: Optional[Dict[str, tuple[ir.GlobalVariable, Field]]]  # For structs.
+    debug_info: Any

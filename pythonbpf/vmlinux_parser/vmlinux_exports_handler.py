@@ -1,4 +1,6 @@
 import logging
+from typing import Any
+
 from llvmlite import ir
 
 from pythonbpf.local_symbol import LocalSymbol
@@ -39,6 +41,15 @@ class VmlinuxHandler:
             name in self.vmlinux_symtab
             and self.vmlinux_symtab[name].value_type == AssignmentType.CONSTANT
         )
+
+    def get_struct_debug_info(self, name: str) -> Any:
+        if (
+            name in self.vmlinux_symtab
+            and self.vmlinux_symtab[name].value_type == AssignmentType.STRUCT
+        ):
+            return self.vmlinux_symtab[name].debug_info
+        else:
+            raise ValueError(f"{name} is not a vmlinux struct type")
 
     def get_vmlinux_struct_type(self, name):
         """Check if name is a vmlinux struct type"""

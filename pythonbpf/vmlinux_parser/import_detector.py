@@ -148,6 +148,7 @@ def process_vmlinux_assign(node, module, assignments: dict[str, AssignmentInfo])
                 pointer_level=None,
                 signature=None,
                 members=None,
+                debug_info=None,
             )
             logger.info(
                 f"Added assignment: {target_name} = {node.value.value!r} of type {type(node.value.value)}"
