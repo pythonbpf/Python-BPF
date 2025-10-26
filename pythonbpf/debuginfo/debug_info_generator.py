@@ -256,6 +256,7 @@ class DebugInfoGenerator:
                 "scope": self.module._file_metadata,
                 "file": self.module._file_metadata,
                 "type": subroutine_type,
+                # TODO: the following flags do not exist at the moment in our dwarf constants file. We need to add them.
                 # "flags": dc.DW_FLAG_Prototyped | dc.DW_FLAG_AllCallsDescribed,
                 # "spFlags": dc.DW_SPFLAG_Definition | dc.DW_SPFLAG_Optimized,
                 "unit": self.module._debug_compile_unit,
