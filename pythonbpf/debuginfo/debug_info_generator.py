@@ -222,15 +222,44 @@ class DebugInfoGenerator:
         """
         Add scope information to an existing local variable debug info object.
         """
-        #TODO: this is a workaround a flaw in the debug info generation. Fix this if possible in the future.
+        # TODO: this is a workaround a flaw in the debug info generation. Fix this if possible in the future.
         # We should not be touching llvmlite's internals like this.
-        if hasattr(local_variable_debug_info, 'operands'):
+        if hasattr(local_variable_debug_info, "operands"):
             # LLVM metadata operands is a tuple, so we need to rebuild it
             existing_operands = local_variable_debug_info.operands
 
             # Convert tuple to list, add scope, convert back to tuple
             operands_list = list(existing_operands)
-            operands_list.append(('scope', scope_value))
+            operands_list.append(("scope", scope_value))
 
             # Reassign the new tuple
             local_variable_debug_info.operands = tuple(operands_list)
+
+    def create_subprogram(
+        self, name: str, subroutine_type: Any, retained_nodes: List[Any]
+    ) -> Any:
+        """
+        Create a DISubprogram for a function.
+
+        Args:
+            name: Function name
+            subroutine_type: DISubroutineType for the function signature
+            retained_nodes: List of DILocalVariable nodes for function parameters/variables
+
+        Returns:
+            DISubprogram metadata
+        """
+        return self.module.add_debug_info(
+            "DISubprogram",
+            {
+                "name": name,
+                "scope": self.module._file_metadata,
+                "file": self.module._file_metadata,
+                "type": subroutine_type,
+                # "flags": dc.DW_FLAG_Prototyped | dc.DW_FLAG_AllCallsDescribed,
+                # "spFlags": dc.DW_SPFLAG_Definition | dc.DW_SPFLAG_Optimized,
+                "unit": self.module._debug_compile_unit,
+                "retainedNodes": retained_nodes,
+            },
+            is_distinct=True,
+        )

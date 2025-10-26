@@ -58,9 +58,15 @@ def generate_function_debug_info(
         context_local_variable = generator.create_local_variable_debug_info(
             leading_argument_name, 1, pointer_to_context_debug_info
         )
+        retained_nodes = [context_local_variable]
+        print("function name", func_node.name)
+        subprogram_debug_info = generator.create_subprogram(
+            func_node.name, subroutine_type, retained_nodes
+        )
+        generator.add_scope_to_local_variable(
+            context_local_variable, subprogram_debug_info
+        )
+        func.set_metadata("dbg", subprogram_debug_info)
 
-        # following is just a test.
-        generator.add_scope_to_local_variable(context_local_variable, module._file_metadata)
-        print(context_local_variable)
     else:
         logger.error(f"Invalid annotation type for argument '{leading_argument_name}'")
