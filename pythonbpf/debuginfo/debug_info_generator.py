@@ -200,4 +200,37 @@ class DebugInfoGenerator:
             type_array.append(param_types)
         return self.module.add_debug_info("DISubroutineType", {"types": type_array})
 
+    def create_local_variable_debug_info(
+        self, name: str, arg: int, var_type: Any
+    ) -> Any:
+        """
+        Create debug info for a local variable (DILocalVariable) without scope.
+        Example:
+        !DILocalVariable(name: "ctx", arg: 1, file: !3, line: 20, type: !7)
+        """
+        return self.module.add_debug_info(
+            "DILocalVariable",
+            {
+                "name": name,
+                "arg": arg,
+                "file": self.module._file_metadata,
+                "type": var_type,
+            },
+        )
 
+    def add_scope_to_local_variable(self, local_variable_debug_info, scope_value):
+        """
+        Add scope information to an existing local variable debug info object.
+        """
+        #TODO: this is a workaround a flaw in the debug info generation. Fix this if possible in the future.
+        # We should not be touching llvmlite's internals like this.
+        if hasattr(local_variable_debug_info, 'operands'):
+            # LLVM metadata operands is a tuple, so we need to rebuild it
+            existing_operands = local_variable_debug_info.operands
+
+            # Convert tuple to list, add scope, convert back to tuple
+            operands_list = list(existing_operands)
+            operands_list.append(('scope', scope_value))
+
+            # Reassign the new tuple
+            local_variable_debug_info.operands = tuple(operands_list)

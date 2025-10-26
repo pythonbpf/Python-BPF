@@ -49,8 +49,18 @@ def generate_function_debug_info(
                 "The first argument should always be a pointer to a struct or a void pointer"
             )
         context_debug_info = VmlinuxHandlerRegistry.get_struct_debug_info(annotation.id)
-        pointer_to_context_debug_info = generator.create_pointer_type(context_debug_info, 64)
-        subroutine_type = generator.create_subroutine_type(return_type, pointer_to_context_debug_info)
-        print(subroutine_type)
+        pointer_to_context_debug_info = generator.create_pointer_type(
+            context_debug_info, 64
+        )
+        subroutine_type = generator.create_subroutine_type(
+            return_type, pointer_to_context_debug_info
+        )
+        context_local_variable = generator.create_local_variable_debug_info(
+            leading_argument_name, 1, pointer_to_context_debug_info
+        )
+
+        # following is just a test.
+        generator.add_scope_to_local_variable(context_local_variable, module._file_metadata)
+        print(context_local_variable)
     else:
         logger.error(f"Invalid annotation type for argument '{leading_argument_name}'")
