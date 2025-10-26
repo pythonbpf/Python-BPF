@@ -25,6 +25,7 @@ class BPFHelperID(Enum):
     BPF_MAP_DELETE_ELEM = 3
     BPF_KTIME_GET_NS = 5
     BPF_PRINTK = 6
+    BPF_GET_PRANDOM_U32 = 7
     BPF_GET_CURRENT_PID_TGID = 14
     BPF_GET_CURRENT_COMM = 16
     BPF_PERF_EVENT_OUTPUT = 25
@@ -431,6 +432,28 @@ def bpf_probe_read_kernel_str_emitter(
 
     logger.info(f"Emitted bpf_probe_read_kernel_str (size={dst_size})")
     return result, ir.IntType(64)
+
+
+@HelperHandlerRegistry.register("random")
+def bpf_get_prandom_u32_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_get_prandom_u32 helper function call.
+    """
+    helper_id = ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_PRANDOM_U32.value)
+    fn_type = ir.FunctionType(ir.IntType(32), [], var_arg=False)
+    fn_ptr_type = ir.PointerType(fn_type)
+    fn_ptr = builder.inttoptr(helper_id, fn_ptr_type)
+    result = builder.call(fn_ptr, [], tail=False)
+    return result, ir.IntType(32)
 
 
 def handle_helper_call(

@@ -27,6 +27,11 @@ def probe_read_str(dst, src):
     return ctypes.c_int64(0)
 
 
+def random():
+    """get a pseudorandom u32 number"""
+    return ctypes.c_int32(0)
+
+
 XDP_ABORTED = ctypes.c_int64(0)
 XDP_DROP = ctypes.c_int64(1)
 XDP_PASS = ctypes.c_int64(2)
