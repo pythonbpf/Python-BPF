@@ -402,7 +402,7 @@ def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_t
     func.linkage = "dso_local"
     func.attributes.add("nounwind")
     func.attributes.add("noinline")
-    func.attributes.add("optnone")
+    # func.attributes.add("optnone")
 
     if func_node.args.args:
         # Only look at the first argument for now

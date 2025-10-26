@@ -86,7 +86,7 @@ class VmlinuxHandler:
             globvar_ir, field_data = self.get_field_type(
                 python_type.__name__, field_name
             )
-            builder.function.args[0].type = ir.PointerType(ir.IntType(8))
+            builder.function.args[0].type = ir.PointerType(ir.IntType(64))
             print(builder.function.args[0])
             field_ptr = self.load_ctx_field(builder, builder.function.args[0], globvar_ir)
             print(field_ptr)
@@ -113,18 +113,18 @@ class VmlinuxHandler:
         offset = builder.load(offset_global)
 
         # Ensure ctx_arg is treated as i8* (byte pointer)
-        i8_type = ir.IntType(8)
-        i8_ptr_type = ir.PointerType(i8_type)
+        # i8_type = ir.IntType(8)
+        i8_ptr_type = ir.PointerType()
 
         # Cast ctx_arg to i8* if it isn't already
-        if str(ctx_arg.type) != str(i8_ptr_type):
-            ctx_i8_ptr = builder.bitcast(ctx_arg, i8_ptr_type)
-        else:
-            ctx_i8_ptr = ctx_arg
+        # if str(ctx_arg.type) != str(i8_ptr_type):
+        #     ctx_i8_ptr = builder.bitcast(ctx_arg, i8_ptr_type)
+        # else:
+        #     ctx_i8_ptr = ctx_arg
 
         # GEP with explicit type - this is the key fix
         field_ptr = builder.gep(
-            ctx_i8_ptr,
+            ctx_arg,
             [offset],
             inbounds=False,
         )
@@ -138,19 +138,20 @@ class VmlinuxHandler:
                 raise KeyError
         except (KeyError, AttributeError):
             passthrough_type = ir.FunctionType(
-                i8_ptr_type,
-                [ir.IntType(32), i8_ptr_type]
+                ir.PointerType(),
+                [ir.IntType(32), ir.PointerType()],
             )
             passthrough_fn = ir.Function(
                 module,
                 passthrough_type,
-                name='llvm.bpf.passthrough.p0.p0'
+                name='llvm.bpf.passthrough.p0.p0',
             )
 
         # Call passthrough to satisfy BPF verifier
         verified_ptr = builder.call(
             passthrough_fn,
             [ir.Constant(ir.IntType(32), 0), field_ptr],
+            tail=True
         )
 
         # Bitcast to i64* (assuming field is 64-bit, adjust if needed)
