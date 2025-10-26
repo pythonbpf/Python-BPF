@@ -152,12 +152,14 @@ def handle_variable_assignment(
     if val_type != var_type:
         if isinstance(val_type, Field):
             logger.info("Handling assignment to struct field")
-            #TODO: handling only ctype struct fields for now. Handle other stuff too later.
+            # TODO: handling only ctype struct fields for now. Handle other stuff too later.
             if var_type == ctypes_to_ir(val_type.type.__name__):
                 builder.store(val, var_ptr)
                 logger.info(f"Assigned ctype struct field to {var_name}")
                 return True
-            logger.error(f"Failed to assign ctype struct field to {var_name}: {val_type} != {var_type}")
+            logger.error(
+                f"Failed to assign ctype struct field to {var_name}: {val_type} != {var_type}"
+            )
             return False
         elif isinstance(val_type, ir.IntType) and isinstance(var_type, ir.IntType):
             # Allow implicit int widening

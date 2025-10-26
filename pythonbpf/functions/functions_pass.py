@@ -23,7 +23,7 @@ from pythonbpf.allocation_pass import (
     create_targets_and_rvals,
     LocalSymbol,
 )
-
+from .function_debug_info import generate_function_debug_info
 from .return_utils import handle_none_return, handle_xdp_return, is_xdp_name
 from .function_metadata import get_probe_string, is_global_function, infer_return_type
 
@@ -440,13 +440,16 @@ def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab):
         func_type = get_probe_string(func_node)
         logger.info(f"Found probe_string of {func_node.name}: {func_type}")
 
-        process_bpf_chunk(
+        func = process_bpf_chunk(
             func_node,
             module,
             ctypes_to_ir(infer_return_type(func_node)),
             map_sym_tab,
             structs_sym_tab,
         )
+
+        logger.info(f"Generating Debug Info for Function {func_node.name}")
+        generate_function_debug_info(func_node, module, func)
 
 
 # TODO: WIP, for string assignment to fixed-size arrays

@@ -88,7 +88,9 @@ class VmlinuxHandler:
             )
             builder.function.args[0].type = ir.PointerType(ir.IntType(64))
             print(builder.function.args[0])
-            field_ptr = self.load_ctx_field(builder, builder.function.args[0], globvar_ir)
+            field_ptr = self.load_ctx_field(
+                builder, builder.function.args[0], globvar_ir
+            )
             print(field_ptr)
             # Return pointer to field and field type
             return field_ptr, field_data
@@ -112,9 +114,9 @@ class VmlinuxHandler:
         # Load the offset value
         offset = builder.load(offset_global)
 
-        # Ensure ctx_arg is treated as i8* (byte pointer)
-        # i8_type = ir.IntType(8)
-        i8_ptr_type = ir.PointerType()
+        # # Ensure ctx_arg is treated as i8* (byte pointer)
+        # # i8_type = ir.IntType(8)
+        # i8_ptr_type = ir.PointerType()
 
         # Cast ctx_arg to i8* if it isn't already
         # if str(ctx_arg.type) != str(i8_ptr_type):
@@ -133,7 +135,7 @@ class VmlinuxHandler:
         module = builder.function.module
 
         try:
-            passthrough_fn = module.globals.get('llvm.bpf.passthrough.p0.p0')
+            passthrough_fn = module.globals.get("llvm.bpf.passthrough.p0.p0")
             if passthrough_fn is None:
                 raise KeyError
         except (KeyError, AttributeError):
@@ -144,14 +146,12 @@ class VmlinuxHandler:
             passthrough_fn = ir.Function(
                 module,
                 passthrough_type,
-                name='llvm.bpf.passthrough.p0.p0',
+                name="llvm.bpf.passthrough.p0.p0",
             )
 
         # Call passthrough to satisfy BPF verifier
         verified_ptr = builder.call(
-            passthrough_fn,
-            [ir.Constant(ir.IntType(32), 0), field_ptr],
-            tail=True
+            passthrough_fn, [ir.Constant(ir.IntType(32), 0), field_ptr], tail=True
         )
 
         # Bitcast to i64* (assuming field is 64-bit, adjust if needed)
@@ -162,7 +162,6 @@ class VmlinuxHandler:
         value = builder.load(typed_ptr)
 
         return value
-
 
     def has_field(self, struct_name, field_name):
         """Check if a vmlinux struct has a specific field"""
