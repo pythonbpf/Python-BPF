@@ -1,2 +1,3 @@
 tests/c-form/vmlinux.h linguist-vendored
-*.ipynb linguist-vendored
+examples/ linguist-vendored
+BCC-Examples/ linguist-vendored
