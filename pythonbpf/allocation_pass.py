@@ -242,21 +242,12 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
             )
             field_ir, field = field_type
             # TODO: For now, we only support integer type allocations.
-
-            # loaded_value = builder.load(field_ir, align=8)
-            # #TODO: fatal flaw that this always assumes first argument of function to be the context of what this gets.
+            # This always assumes first argument of function to be the context struct
             base_ptr = builder.function.args[0]
             local_sym_tab[
                 struct_var
             ].var = base_ptr  # This is repurposing of var to store the pointer of the base type
             local_sym_tab[struct_var].ir_type = field_ir
-            # gep_result = builder.gep(
-            #     base_ptr,
-            #     [loaded_value],
-            #     inbounds=False,  # Not using inbounds GEP
-            # )
-            # print("DEBUG", loaded_value, base_ptr, gep_result)
-            # Use i64 for allocation since that's what the global variable contains
 
             actual_ir_type = ir.IntType(64)
 
