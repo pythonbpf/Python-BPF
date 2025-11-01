@@ -567,6 +567,85 @@ def bpf_get_current_uid_gid_emitter(
     return pid, ir.IntType(64)
 
 
+@HelperHandlerRegistry.register("skb_store_bytes")
+def bpf_skb_store_bytes_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_skb_store_bytes helper function call.
+    Expected call signature: skb_store_bytes(skb, offset, from, len, flags)
+    """
+
+    if len(call.args) not in (4, 5):
+        raise ValueError(
+            f"skb_store_bytes expects 4 or 5 args (skb, offset, from, len, flags), got {len(call.args)}"
+        )
+
+    skb_ptr = get_or_create_ptr_from_arg(
+        func, module, call.args[0], builder, local_sym_tab, map_sym_tab, struct_sym_tab
+    )
+    offset_val = get_int_value_from_arg(
+        call.args[1],
+        func,
+        module,
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+    )
+    from_ptr = get_or_create_ptr_from_arg(
+        func, module, call.args[2], builder, local_sym_tab, map_sym_tab, struct_sym_tab
+    )
+    len_val = get_int_value_from_arg(
+        call.args[3],
+        func,
+        module,
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+    )
+    if len(call.args) == 5:
+        flags_val = get_flags_val(call.args[4], builder, local_sym_tab)
+    else:
+        flags_val = ir.Constant(ir.IntType(64), 0)
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [
+            ir.PointerType(),  # skb
+            ir.IntType(32),  # offset
+            ir.PointerType(),  # from
+            ir.IntType(32),  # len
+            ir.IntType(64),  # flags
+        ],
+        var_arg=False,
+    )
+    fn_ptr = builder.inttoptr(
+        ir.Constant(ir.IntType(64), BPFHelperID.BPF_SKB_STORE_BYTES.value),
+        ir.PointerType(fn_type),
+    )
+    result = builder.call(
+        fn_ptr,
+        [
+            builder.bitcast(skb_ptr, ir.PointerType()),
+            builder.trunc(offset_val, ir.IntType(32)),
+            builder.bitcast(from_ptr, ir.PointerType()),
+            builder.trunc(len_val, ir.IntType(32)),
+            flags_val,
+        ],
+        tail=False,
+    )
+    logger.info("Emitted bpf_skb_store_bytes call")
+    return result, ir.IntType(64)
+
+
 def handle_helper_call(
     call,
     module,
