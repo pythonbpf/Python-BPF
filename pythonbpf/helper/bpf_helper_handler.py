@@ -10,6 +10,7 @@ from .helper_utils import (
     get_buffer_ptr_and_size,
     get_char_array_ptr_and_size,
     get_ptr_from_arg,
+    get_int_value_from_arg,
 )
 from .printk_formatter import simple_string_print, handle_fstring_print
 
@@ -455,6 +456,64 @@ def bpf_get_prandom_u32_emitter(
     fn_ptr = builder.inttoptr(helper_id, fn_ptr_type)
     result = builder.call(fn_ptr, [], tail=False)
     return result, ir.IntType(32)
+
+
+@HelperHandlerRegistry.register("probe_read")
+def bpf_probe_read_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_probe_read helper function
+    """
+
+    if len(call.args) != 3:
+        logger.warn("Expected 3 args for probe_read helper")
+        return
+    dst_ptr, _ = get_ptr_from_arg(
+        call.args[0], func, module, builder, local_sym_tab, map_sym_tab, struct_sym_tab
+    )
+    size_val = (
+        get_int_value_from_arg(
+            call.args[1],
+            func,
+            module,
+            builder,
+            local_sym_tab,
+            map_sym_tab,
+            struct_sym_tab,
+        )
+        & 0xFFFFFFFF
+    )
+    src_ptr, _ = get_ptr_from_arg(
+        call.args[2], func, module, builder, local_sym_tab, map_sym_tab, struct_sym_tab
+    )
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [ir.PointerType(), ir.IntType(32), ir.PointerType()],
+        var_arg=False,
+    )
+    fn_ptr = builder.inttoptr(
+        ir.Constant(ir.IntType(64), BPFHelperID.BPF_PROBE_READ.value),
+        ir.PointerType(fn_type),
+    )
+    result = builder.call(
+        fn_ptr,
+        [
+            builder.bitcast(dst_ptr, ir.PointerType()),
+            ir.Constant(ir.IntType(32), size_val),
+            builder.bitcast(src_ptr, ir.PointerType()),
+        ],
+        tail=False,
+    )
+    logger.info(f"Emitted bpf_probe_read (size={size_val})")
+    return result, ir.IntType(64)
 
 
 def handle_helper_call(

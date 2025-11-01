@@ -274,3 +274,23 @@ def get_ptr_from_arg(
         raise ValueError(f"Expected pointer type, got {val_type}")
 
     return val, val_type
+
+
+def get_int_value_from_arg(
+    arg, func, module, builder, local_sym_tab, map_sym_tab, struct_sym_tab
+):
+    """Evaluate argument and return integer value"""
+
+    result = eval_expr(
+        func, module, builder, arg, local_sym_tab, map_sym_tab, struct_sym_tab
+    )
+
+    if not result:
+        raise ValueError("Failed to evaluate argument")
+
+    val, val_type = result
+
+    if not isinstance(val_type, ir.IntType):
+        raise ValueError(f"Expected integer type, got {val_type}")
+
+    return val
