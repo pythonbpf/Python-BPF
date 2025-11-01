@@ -32,6 +32,11 @@ def random():
     return ctypes.c_int32(0)
 
 
+def probe_read(dst, size, src):
+    """Safely read data from kernel memory"""
+    return ctypes.c_int64(0)
+
+
 XDP_ABORTED = ctypes.c_int64(0)
 XDP_DROP = ctypes.c_int64(1)
 XDP_PASS = ctypes.c_int64(2)

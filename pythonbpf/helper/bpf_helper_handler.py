@@ -476,23 +476,20 @@ def bpf_probe_read_emitter(
     if len(call.args) != 3:
         logger.warn("Expected 3 args for probe_read helper")
         return
-    dst_ptr, _ = get_ptr_from_arg(
-        call.args[0], func, module, builder, local_sym_tab, map_sym_tab, struct_sym_tab
+    dst_ptr = get_or_create_ptr_from_arg(
+        func, module, call.args[0], builder, local_sym_tab, map_sym_tab, struct_sym_tab
     )
-    size_val = (
-        get_int_value_from_arg(
-            call.args[1],
-            func,
-            module,
-            builder,
-            local_sym_tab,
-            map_sym_tab,
-            struct_sym_tab,
-        )
-        & 0xFFFFFFFF
+    size_val = get_int_value_from_arg(
+        call.args[1],
+        func,
+        module,
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
     )
-    src_ptr, _ = get_ptr_from_arg(
-        call.args[2], func, module, builder, local_sym_tab, map_sym_tab, struct_sym_tab
+    src_ptr = get_or_create_ptr_from_arg(
+        func, module, call.args[2], builder, local_sym_tab, map_sym_tab, struct_sym_tab
     )
     fn_type = ir.FunctionType(
         ir.IntType(64),
@@ -507,7 +504,7 @@ def bpf_probe_read_emitter(
         fn_ptr,
         [
             builder.bitcast(dst_ptr, ir.PointerType()),
-            ir.Constant(ir.IntType(32), size_val),
+            builder.trunc(size_val, ir.IntType(32)),
             builder.bitcast(src_ptr, ir.PointerType()),
         ],
         tail=False,
