@@ -322,6 +322,7 @@ def bpf_get_current_pid_tgid_emitter(
     result = builder.call(fn_ptr, [], tail=False)
 
     # Extract the lower 32 bits (PID) using bitwise AND with 0xFFFFFFFF
+    # TODO: return both PID and TGID if we end up needing TGID somewhere
     mask = ir.Constant(ir.IntType(64), 0xFFFFFFFF)
     pid = builder.and_(result, mask)
     return pid, ir.IntType(64)
