@@ -539,6 +539,33 @@ def bpf_get_smp_processor_id_emitter(
     return result, ir.IntType(32)
 
 
+@HelperHandlerRegistry.register("uid")
+def bpf_get_current_uid_gid_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_get_current_uid_gid helper function call.
+    """
+    helper_id = ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_CURRENT_UID_GID.value)
+    fn_type = ir.FunctionType(ir.IntType(64), [], var_arg=False)
+    fn_ptr_type = ir.PointerType(fn_type)
+    fn_ptr = builder.inttoptr(helper_id, fn_ptr_type)
+    result = builder.call(fn_ptr, [], tail=False)
+
+    # Extract the lower 32 bits (UID) using bitwise AND with 0xFFFFFFFF
+    # TODO: return both UID and GID if we end up needing GID somewhere
+    mask = ir.Constant(ir.IntType(64), 0xFFFFFFFF)
+    pid = builder.and_(result, mask)
+    return pid, ir.IntType(64)
+
+
 def handle_helper_call(
     call,
     module,
