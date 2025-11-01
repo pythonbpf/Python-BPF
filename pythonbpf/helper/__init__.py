@@ -10,6 +10,7 @@ from .helpers import (
     random,
     probe_read,
     smp_processor_id,
+    uid,
     XDP_DROP,
     XDP_PASS,
 )
@@ -79,6 +80,7 @@ __all__ = [
     "random",
     "probe_read",
     "smp_processor_id",
+    "uid",
     "XDP_DROP",
     "XDP_PASS",
 ]
