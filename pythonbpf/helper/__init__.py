@@ -11,6 +11,7 @@ from .helpers import (
     probe_read,
     smp_processor_id,
     uid,
+    skb_store_bytes,
     XDP_DROP,
     XDP_PASS,
 )
@@ -81,6 +82,7 @@ __all__ = [
     "probe_read",
     "smp_processor_id",
     "uid",
+    "skb_store_bytes",
     "XDP_DROP",
     "XDP_PASS",
 ]
