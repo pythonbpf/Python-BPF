@@ -1,4 +1,4 @@
-from pythonbpf import bpf, map, section, bpfglobal, compile, struct
+from pythonbpf import bpf, map, section, bpfglobal, compile, struct, compile_to_ir
 from ctypes import c_void_p, c_int64, c_int32, c_uint64
 from pythonbpf.maps import HashMap
 from pythonbpf.helper import ktime
@@ -71,4 +71,5 @@ def LICENSE() -> str:
     return "GPL"
 
 
+compile_to_ir("comprehensive.py", "comprehensive.ll")
 compile()

@@ -2,25 +2,13 @@ import ast
 import logging
 
 from llvmlite import ir
-from dataclasses import dataclass
-from typing import Any
+from .local_symbol import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
+from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
 from pythonbpf.type_deducer import ctypes_to_ir
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class LocalSymbol:
-    var: ir.AllocaInstr
-    ir_type: ir.Type
-    metadata: Any = None
-
-    def __iter__(self):
-        yield self.var
-        yield self.ir_type
-        yield self.metadata
 
 
 def create_targets_and_rvals(stmt):
@@ -60,20 +48,10 @@ def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
             continue
 
         var_name = target.id
-
         # Skip if already allocated
         if var_name in local_sym_tab:
             logger.debug(f"Variable {var_name} already allocated, skipping")
             continue
-
-        # When allocating a variable, check if it's a vmlinux struct type
-        if isinstance(
-            stmt.value, ast.Name
-        ) and VmlinuxHandlerRegistry.is_vmlinux_struct(stmt.value.id):
-            # Handle vmlinux struct allocation
-            # This requires more implementation
-            print(stmt.value)
-            pass
 
         # Determine type and allocate based on rval
         if isinstance(rval, ast.Call):
@@ -248,9 +226,41 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
         logger.error(f"Struct variable '{struct_var}' not found")
         return
 
-    struct_type = local_sym_tab[struct_var].metadata
+    struct_type: type = local_sym_tab[struct_var].metadata
     if not struct_type or struct_type not in structs_sym_tab:
-        logger.error(f"Struct type '{struct_type}' not found")
+        if VmlinuxHandlerRegistry.is_vmlinux_struct(struct_type.__name__):
+            # Handle vmlinux struct field access
+            vmlinux_struct_name = struct_type.__name__
+            if not VmlinuxHandlerRegistry.has_field(vmlinux_struct_name, field_name):
+                logger.error(
+                    f"Field '{field_name}' not found in vmlinux struct '{vmlinux_struct_name}'"
+                )
+                return
+
+            field_type: tuple[ir.GlobalVariable, Field] = (
+                VmlinuxHandlerRegistry.get_field_type(vmlinux_struct_name, field_name)
+            )
+            field_ir, field = field_type
+            # TODO: For now, we only support integer type allocations.
+            # This always assumes first argument of function to be the context struct
+            base_ptr = builder.function.args[0]
+            local_sym_tab[
+                struct_var
+            ].var = base_ptr  # This is repurposing of var to store the pointer of the base type
+            local_sym_tab[struct_var].ir_type = field_ir
+
+            actual_ir_type = ir.IntType(64)
+
+            # Allocate with the actual IR type, not the GlobalVariable
+            var = _allocate_with_type(builder, var_name, actual_ir_type)
+            local_sym_tab[var_name] = LocalSymbol(var, actual_ir_type, field)
+
+            logger.info(
+                f"Pre-allocated {var_name} from vmlinux struct {vmlinux_struct_name}.{field_name}"
+            )
+            return
+        else:
+            logger.error(f"Struct type '{struct_type}' not found")
         return
 
     struct_info = structs_sym_tab[struct_type]

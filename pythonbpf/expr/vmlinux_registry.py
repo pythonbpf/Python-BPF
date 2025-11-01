@@ -1,5 +1,7 @@
 import ast
 
+from pythonbpf.vmlinux_parser.vmlinux_exports_handler import VmlinuxHandler
+
 
 class VmlinuxHandlerRegistry:
     """Registry for vmlinux handler operations"""
@@ -7,7 +9,7 @@ class VmlinuxHandlerRegistry:
     _handler = None
 
     @classmethod
-    def set_handler(cls, handler):
+    def set_handler(cls, handler: VmlinuxHandler):
         """Set the vmlinux handler"""
         cls._handler = handler
 
@@ -38,8 +40,36 @@ class VmlinuxHandlerRegistry:
         return None
 
     @classmethod
+    def get_struct_debug_info(cls, name):
+        if cls._handler is None:
+            return False
+        return cls._handler.get_struct_debug_info(name)
+
+    @classmethod
     def is_vmlinux_struct(cls, name):
         """Check if a name refers to a vmlinux struct"""
         if cls._handler is None:
             return False
         return cls._handler.is_vmlinux_struct(name)
+
+    @classmethod
+    def get_struct_type(cls, name):
+        """Try to handle a struct name as vmlinux struct"""
+        if cls._handler is None:
+            return None
+        return cls._handler.get_vmlinux_struct_type(name)
+
+    @classmethod
+    def has_field(cls, vmlinux_struct_name, field_name):
+        """Check if a vmlinux struct has a specific field"""
+        if cls._handler is None:
+            return False
+        return cls._handler.has_field(vmlinux_struct_name, field_name)
+
+    @classmethod
+    def get_field_type(cls, vmlinux_struct_name, field_name):
+        """Get the type of a field in a vmlinux struct"""
+        if cls._handler is None:
+            return None
+        assert isinstance(cls._handler, VmlinuxHandler)
+        return cls._handler.get_field_type(vmlinux_struct_name, field_name)

@@ -86,19 +86,19 @@ def vmlinux_proc(tree: ast.AST, module):
 
     if not import_statements:
         logger.info("No vmlinux imports found")
-        return
+        return None
 
     # Import vmlinux module directly
     try:
         vmlinux_mod = importlib.import_module("vmlinux")
     except ImportError:
         logger.warning("Could not import vmlinux module")
-        return
+        return None
 
     source_file = inspect.getsourcefile(vmlinux_mod)
     if source_file is None:
         logger.warning("Cannot find source for vmlinux module")
-        return
+        return None
 
     with open(source_file, "r") as f:
         mod_ast = ast.parse(f.read(), filename=source_file)
@@ -148,6 +148,7 @@ def process_vmlinux_assign(node, module, assignments: dict[str, AssignmentInfo])
                 pointer_level=None,
                 signature=None,
                 members=None,
+                debug_info=None,
             )
             logger.info(
                 f"Added assignment: {target_name} = {node.value.value!r} of type {type(node.value.value)}"

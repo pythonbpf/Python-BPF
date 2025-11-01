@@ -7,7 +7,12 @@ from pythonbpf.helper import (
     reset_scratch_pool,
 )
 from pythonbpf.type_deducer import ctypes_to_ir
-from pythonbpf.expr import eval_expr, handle_expr, convert_to_bool
+from pythonbpf.expr import (
+    eval_expr,
+    handle_expr,
+    convert_to_bool,
+    VmlinuxHandlerRegistry,
+)
 from pythonbpf.assign_pass import (
     handle_variable_assignment,
     handle_struct_field_assignment,
@@ -16,8 +21,9 @@ from pythonbpf.allocation_pass import (
     handle_assign_allocation,
     allocate_temp_pool,
     create_targets_and_rvals,
+    LocalSymbol,
 )
-
+from .function_debug_info import generate_function_debug_info
 from .return_utils import handle_none_return, handle_xdp_return, is_xdp_name
 from .function_metadata import get_probe_string, is_global_function, infer_return_type
 
@@ -324,6 +330,28 @@ def process_func_body(
 
     local_sym_tab = {}
 
+    # Add the context parameter (first function argument) to the local symbol table
+    if func_node.args.args and len(func_node.args.args) > 0:
+        context_arg = func_node.args.args[0]
+        context_name = context_arg.arg
+
+        if hasattr(context_arg, "annotation") and context_arg.annotation:
+            if isinstance(context_arg.annotation, ast.Name):
+                context_type_name = context_arg.annotation.id
+            elif isinstance(context_arg.annotation, ast.Attribute):
+                context_type_name = context_arg.annotation.attr
+            else:
+                raise TypeError(
+                    f"Unsupported annotation type: {ast.dump(context_arg.annotation)}"
+                )
+            if VmlinuxHandlerRegistry.is_vmlinux_struct(context_type_name):
+                resolved_type = VmlinuxHandlerRegistry.get_struct_type(
+                    context_type_name
+                )
+                context_type = LocalSymbol(None, None, resolved_type)
+                local_sym_tab[context_name] = context_type
+                logger.info(f"Added argument '{context_name}' to local symbol table")
+
     # pre-allocate dynamic variables
     local_sym_tab = allocate_mem(
         module,
@@ -374,7 +402,7 @@ def process_bpf_chunk(func_node, module, return_type, map_sym_tab, structs_sym_t
     func.linkage = "dso_local"
     func.attributes.add("nounwind")
     func.attributes.add("noinline")
-    func.attributes.add("optnone")
+    # func.attributes.add("optnone")
 
     if func_node.args.args:
         # Only look at the first argument for now
@@ -412,13 +440,16 @@ def func_proc(tree, module, chunks, map_sym_tab, structs_sym_tab):
         func_type = get_probe_string(func_node)
         logger.info(f"Found probe_string of {func_node.name}: {func_type}")
 
-        process_bpf_chunk(
+        func = process_bpf_chunk(
             func_node,
             module,
             ctypes_to_ir(infer_return_type(func_node)),
             map_sym_tab,
             structs_sym_tab,
         )
+
+        logger.info(f"Generating Debug Info for Function {func_node.name}")
+        generate_function_debug_info(func_node, module, func)
 
 
 # TODO: WIP, for string assignment to fixed-size arrays

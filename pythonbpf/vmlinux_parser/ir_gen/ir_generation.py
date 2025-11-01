@@ -73,9 +73,8 @@ class IRGenerator:
                             )
 
             # Generate IR first to populate field names
-            self.generated_debug_info.append(
-                (struct, self.gen_ir(struct, self.generated_debug_info))
-            )
+            struct_debug_info = self.gen_ir(struct, self.generated_debug_info)
+            self.generated_debug_info.append((struct, struct_debug_info))
 
             # Fill the assignments dictionary with struct information
             if struct.name not in self.assignments:
@@ -105,6 +104,7 @@ class IRGenerator:
                     pointer_level=None,
                     signature=None,
                     members=members_dict,
+                    debug_info=struct_debug_info,
                 )
                 logger.info(f"Added struct assignment info for {struct.name}")
 

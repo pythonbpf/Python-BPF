@@ -1,5 +1,5 @@
 BPF_CLANG := clang
-CFLAGS := -O2 -emit-llvm -target bpf -c
+CFLAGS := -O0 -emit-llvm -target bpf -c
 
 SRC := $(wildcard *.bpf.c)
 LL := $(SRC:.bpf.c=.bpf.ll)
