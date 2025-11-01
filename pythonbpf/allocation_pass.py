@@ -1,6 +1,6 @@
 import ast
 import logging
-
+import ctypes
 from llvmlite import ir
 from .local_symbol import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
@@ -249,7 +249,46 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
             ].var = base_ptr  # This is repurposing of var to store the pointer of the base type
             local_sym_tab[struct_var].ir_type = field_ir
 
-            actual_ir_type = ir.IntType(64)
+            # Determine the actual IR type based on the field's type
+            actual_ir_type = None
+
+            # Check if it's a ctypes primitive
+            if field.type.__module__ == ctypes.__name__:
+                try:
+                    field_size_bytes = ctypes.sizeof(field.type)
+                    field_size_bits = field_size_bytes * 8
+
+                    if field_size_bits in [8, 16, 32, 64]:
+                        actual_ir_type = ir.IntType(field_size_bits)
+                    else:
+                        logger.warning(
+                            f"Unusual field size {field_size_bits} bits for {field_name}"
+                        )
+                        actual_ir_type = ir.IntType(64)
+                except Exception as e:
+                    logger.warning(
+                        f"Could not determine size for ctypes field {field_name}: {e}"
+                    )
+                    actual_ir_type = ir.IntType(64)
+
+            # Check if it's a nested vmlinux struct or complex type
+            elif field.type.__module__ == "vmlinux":
+                # For pointers to structs, use pointer type (64-bit)
+                if field.ctype_complex_type is not None and issubclass(
+                    field.ctype_complex_type, ctypes._Pointer
+                ):
+                    actual_ir_type = ir.IntType(64)  # Pointer is always 64-bit
+                # For embedded structs, this is more complex - might need different handling
+                else:
+                    logger.warning(
+                        f"Field {field_name} is a nested vmlinux struct, using i64 for now"
+                    )
+                    actual_ir_type = ir.IntType(64)
+            else:
+                logger.warning(
+                    f"Unknown field type module {field.type.__module__} for {field_name}"
+                )
+                actual_ir_type = ir.IntType(64)
 
             # Allocate with the actual IR type, not the GlobalVariable
             var = _allocate_with_type(builder, var_name, actual_ir_type)

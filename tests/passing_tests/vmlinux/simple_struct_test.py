@@ -44,4 +44,4 @@ def LICENSE() -> str:
 
 
 compile_to_ir("simple_struct_test.py", "simple_struct_test.ll", loglevel=logging.DEBUG)
-# compile()
+compile()

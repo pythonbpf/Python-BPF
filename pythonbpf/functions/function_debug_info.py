@@ -59,7 +59,6 @@ def generate_function_debug_info(
             leading_argument_name, 1, pointer_to_context_debug_info
         )
         retained_nodes = [context_local_variable]
-        print("function name", func_node.name)
         subprogram_debug_info = generator.create_subprogram(
             func_node.name, subroutine_type, retained_nodes
         )
