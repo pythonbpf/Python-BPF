@@ -47,7 +47,7 @@ def uid():
     return ctypes.c_int32(0)
 
 
-def skb_store_bytes(skb, offset, from_buf, size, flags=0):
+def skb_store_bytes(offset, from_buf, size, flags=0):
     """store bytes into a socket buffer"""
     return ctypes.c_int64(0)
 

@@ -583,16 +583,14 @@ def bpf_skb_store_bytes_emitter(
     Expected call signature: skb_store_bytes(skb, offset, from, len, flags)
     """
 
-    if len(call.args) not in (4, 5):
+    if len(call.args) not in (3, 4):
         raise ValueError(
-            f"skb_store_bytes expects 4 or 5 args (skb, offset, from, len, flags), got {len(call.args)}"
+            f"skb_store_bytes expects 3 or 4 args (offset, from, len, flags), got {len(call.args)}"
         )
 
-    skb_ptr = get_or_create_ptr_from_arg(
-        func, module, call.args[0], builder, local_sym_tab, map_sym_tab, struct_sym_tab
-    )
+    skb_ptr = func.args[0]  # First argument to the function is skb
     offset_val = get_int_value_from_arg(
-        call.args[1],
+        call.args[0],
         func,
         module,
         builder,
@@ -601,10 +599,10 @@ def bpf_skb_store_bytes_emitter(
         struct_sym_tab,
     )
     from_ptr = get_or_create_ptr_from_arg(
-        func, module, call.args[2], builder, local_sym_tab, map_sym_tab, struct_sym_tab
+        func, module, call.args[1], builder, local_sym_tab, map_sym_tab, struct_sym_tab
     )
     len_val = get_int_value_from_arg(
-        call.args[3],
+        call.args[2],
         func,
         module,
         builder,
@@ -612,10 +610,11 @@ def bpf_skb_store_bytes_emitter(
         map_sym_tab,
         struct_sym_tab,
     )
-    if len(call.args) == 5:
-        flags_val = get_flags_val(call.args[4], builder, local_sym_tab)
+    if len(call.args) == 4:
+        flags_val = get_flags_val(call.args[3], builder, local_sym_tab)
     else:
-        flags_val = ir.Constant(ir.IntType(64), 0)
+        flags_val = 0
+    flags = ir.Constant(ir.IntType(64), flags_val)
     fn_type = ir.FunctionType(
         ir.IntType(64),
         [
@@ -638,7 +637,7 @@ def bpf_skb_store_bytes_emitter(
             builder.trunc(offset_val, ir.IntType(32)),
             builder.bitcast(from_ptr, ir.PointerType()),
             builder.trunc(len_val, ir.IntType(32)),
-            flags_val,
+            flags,
         ],
         tail=False,
     )
