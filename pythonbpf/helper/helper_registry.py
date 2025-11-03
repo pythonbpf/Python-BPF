@@ -40,3 +40,22 @@ class HelperHandlerRegistry:
     def has_handler(cls, helper_name):
         """Check if a handler function is registered for a helper"""
         return helper_name in cls._handlers
+
+    @classmethod
+    def get_signature(cls, helper_name):
+        """Get the signature of a helper function"""
+        return cls._handlers.get(helper_name)
+
+    @classmethod
+    def get_param_type(cls, helper_name, index):
+        """Get the type of a parameter of a helper function by the index"""
+        signature = cls.get_signature(helper_name)
+        if signature and 0 <= index < len(signature.arg_types):
+            return signature.arg_types[index]
+        return None
+
+    @classmethod
+    def get_return_type(cls, helper_name):
+        """Get the return type of a helper function"""
+        signature = cls.get_signature(helper_name)
+        return signature.return_type if signature else None
