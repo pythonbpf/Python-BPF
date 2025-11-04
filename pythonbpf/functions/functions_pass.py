@@ -98,11 +98,15 @@ def handle_if_allocation(
 def allocate_mem(
     module, builder, body, func, ret_type, map_sym_tab, local_sym_tab, structs_sym_tab
 ):
-    max_temps_needed = 0
+    max_temps_needed = {}
+
+    def merge_type_counts(count_dict):
+        nonlocal max_temps_needed
+        for typ, cnt in count_dict.items():
+            max_temps_needed[typ] = max(max_temps_needed.get(typ, 0), cnt)
 
     def update_max_temps_for_stmt(stmt):
         nonlocal max_temps_needed
-        temps_needed = 0
 
         if isinstance(stmt, ast.If):
             for s in stmt.body:
@@ -111,10 +115,13 @@ def allocate_mem(
                 update_max_temps_for_stmt(s)
             return
 
+        stmt_temps = {}
         for node in ast.walk(stmt):
             if isinstance(node, ast.Call):
-                temps_needed += count_temps_in_call(node, local_sym_tab)
-        max_temps_needed = max(max_temps_needed, temps_needed)
+                call_temps = count_temps_in_call(node, local_sym_tab)
+                for typ, cnt in call_temps.items():
+                    stmt_temps[typ] = stmt_temps.get(typ, 0) + cnt
+        merge_type_counts(stmt_temps)
 
     for stmt in body:
         update_max_temps_for_stmt(stmt)
