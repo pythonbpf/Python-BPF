@@ -567,7 +567,11 @@ def bpf_get_current_uid_gid_emitter(
     return pid, ir.IntType(64)
 
 
-@HelperHandlerRegistry.register("skb_store_bytes")
+@HelperHandlerRegistry.register(
+    "skb_store_bytes",
+    param_types=[ir.IntType(32), ir.PointerType(), ir.IntType(32), ir.IntType(64)],
+    return_type=ir.IntType(64),
+)
 def bpf_skb_store_bytes_emitter(
     call,
     map_ptr,
@@ -583,6 +587,14 @@ def bpf_skb_store_bytes_emitter(
     Expected call signature: skb_store_bytes(skb, offset, from, len, flags)
     """
 
+    args_signature = [
+        ir.PointerType(),  # skb pointer
+        ir.IntType(32),  # offset
+        ir.PointerType(),  # from
+        ir.IntType(32),  # len
+        ir.IntType(64),  # flags
+    ]
+
     if len(call.args) not in (3, 4):
         raise ValueError(
             f"skb_store_bytes expects 3 or 4 args (offset, from, len, flags), got {len(call.args)}"
@@ -596,10 +608,18 @@ def bpf_skb_store_bytes_emitter(
         builder,
         local_sym_tab,
         map_sym_tab,
+        args_signature[1],
         struct_sym_tab,
     )
     from_ptr = get_or_create_ptr_from_arg(
-        func, module, call.args[1], builder, local_sym_tab, map_sym_tab, struct_sym_tab
+        func,
+        module,
+        call.args[1],
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        args_signature[2],
+        struct_sym_tab,
     )
     len_val = get_int_value_from_arg(
         call.args[2],
@@ -608,6 +628,7 @@ def bpf_skb_store_bytes_emitter(
         builder,
         local_sym_tab,
         map_sym_tab,
+        args_signature[3],
         struct_sym_tab,
     )
     if len(call.args) == 4:
@@ -617,13 +638,7 @@ def bpf_skb_store_bytes_emitter(
     flags = ir.Constant(ir.IntType(64), flags_val)
     fn_type = ir.FunctionType(
         ir.IntType(64),
-        [
-            ir.PointerType(),  # skb
-            ir.IntType(32),  # offset
-            ir.PointerType(),  # from
-            ir.IntType(32),  # len
-            ir.IntType(64),  # flags
-        ],
+        args_signature,
         var_arg=False,
     )
     fn_ptr = builder.inttoptr(
