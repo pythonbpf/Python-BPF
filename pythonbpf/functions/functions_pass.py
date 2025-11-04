@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 def count_temps_in_call(call_node, local_sym_tab):
     """Count the number of temporary variables needed for a function call."""
 
-    count = 0
+    count = {}
     is_helper = False
 
     # NOTE: We exclude print calls for now
@@ -43,21 +43,26 @@ def count_temps_in_call(call_node, local_sym_tab):
             and call_node.func.id != "print"
         ):
             is_helper = True
+            func_name = call_node.func.id
     elif isinstance(call_node.func, ast.Attribute):
         if HelperHandlerRegistry.has_handler(call_node.func.attr):
             is_helper = True
+            func_name = call_node.func.attr
 
     if not is_helper:
         return 0
 
-    for arg in call_node.args:
+    for arg_idx in range(len(call_node.args)):
         # NOTE: Count all non-name arguments
         # For struct fields, if it is being passed as an argument,
         # The struct object should already exist in the local_sym_tab
-        if not isinstance(arg, ast.Name) and not (
+        arg = call_node.args[arg_idx]
+        if isinstance(arg, ast.Name) or (
             isinstance(arg, ast.Attribute) and arg.value.id in local_sym_tab
         ):
-            count += 1
+            continue
+        param_type = HelperHandlerRegistry.get_param_type(func_name, arg_idx)
+        count[param_type] = count.get(param_type, 0) + 1
 
     return count
 
