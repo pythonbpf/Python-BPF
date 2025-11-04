@@ -50,7 +50,7 @@ class HelperHandlerRegistry:
     def get_param_type(cls, helper_name, index):
         """Get the type of a parameter of a helper function by the index"""
         signature = cls.get_signature(helper_name)
-        if signature and 0 <= index < len(signature.arg_types):
+        if signature and signature.arg_types and 0 <= index < len(signature.arg_types):
             return signature.arg_types[index]
         return None
 

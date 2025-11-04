@@ -14,26 +14,43 @@ class ScratchPoolManager:
     """Manage the temporary helper variables in local_sym_tab"""
 
     def __init__(self):
-        self._counter = 0
+        self._counters = {}
 
     @property
     def counter(self):
-        return self._counter
+        return sum(self._counter.values())
 
     def reset(self):
-        self._counter = 0
+        self._counters.clear()
         logger.debug("Scratch pool counter reset to 0")
 
-    def get_next_temp(self, local_sym_tab):
-        temp_name = f"__helper_temp_{self._counter}"
-        self._counter += 1
+    def _get_type_name(self, ir_type):
+        if isinstance(ir_type, ir.PointerType):
+            return "ptr"
+        elif isinstance(ir_type, ir.IntType):
+            return f"i{ir_type.width}"
+        elif isinstance(ir_type, ir.ArrayType):
+            return f"[{ir_type.count}x{self._get_type_name(ir_type.element)}]"
+        else:
+            return str(ir_type).replace(" ", "")
+
+    def get_next_temp(self, local_sym_tab, expected_type=None):
+        # Default to i64 if no expected type provided
+        type_name = self._get_type_name(expected_type) if expected_type else "i64"
+        if type_name not in self._counters:
+            self._counters[type_name] = 0
+
+        counter = self._counters[type_name]
+        temp_name = f"__helper_temp_{type_name}_{counter}"
+        self._counters[type_name] += 1
 
         if temp_name not in local_sym_tab:
             raise ValueError(
                 f"Scratch pool exhausted or inadequate: {temp_name}. "
-                f"Current counter: {self._counter}"
+                f"Type: {type_name} Counter: {counter}"
             )
 
+        logger.debug(f"Using {temp_name} for type {type_name}")
         return local_sym_tab[temp_name].var, temp_name
 
 

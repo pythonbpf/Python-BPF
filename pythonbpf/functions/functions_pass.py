@@ -50,7 +50,7 @@ def count_temps_in_call(call_node, local_sym_tab):
             func_name = call_node.func.attr
 
     if not is_helper:
-        return 0
+        return {}  # No temps needed
 
     for arg_idx in range(len(call_node.args)):
         # NOTE: Count all non-name arguments
