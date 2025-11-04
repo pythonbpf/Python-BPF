@@ -77,24 +77,35 @@ def get_var_ptr_from_name(var_name, local_sym_tab):
 def create_int_constant_ptr(value, builder, local_sym_tab, int_width=64):
     """Create a pointer to an integer constant."""
 
-    # Default to 64-bit integer
-    ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab)
+    int_type = ir.IntType(int_width)
+    ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab, int_type)
     logger.info(f"Using temp variable '{temp_name}' for int constant {value}")
-    const_val = ir.Constant(ir.IntType(int_width), value)
+    const_val = ir.Constant(int_type, value)
     builder.store(const_val, ptr)
     return ptr
 
 
 def get_or_create_ptr_from_arg(
-    func, module, arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab=None
+    func,
+    module,
+    arg,
+    builder,
+    local_sym_tab,
+    map_sym_tab,
+    expected_type=None,
+    struct_sym_tab=None,
 ):
     """Extract or create pointer from the call arguments."""
 
     if isinstance(arg, ast.Name):
+        # Stack space is already allocated
         ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
     elif isinstance(arg, ast.Constant) and isinstance(arg.value, int):
-        ptr = create_int_constant_ptr(arg.value, builder, local_sym_tab)
+        if expected_type and isinstance(expected_type, ir.IntType):
+            int_width = expected_type.width
+        ptr = create_int_constant_ptr(arg.value, builder, local_sym_tab, int_width)
     else:
+        # NOTE: For any integer expression reaching this branch, it is probably a struct field or a binop
         # Evaluate the expression and store the result in a temp variable
         val = get_operand_value(
             func, module, arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab
@@ -102,11 +113,14 @@ def get_or_create_ptr_from_arg(
         if val is None:
             raise ValueError("Failed to evaluate expression for helper arg.")
 
-        # NOTE: We assume the result is an int64 for now
-        # if isinstance(arg, ast.Attribute):
-        # return val
-        ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab)
+        ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab, expected_type)
         logger.info(f"Using temp variable '{temp_name}' for expression result")
+        if (
+            isinstance(val.type, ir.IntType)
+            and expected_type
+            and val.type.width > expected_type.width
+        ):
+            val = builder.trunc(val, expected_type)
         builder.store(val, ptr)
 
     return ptr
