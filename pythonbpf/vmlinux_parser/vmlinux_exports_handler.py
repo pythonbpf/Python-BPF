@@ -95,9 +95,7 @@ class VmlinuxHandler:
             )
             python_type: type = var_info.metadata
             struct_name = python_type.__name__
-            globvar_ir, field_data = self.get_field_type(
-                struct_name, field_name
-            )
+            globvar_ir, field_data = self.get_field_type(struct_name, field_name)
             builder.function.args[0].type = ir.PointerType(ir.IntType(8))
             field_ptr = self.load_ctx_field(
                 builder, builder.function.args[0], globvar_ir, field_data, struct_name
@@ -183,7 +181,9 @@ class VmlinuxHandler:
                         # Load as i32 but extend to i64 before storing
                         if struct_name == "struct_xdp_md" and int_width == 32:
                             needs_zext = True
-                            logger.info(f"struct_xdp_md i32 field detected, will zero-extend to i64")
+                            logger.info(
+                                "struct_xdp_md i32 field detected, will zero-extend to i64"
+                            )
                     else:
                         logger.warning(
                             f"Unusual field size {field_size_bits} bits, using default 64"

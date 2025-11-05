@@ -154,13 +154,17 @@ def handle_variable_assignment(
             logger.info("Handling assignment to struct field")
             # Special handling for struct_xdp_md i32 fields that are zero-extended to i64
             # The load_ctx_field already extended them, so val is i64 but val_type.type shows c_uint
-            if (hasattr(val_type, 'type') and
-                val_type.type.__name__ == "c_uint" and
-                isinstance(var_type, ir.IntType) and
-                var_type.width == 64):
+            if (
+                hasattr(val_type, "type")
+                and val_type.type.__name__ == "c_uint"
+                and isinstance(var_type, ir.IntType)
+                and var_type.width == 64
+            ):
                 # This is the struct_xdp_md case - value is already i64
                 builder.store(val, var_ptr)
-                logger.info(f"Assigned zero-extended struct_xdp_md i32 field to {var_name} (i64)")
+                logger.info(
+                    f"Assigned zero-extended struct_xdp_md i32 field to {var_name} (i64)"
+                )
                 return True
             # TODO: handling only ctype struct fields for now. Handle other stuff too later.
             elif var_type == ctypes_to_ir(val_type.type.__name__):

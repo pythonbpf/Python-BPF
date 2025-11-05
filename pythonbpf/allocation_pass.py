@@ -261,7 +261,10 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
                     if field_size_bits in [8, 16, 32, 64]:
                         # Special case: struct_xdp_md i32 fields should allocate as i64
                         # because load_ctx_field will zero-extend them to i64
-                        if vmlinux_struct_name == "struct_xdp_md" and field_size_bits == 32:
+                        if (
+                            vmlinux_struct_name == "struct_xdp_md"
+                            and field_size_bits == 32
+                        ):
                             actual_ir_type = ir.IntType(64)
                             logger.info(
                                 f"Allocating {var_name} as i64 for i32 field from struct_xdp_md.{field_name} "
