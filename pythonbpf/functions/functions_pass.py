@@ -62,7 +62,9 @@ def count_temps_in_call(call_node, local_sym_tab):
         ):
             continue
         param_type = HelperHandlerRegistry.get_param_type(func_name, arg_idx)
-        count[param_type] = count.get(param_type, 0) + 1
+        if isinstance(param_type, ir.PointerType):
+            pointee_type = param_type.pointee
+            count[pointee_type] = count.get(pointee_type, 0) + 1
 
     return count
 
