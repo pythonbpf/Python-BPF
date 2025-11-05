@@ -569,7 +569,12 @@ def bpf_get_current_uid_gid_emitter(
 
 @HelperHandlerRegistry.register(
     "skb_store_bytes",
-    param_types=[ir.IntType(32), ir.PointerType(), ir.IntType(32), ir.IntType(64)],
+    param_types=[
+        ir.IntType(32),
+        ir.PointerType(ir.IntType(8)),
+        ir.IntType(32),
+        ir.IntType(64),
+    ],
     return_type=ir.IntType(64),
 )
 def bpf_skb_store_bytes_emitter(
@@ -608,7 +613,6 @@ def bpf_skb_store_bytes_emitter(
         builder,
         local_sym_tab,
         map_sym_tab,
-        args_signature[1],
         struct_sym_tab,
     )
     from_ptr = get_or_create_ptr_from_arg(
@@ -628,7 +632,6 @@ def bpf_skb_store_bytes_emitter(
         builder,
         local_sym_tab,
         map_sym_tab,
-        args_signature[3],
         struct_sym_tab,
     )
     if len(call.args) == 4:
