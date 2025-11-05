@@ -81,7 +81,7 @@ def _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab):
         call_type = rval.func.id
 
         # C type constructors
-        if call_type in ("c_int32", "c_int64", "c_uint32", "c_uint64"):
+        if call_type in ("c_int32", "c_int64", "c_uint32", "c_uint64", "c_void_p"):
             ir_type = ctypes_to_ir(call_type)
             var = builder.alloca(ir_type, name=var_name)
             var.align = ir_type.width // 8
@@ -259,7 +259,16 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
                     field_size_bits = field_size_bytes * 8
 
                     if field_size_bits in [8, 16, 32, 64]:
-                        actual_ir_type = ir.IntType(field_size_bits)
+                        # Special case: struct_xdp_md i32 fields should allocate as i64
+                        # because load_ctx_field will zero-extend them to i64
+                        if vmlinux_struct_name == "struct_xdp_md" and field_size_bits == 32:
+                            actual_ir_type = ir.IntType(64)
+                            logger.info(
+                                f"Allocating {var_name} as i64 for i32 field from struct_xdp_md.{field_name} "
+                                "(will be zero-extended during load)"
+                            )
+                        else:
+                            actual_ir_type = ir.IntType(field_size_bits)
                     else:
                         logger.warning(
                             f"Unusual field size {field_size_bits} bits for {field_name}"
