@@ -1,5 +1,5 @@
 from ctypes import c_int64
-from pythonbpf import bpf, section, bpfglobal, compile
+from pythonbpf import bpf, section, bpfglobal, compile, compile_to_ir
 from vmlinux import struct_xdp_md
 from vmlinux import XDP_PASS
 import logging
@@ -20,4 +20,5 @@ def LICENSE() -> str:
     return "GPL"
 
 
+compile_to_ir("i32_test_fail_2.py", "i32_test_fail_2.ll")
 compile(logging.INFO)

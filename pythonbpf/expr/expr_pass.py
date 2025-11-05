@@ -12,6 +12,7 @@ from .type_normalization import (
     get_base_type_and_depth,
     deref_to_depth,
 )
+from pythonbpf.vmlinux_parser.assignment_info import Field
 from .vmlinux_registry import VmlinuxHandlerRegistry
 
 logger: Logger = logging.getLogger(__name__)
@@ -279,16 +280,45 @@ def _handle_ctypes_call(
     call_type = expr.func.id
     expected_type = ctypes_to_ir(call_type)
 
-    if val[1] != expected_type:
+    # Extract the actual IR value and type
+    # val could be (value, ir_type) or (value, Field)
+    value, val_type = val
+
+    # If val_type is a Field object (from vmlinux struct), get the actual IR type of the value
+    if isinstance(val_type, Field):
+        # The value is already the correct IR value (potentially zero-extended)
+        # Get the IR type from the value itself
+        actual_ir_type = value.type
+        logger.info(
+            f"Converting vmlinux field {val_type.name} (IR type: {actual_ir_type}) to {call_type}"
+        )
+    else:
+        actual_ir_type = val_type
+
+    if actual_ir_type != expected_type:
         # NOTE: We are only considering casting to and from int types for now
-        if isinstance(val[1], ir.IntType) and isinstance(expected_type, ir.IntType):
-            if val[1].width < expected_type.width:
-                val = (builder.sext(val[0], expected_type), expected_type)
+        if isinstance(actual_ir_type, ir.IntType) and isinstance(
+            expected_type, ir.IntType
+        ):
+            if actual_ir_type.width < expected_type.width:
+                value = builder.sext(value, expected_type)
+                logger.info(
+                    f"Sign-extended from i{actual_ir_type.width} to i{expected_type.width}"
+                )
+            elif actual_ir_type.width > expected_type.width:
+                value = builder.trunc(value, expected_type)
+                logger.info(
+                    f"Truncated from i{actual_ir_type.width} to i{expected_type.width}"
+                )
             else:
-                val = (builder.trunc(val[0], expected_type), expected_type)
+                # Same width, just use as-is (e.g., both i64)
+                pass
         else:
-            raise ValueError(f"Type mismatch: expected {expected_type}, got {val[1]}")
-    return val
+            raise ValueError(
+                f"Type mismatch: expected {expected_type}, got {actual_ir_type} (original type: {val_type})"
+            )
+
+    return value, expected_type
 
 
 def _handle_compare(
