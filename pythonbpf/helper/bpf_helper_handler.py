@@ -533,7 +533,14 @@ def bpf_probe_read_emitter(
         logger.warn("Expected 3 args for probe_read helper")
         return
     dst_ptr = get_or_create_ptr_from_arg(
-        func, module, call.args[0], builder, local_sym_tab, map_sym_tab, struct_sym_tab
+        func,
+        module,
+        call.args[0],
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+        ir.IntType(8),
     )
     size_val = get_int_value_from_arg(
         call.args[1],
@@ -545,7 +552,14 @@ def bpf_probe_read_emitter(
         struct_sym_tab,
     )
     src_ptr = get_or_create_ptr_from_arg(
-        func, module, call.args[2], builder, local_sym_tab, map_sym_tab, struct_sym_tab
+        func,
+        module,
+        call.args[2],
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+        ir.IntType(8),
     )
     fn_type = ir.FunctionType(
         ir.IntType(64),
