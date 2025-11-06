@@ -138,8 +138,8 @@ def get_or_create_ptr_from_arg(
     builder,
     local_sym_tab,
     map_sym_tab,
-    expected_type=None,
     struct_sym_tab=None,
+    expected_type=None,
 ):
     """Extract or create pointer from the call arguments."""
 

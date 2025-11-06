@@ -37,7 +37,11 @@ class BPFHelperID(Enum):
     BPF_PROBE_READ_KERNEL_STR = 115
 
 
-@HelperHandlerRegistry.register("ktime")
+@HelperHandlerRegistry.register(
+    "ktime",
+    param_types=[],
+    return_type=ir.IntType(64),
+)
 def bpf_ktime_get_ns_emitter(
     call,
     map_ptr,
@@ -60,7 +64,11 @@ def bpf_ktime_get_ns_emitter(
     return result, ir.IntType(64)
 
 
-@HelperHandlerRegistry.register("lookup")
+@HelperHandlerRegistry.register(
+    "lookup",
+    param_types=[ir.PointerType(ir.IntType(64))],
+    return_type=ir.PointerType(ir.IntType(64)),
+)
 def bpf_map_lookup_elem_emitter(
     call,
     map_ptr,
@@ -102,6 +110,7 @@ def bpf_map_lookup_elem_emitter(
     return result, ir.PointerType()
 
 
+# NOTE: This has special handling so we won't reflect the signature here.
 @HelperHandlerRegistry.register("print")
 def bpf_printk_emitter(
     call,
@@ -150,7 +159,15 @@ def bpf_printk_emitter(
     return True
 
 
-@HelperHandlerRegistry.register("update")
+@HelperHandlerRegistry.register(
+    "update",
+    param_types=[
+        ir.PointerType(ir.IntType(64)),
+        ir.PointerType(ir.IntType(64)),
+        ir.IntType(64),
+    ],
+    return_type=ir.PointerType(ir.IntType(64)),
+)
 def bpf_map_update_elem_emitter(
     call,
     map_ptr,
@@ -205,7 +222,11 @@ def bpf_map_update_elem_emitter(
     return result, None
 
 
-@HelperHandlerRegistry.register("delete")
+@HelperHandlerRegistry.register(
+    "delete",
+    param_types=[ir.PointerType(ir.IntType(64))],
+    return_type=ir.PointerType(ir.IntType(64)),
+)
 def bpf_map_delete_elem_emitter(
     call,
     map_ptr,
@@ -245,7 +266,11 @@ def bpf_map_delete_elem_emitter(
     return result, None
 
 
-@HelperHandlerRegistry.register("comm")
+@HelperHandlerRegistry.register(
+    "comm",
+    param_types=[ir.PointerType(ir.IntType(8))],
+    return_type=ir.IntType(64),
+)
 def bpf_get_current_comm_emitter(
     call,
     map_ptr,
@@ -302,7 +327,11 @@ def bpf_get_current_comm_emitter(
     return result, None
 
 
-@HelperHandlerRegistry.register("pid")
+@HelperHandlerRegistry.register(
+    "pid",
+    param_types=[],
+    return_type=ir.IntType(64),
+)
 def bpf_get_current_pid_tgid_emitter(
     call,
     map_ptr,
@@ -330,7 +359,11 @@ def bpf_get_current_pid_tgid_emitter(
     return pid, ir.IntType(64)
 
 
-@HelperHandlerRegistry.register("output")
+@HelperHandlerRegistry.register(
+    "output",
+    param_types=[ir.PointerType(ir.IntType(8))],
+    return_type=ir.IntType(64),
+)
 def bpf_perf_event_output_handler(
     call,
     map_ptr,
@@ -405,7 +438,14 @@ def emit_probe_read_kernel_str_call(builder, dst_ptr, dst_size, src_ptr):
     return result
 
 
-@HelperHandlerRegistry.register("probe_read_str")
+@HelperHandlerRegistry.register(
+    "probe_read_str",
+    param_types=[
+        ir.PointerType(ir.IntType(8)),
+        ir.PointerType(ir.IntType(8)),
+    ],
+    return_type=ir.IntType(64),
+)
 def bpf_probe_read_kernel_str_emitter(
     call,
     map_ptr,
@@ -440,7 +480,11 @@ def bpf_probe_read_kernel_str_emitter(
     return result, ir.IntType(64)
 
 
-@HelperHandlerRegistry.register("random")
+@HelperHandlerRegistry.register(
+    "random",
+    param_types=[],
+    return_type=ir.IntType(32),
+)
 def bpf_get_prandom_u32_emitter(
     call,
     map_ptr,
@@ -462,7 +506,15 @@ def bpf_get_prandom_u32_emitter(
     return result, ir.IntType(32)
 
 
-@HelperHandlerRegistry.register("probe_read")
+@HelperHandlerRegistry.register(
+    "probe_read",
+    param_types=[
+        ir.PointerType(ir.IntType(8)),
+        ir.IntType(32),
+        ir.PointerType(ir.IntType(8)),
+    ],
+    return_type=ir.IntType(64),
+)
 def bpf_probe_read_emitter(
     call,
     map_ptr,
@@ -517,7 +569,11 @@ def bpf_probe_read_emitter(
     return result, ir.IntType(64)
 
 
-@HelperHandlerRegistry.register("smp_processor_id")
+@HelperHandlerRegistry.register(
+    "smp_processor_id",
+    param_types=[],
+    return_type=ir.IntType(32),
+)
 def bpf_get_smp_processor_id_emitter(
     call,
     map_ptr,
@@ -540,7 +596,11 @@ def bpf_get_smp_processor_id_emitter(
     return result, ir.IntType(32)
 
 
-@HelperHandlerRegistry.register("uid")
+@HelperHandlerRegistry.register(
+    "uid",
+    param_types=[],
+    return_type=ir.IntType(64),
+)
 def bpf_get_current_uid_gid_emitter(
     call,
     map_ptr,
@@ -622,8 +682,8 @@ def bpf_skb_store_bytes_emitter(
         builder,
         local_sym_tab,
         map_sym_tab,
-        args_signature[2],
         struct_sym_tab,
+        args_signature[2],
     )
     len_val = get_int_value_from_arg(
         call.args[2],
