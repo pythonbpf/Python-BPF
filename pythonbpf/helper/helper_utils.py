@@ -102,7 +102,7 @@ def get_or_create_ptr_from_arg(
         # Stack space is already allocated
         ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
     elif isinstance(arg, ast.Constant) and isinstance(arg.value, int):
-        int_width = 64  # Deafult to i64
+        int_width = 64  # Default to i64
         if expected_type and isinstance(expected_type, ir.IntType):
             int_width = expected_type.width
         ptr = create_int_constant_ptr(arg.value, builder, local_sym_tab, int_width)
