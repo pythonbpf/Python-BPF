@@ -4,7 +4,7 @@ import logging
 from llvmlite import ir
 from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth
 from pythonbpf.expr.vmlinux_registry import VmlinuxHandlerRegistry
-from pythonbpf.helper.helper_utils import get_struct_char_array_ptr
+from pythonbpf.helper.helper_utils import get_char_array_ptr_and_size
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +220,7 @@ def _prepare_expr_args(expr, func, module, builder, local_sym_tab, struct_sym_ta
     """Evaluate and prepare an expression to use as an arg for bpf_printk."""
 
     # Special case: struct field char array needs pointer to first element
-    char_array_ptr = get_struct_char_array_ptr(
+    char_array_ptr, _ = get_char_array_ptr_and_size(
         expr, builder, local_sym_tab, struct_sym_tab
     )
     if char_array_ptr:

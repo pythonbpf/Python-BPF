@@ -8,7 +8,6 @@ from .helper_utils import (
     get_flags_val,
     get_data_ptr_and_size,
     get_buffer_ptr_and_size,
-    get_char_array_ptr_and_size,
     get_ptr_from_arg,
     get_int_value_from_arg,
 )
@@ -464,7 +463,7 @@ def bpf_probe_read_kernel_str_emitter(
         )
 
     # Get destination buffer (char array -> i8*)
-    dst_ptr, dst_size = get_char_array_ptr_and_size(
+    dst_ptr, dst_size = get_or_create_ptr_from_arg(
         call.args[0], builder, local_sym_tab, struct_sym_tab
     )
 
