@@ -18,7 +18,7 @@ class ScratchPoolManager:
 
     @property
     def counter(self):
-        return sum(self._counter.values())
+        return sum(self._counters.values())
 
     def reset(self):
         self._counters.clear()
