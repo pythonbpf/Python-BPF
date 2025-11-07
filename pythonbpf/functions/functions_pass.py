@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 def count_temps_in_call(call_node, local_sym_tab):
     """Count the number of temporary variables needed for a function call."""
 
-    count = 0
+    count = {}
     is_helper = False
 
     # NOTE: We exclude print calls for now
@@ -49,21 +49,28 @@ def count_temps_in_call(call_node, local_sym_tab):
             and call_node.func.id != "print"
         ):
             is_helper = True
+            func_name = call_node.func.id
     elif isinstance(call_node.func, ast.Attribute):
         if HelperHandlerRegistry.has_handler(call_node.func.attr):
             is_helper = True
+            func_name = call_node.func.attr
 
     if not is_helper:
-        return 0
+        return {}  # No temps needed
 
-    for arg in call_node.args:
+    for arg_idx in range(len(call_node.args)):
         # NOTE: Count all non-name arguments
         # For struct fields, if it is being passed as an argument,
         # The struct object should already exist in the local_sym_tab
-        if not isinstance(arg, ast.Name) and not (
+        arg = call_node.args[arg_idx]
+        if isinstance(arg, ast.Name) or (
             isinstance(arg, ast.Attribute) and arg.value.id in local_sym_tab
         ):
-            count += 1
+            continue
+        param_type = HelperHandlerRegistry.get_param_type(func_name, arg_idx)
+        if isinstance(param_type, ir.PointerType):
+            pointee_type = param_type.pointee
+            count[pointee_type] = count.get(pointee_type, 0) + 1
 
     return count
 
@@ -99,11 +106,15 @@ def handle_if_allocation(
 def allocate_mem(
     module, builder, body, func, ret_type, map_sym_tab, local_sym_tab, structs_sym_tab
 ):
-    max_temps_needed = 0
+    max_temps_needed = {}
+
+    def merge_type_counts(count_dict):
+        nonlocal max_temps_needed
+        for typ, cnt in count_dict.items():
+            max_temps_needed[typ] = max(max_temps_needed.get(typ, 0), cnt)
 
     def update_max_temps_for_stmt(stmt):
         nonlocal max_temps_needed
-        temps_needed = 0
 
         if isinstance(stmt, ast.If):
             for s in stmt.body:
@@ -112,10 +123,13 @@ def allocate_mem(
                 update_max_temps_for_stmt(s)
             return
 
+        stmt_temps = {}
         for node in ast.walk(stmt):
             if isinstance(node, ast.Call):
-                temps_needed += count_temps_in_call(node, local_sym_tab)
-        max_temps_needed = max(max_temps_needed, temps_needed)
+                call_temps = count_temps_in_call(node, local_sym_tab)
+                for typ, cnt in call_temps.items():
+                    stmt_temps[typ] = stmt_temps.get(typ, 0) + cnt
+        merge_type_counts(stmt_temps)
 
     for stmt in body:
         update_max_temps_for_stmt(stmt)

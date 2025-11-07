@@ -177,17 +177,33 @@ def _allocate_for_binop(builder, var_name, local_sym_tab):
     logger.info(f"Pre-allocated {var_name} for binop result")
 
 
+def _get_type_name(ir_type):
+    """Get a string representation of an IR type."""
+    if isinstance(ir_type, ir.IntType):
+        return f"i{ir_type.width}"
+    elif isinstance(ir_type, ir.PointerType):
+        return "ptr"
+    elif isinstance(ir_type, ir.ArrayType):
+        return f"[{ir_type.count}x{_get_type_name(ir_type.element)}]"
+    else:
+        return str(ir_type).replace(" ", "")
+
+
 def allocate_temp_pool(builder, max_temps, local_sym_tab):
     """Allocate the temporary scratch space pool for helper arguments."""
-    if max_temps == 0:
+    if not max_temps:
+        logger.info("No temp pool allocation needed")
         return
 
-    logger.info(f"Allocating temp pool of {max_temps} variables")
-    for i in range(max_temps):
-        temp_name = f"__helper_temp_{i}"
-        temp_var = builder.alloca(ir.IntType(64), name=temp_name)
-        temp_var.align = 8
-        local_sym_tab[temp_name] = LocalSymbol(temp_var, ir.IntType(64))
+    for tmp_type, cnt in max_temps.items():
+        type_name = _get_type_name(tmp_type)
+        logger.info(f"Allocating temp pool of {cnt} variables of type {type_name}")
+        for i in range(cnt):
+            temp_name = f"__helper_temp_{type_name}_{i}"
+            temp_var = builder.alloca(tmp_type, name=temp_name)
+            temp_var.align = _get_alignment(tmp_type)
+            local_sym_tab[temp_name] = LocalSymbol(temp_var, tmp_type)
+            logger.debug(f"Allocated temp variable: {temp_name}")
 
 
 def _allocate_for_name(builder, var_name, rval, local_sym_tab):

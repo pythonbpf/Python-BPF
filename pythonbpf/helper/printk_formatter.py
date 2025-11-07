@@ -4,6 +4,7 @@ import logging
 from llvmlite import ir
 from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth
 from pythonbpf.expr.vmlinux_registry import VmlinuxHandlerRegistry
+from pythonbpf.helper.helper_utils import get_char_array_ptr_and_size
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +220,7 @@ def _prepare_expr_args(expr, func, module, builder, local_sym_tab, struct_sym_ta
     """Evaluate and prepare an expression to use as an arg for bpf_printk."""
 
     # Special case: struct field char array needs pointer to first element
-    char_array_ptr = _get_struct_char_array_ptr(
+    char_array_ptr, _ = get_char_array_ptr_and_size(
         expr, builder, local_sym_tab, struct_sym_tab
     )
     if char_array_ptr:
@@ -240,52 +241,6 @@ def _prepare_expr_args(expr, func, module, builder, local_sym_tab, struct_sym_ta
     else:
         logger.warning(f"Unsupported type {val.type} in bpf_printk, defaulting to 0")
         return ir.Constant(ir.IntType(64), 0)
-
-
-def _get_struct_char_array_ptr(expr, builder, local_sym_tab, struct_sym_tab):
-    """Get pointer to first element of char array in struct field, or None."""
-    if not (isinstance(expr, ast.Attribute) and isinstance(expr.value, ast.Name)):
-        return None
-
-    var_name = expr.value.id
-    field_name = expr.attr
-
-    # Check if it's a valid struct field
-    if not (
-        local_sym_tab
-        and var_name in local_sym_tab
-        and struct_sym_tab
-        and local_sym_tab[var_name].metadata in struct_sym_tab
-    ):
-        return None
-
-    struct_type = local_sym_tab[var_name].metadata
-    struct_info = struct_sym_tab[struct_type]
-
-    if field_name not in struct_info.fields:
-        return None
-
-    field_type = struct_info.field_type(field_name)
-
-    # Check if it's a char array
-    is_char_array = (
-        isinstance(field_type, ir.ArrayType)
-        and isinstance(field_type.element, ir.IntType)
-        and field_type.element.width == 8
-    )
-
-    if not is_char_array:
-        return None
-
-    # Get field pointer and GEP to first element: [N x i8]* -> i8*
-    struct_ptr = local_sym_tab[var_name].var
-    field_ptr = struct_info.gep(builder, struct_ptr, field_name)
-
-    return builder.gep(
-        field_ptr,
-        [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)],
-        inbounds=True,
-    )
 
 
 def _handle_pointer_arg(val, func, builder):
