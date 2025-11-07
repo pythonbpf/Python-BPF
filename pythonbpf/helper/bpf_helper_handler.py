@@ -464,7 +464,7 @@ def bpf_probe_read_kernel_str_emitter(
 
     # Get destination buffer (char array -> i8*)
     dst_ptr, dst_size = get_or_create_ptr_from_arg(
-        call.args[0], builder, local_sym_tab, struct_sym_tab
+        func, module, call.args[0], builder, local_sym_tab, map_sym_tab, struct_sym_tab
     )
 
     # Get source pointer (evaluate expression)
