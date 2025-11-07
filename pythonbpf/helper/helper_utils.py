@@ -98,6 +98,7 @@ def get_or_create_ptr_from_arg(
     """Extract or create pointer from the call arguments."""
 
     logger.info(f"Getting pointer from arg: {ast.dump(arg)}")
+    sz = None
     if isinstance(arg, ast.Name):
         # Stack space is already allocated
         ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
