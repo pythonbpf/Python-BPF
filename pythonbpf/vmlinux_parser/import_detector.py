@@ -11,7 +11,9 @@ from .class_handler import process_vmlinux_class
 logger = logging.getLogger(__name__)
 
 
-def detect_import_statement(tree: ast.AST) -> list[tuple[str, ast.ImportFrom]]:
+def detect_import_statement(
+    tree: ast.AST,
+) -> list[tuple[str, ast.ImportFrom, str, str]]:
     """
     Parse AST and detect import statements from vmlinux.
 
@@ -64,6 +66,7 @@ def detect_import_statement(tree: ast.AST) -> list[tuple[str, ast.ImportFrom]]:
                     )
 
     logger.info(f"Total vmlinux imports detected: {len(vmlinux_imports)}")
+    # print(f"\n**************\n{vmlinux_imports}\n**************\n")
     return vmlinux_imports
 
 
