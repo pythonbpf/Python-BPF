@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 class IRGenerator:
+    # This field keeps track of the non_struct names to avoid duplicate name errors.
+    type_number = 0
+    unprocessed_store = []
     # get the assignments dict and add this stuff to it.
     def __init__(self, llvm_module, handler: DependencyHandler, assignments):
         self.llvm_module = llvm_module
@@ -68,6 +71,7 @@ class IRGenerator:
                                 dep_node_from_dependency, processing_stack
                             )
                         else:
+                            print(struct)
                             raise RuntimeError(
                                 f"Warning: Dependency {dependency} not found in handler"
                             )
@@ -129,7 +133,20 @@ class IRGenerator:
 
         for field_name, field in struct.fields.items():
             # does not take arrays and similar types into consideration yet.
-            if field.ctype_complex_type is not None and issubclass(
+            if callable(field.ctype_complex_type):
+                # Function pointer case - generate a simple field accessor
+                field_co_re_name, returned = self._struct_name_generator(
+                    struct, field, field_index
+                )
+                print(field_co_re_name)
+                field_index += 1
+                globvar = ir.GlobalVariable(
+                    self.llvm_module, ir.IntType(64), name=field_co_re_name
+                )
+                globvar.linkage = "external"
+                globvar.set_metadata("llvm.preserve.access.index", debug_info)
+                self.generated_field_names[struct.name][field_name] = globvar
+            elif field.ctype_complex_type is not None and issubclass(
                 field.ctype_complex_type, ctypes.Array
             ):
                 array_size = field.type_size
@@ -137,7 +154,7 @@ class IRGenerator:
                 if containing_type.__module__ == ctypes.__name__:
                     containing_type_size = ctypes.sizeof(containing_type)
                     if array_size == 0:
-                        field_co_re_name = self._struct_name_generator(
+                        field_co_re_name, returned = self._struct_name_generator(
                             struct, field, field_index, True, 0, containing_type_size
                         )
                         globvar = ir.GlobalVariable(
@@ -149,7 +166,7 @@ class IRGenerator:
                         field_index += 1
                         continue
                     for i in range(0, array_size):
-                        field_co_re_name = self._struct_name_generator(
+                        field_co_re_name, returned = self._struct_name_generator(
                             struct, field, field_index, True, i, containing_type_size
                         )
                         globvar = ir.GlobalVariable(
@@ -163,11 +180,12 @@ class IRGenerator:
                 array_size = field.type_size
                 containing_type = field.containing_type
                 if containing_type.__module__ == "vmlinux":
+                    print(struct)
                     containing_type_size = self.handler[
                         containing_type.__name__
                     ].current_offset
                     for i in range(0, array_size):
-                        field_co_re_name = self._struct_name_generator(
+                        field_co_re_name, returned = self._struct_name_generator(
                             struct, field, field_index, True, i, containing_type_size
                         )
                         globvar = ir.GlobalVariable(
@@ -178,7 +196,7 @@ class IRGenerator:
                         self.generated_field_names[struct.name][field_name] = globvar
                     field_index += 1
             else:
-                field_co_re_name = self._struct_name_generator(
+                field_co_re_name, returned = self._struct_name_generator(
                     struct, field, field_index
                 )
                 field_index += 1
@@ -198,7 +216,7 @@ class IRGenerator:
         is_indexed: bool = False,
         index: int = 0,
         containing_type_size: int = 0,
-    ) -> str:
+    ) -> tuple[str, bool]:
         # TODO: Does not support Unions as well as recursive pointer and array type naming
         if is_indexed:
             name = (
@@ -208,7 +226,7 @@ class IRGenerator:
                 + "$"
                 + f"0:{field_index}:{index}"
             )
-            return name
+            return name, True
         elif struct.name.startswith("struct_"):
             name = (
                 "llvm."
@@ -217,9 +235,18 @@ class IRGenerator:
                 + "$"
                 + f"0:{field_index}"
             )
-            return name
+            return name, True
         else:
-            print(self.handler[struct.name])
-            raise TypeError(
-                "Name generation cannot occur due to type name not starting with struct"
+            logger.warning(
+                "Blindly handling non-struct type to avoid type errors in vmlinux IR generation. Possibly a union."
             )
+            self.type_number += 1
+            unprocessed_type = "unprocessed_type_" + str(self.handler[struct.name].name)
+            if self.unprocessed_store.__contains__(unprocessed_type):
+                return unprocessed_type + "_" + str(self.type_number), False
+            else:
+                self.unprocessed_store.append(unprocessed_type)
+                return unprocessed_type,  False
+            # raise TypeError(
+            #     "Name generation cannot occur due to type name not starting with struct"
+            # )

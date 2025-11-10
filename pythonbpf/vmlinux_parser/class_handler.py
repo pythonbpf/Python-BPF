@@ -16,10 +16,37 @@ def get_module_symbols(module_name: str):
     return [name for name in dir(imported_module)], imported_module
 
 
+def unwrap_pointer_type(type_obj: Any) -> Any:
+    """
+    Recursively unwrap all pointer layers to get the base type.
+
+    This handles multiply nested pointers like LP_LP_struct_attribute_group
+    and returns the base type (struct_attribute_group).
+
+    Stops unwrapping when reaching a non-pointer type (one without _type_ attribute).
+
+    Args:
+        type_obj: The type object to unwrap
+
+    Returns:
+        The base type after unwrapping all pointer layers
+    """
+    current_type = type_obj
+    # Keep unwrapping while it's a pointer/array type (has _type_)
+    # But stop if _type_ is just a string or basic type marker
+    while hasattr(current_type, "_type_"):
+        next_type = current_type._type_
+        # Stop if _type_ is a string (like 'c' for c_char)
+        if isinstance(next_type, str):
+            break
+        current_type = next_type
+    return current_type
+
+
 def process_vmlinux_class(
-    node,
-    llvm_module,
-    handler: DependencyHandler,
+        node,
+        llvm_module,
+        handler: DependencyHandler,
 ):
     symbols_in_module, imported_module = get_module_symbols("vmlinux")
     if node.name in symbols_in_module:
@@ -30,10 +57,10 @@ def process_vmlinux_class(
 
 
 def process_vmlinux_post_ast(
-    elem_type_class,
-    llvm_handler,
-    handler: DependencyHandler,
-    processing_stack=None,
+        elem_type_class,
+        llvm_handler,
+        handler: DependencyHandler,
+        processing_stack=None,
 ):
     # Initialize processing stack on first call
     if processing_stack is None:
@@ -113,7 +140,7 @@ def process_vmlinux_post_ast(
 
                     # Process pointer to ctype
                     if isinstance(elem_type, type) and issubclass(
-                        elem_type, ctypes._Pointer
+                            elem_type, ctypes._Pointer
                     ):
                         # Get the pointed-to type
                         pointed_type = elem_type._type_
@@ -126,7 +153,7 @@ def process_vmlinux_post_ast(
 
                     # Process function pointers (CFUNCTYPE)
                     elif hasattr(elem_type, "_restype_") and hasattr(
-                        elem_type, "_argtypes_"
+                            elem_type, "_argtypes_"
                     ):
                         # This is a CFUNCTYPE or similar
                         logger.info(
@@ -158,13 +185,19 @@ def process_vmlinux_post_ast(
                         if hasattr(elem_type, "_length_") and is_complex_type:
                             type_length = elem_type._length_
 
-                        if containing_type.__module__ == "vmlinux":
-                            new_dep_node.add_dependent(
-                                elem_type._type_.__name__
-                                if hasattr(elem_type._type_, "__name__")
-                                else str(elem_type._type_)
+                        # Unwrap all pointer layers to get the base type for dependency tracking
+                        base_type = unwrap_pointer_type(elem_type)
+                        base_type_module = getattr(base_type, "__module__", None)
+
+                        if base_type_module == "vmlinux":
+                            base_type_name = (
+                                base_type.__name__
+                                if hasattr(base_type, "__name__")
+                                else str(base_type)
                             )
-                        elif containing_type.__module__ == ctypes.__name__:
+                            new_dep_node.add_dependent(base_type_name)
+                        elif base_type_module == ctypes.__name__ or base_type_module is None:
+                            # Handle ctypes or types with no module (like some internal ctypes types)
                             if isinstance(elem_type, type):
                                 if issubclass(elem_type, ctypes.Array):
                                     ctype_complex_type = ctypes.Array
@@ -178,7 +211,7 @@ def process_vmlinux_post_ast(
                                 raise TypeError("Unsupported ctypes subclass")
                         else:
                             raise ImportError(
-                                f"Unsupported module of {containing_type}"
+                                f"Unsupported module of {base_type}: {base_type_module}"
                             )
                         logger.debug(
                             f"{containing_type} containing type of parent {elem_name} with {elem_type} and ctype {ctype_complex_type} and length {type_length}"
@@ -191,11 +224,16 @@ def process_vmlinux_post_ast(
                             elem_name, ctype_complex_type
                         )
                         new_dep_node.set_field_type(elem_name, elem_type)
-                        if containing_type.__module__ == "vmlinux":
+
+                        # Check the containing_type module to decide whether to recurse
+                        containing_type_module = getattr(containing_type, "__module__", None)
+                        if containing_type_module == "vmlinux":
+                            # Also unwrap containing_type to get base type name
+                            base_containing_type = unwrap_pointer_type(containing_type)
                             containing_type_name = (
-                                containing_type.__name__
-                                if hasattr(containing_type, "__name__")
-                                else str(containing_type)
+                                base_containing_type.__name__
+                                if hasattr(base_containing_type, "__name__")
+                                else str(base_containing_type)
                             )
 
                             # Check for self-reference or already processed
@@ -212,21 +250,21 @@ def process_vmlinux_post_ast(
                                 )
                                 new_dep_node.set_field_ready(elem_name, True)
                             else:
-                                # Process recursively - THIS WAS MISSING
+                                # Process recursively - use base containing type, not the pointer wrapper
                                 new_dep_node.add_dependent(containing_type_name)
                                 process_vmlinux_post_ast(
-                                    containing_type,
+                                    base_containing_type,
                                     llvm_handler,
                                     handler,
                                     processing_stack,
                                 )
                                 new_dep_node.set_field_ready(elem_name, True)
-                        elif containing_type.__module__ == ctypes.__name__:
+                        elif containing_type_module == ctypes.__name__ or containing_type_module is None:
                             logger.debug(f"Processing ctype internal{containing_type}")
                             new_dep_node.set_field_ready(elem_name, True)
                         else:
                             raise TypeError(
-                                "Module not supported in recursive resolution"
+                                f"Module not supported in recursive resolution: {containing_type_module}"
                             )
                     else:
                         new_dep_node.add_dependent(
@@ -245,9 +283,12 @@ def process_vmlinux_post_ast(
                     raise ValueError(
                         f"{elem_name} with type {elem_type} from module {module_name} not supported in recursive resolver"
                     )
-
+    elif module_name == ctypes.__name__ or module_name is None:
+        # Handle ctypes types - these don't need processing, just return
+        logger.debug(f"Skipping ctypes type {current_symbol_name}")
+        return True
     else:
-        raise ImportError("UNSUPPORTED Module")
+        raise ImportError(f"UNSUPPORTED Module {module_name}")
 
     logger.info(
         f"{current_symbol_name} processed and handler readiness {handler.is_ready}"

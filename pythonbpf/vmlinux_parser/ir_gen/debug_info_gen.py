@@ -46,13 +46,14 @@ def debug_info_generation(
 
     if struct.name.startswith("struct_"):
         struct_name = struct.name.removeprefix("struct_")
+        # Create struct type with all members
+        struct_type = generator.create_struct_type_with_name(
+            struct_name, members, struct.__sizeof__() * 8, is_distinct=True
+        )
     else:
-        raise ValueError("Unions are not supported in the current version")
-    # Create struct type with all members
-    struct_type = generator.create_struct_type_with_name(
-        struct_name, members, struct.__sizeof__() * 8, is_distinct=True
-    )
-
+        logger.warning("Blindly handling Unions present in vmlinux dependencies")
+        struct_type = None
+        # raise ValueError("Unions are not supported in the current version")
     return struct_type
 
 
@@ -62,7 +63,7 @@ def _get_field_debug_type(
     generator: DebugInfoGenerator,
     parent_struct: DependencyNode,
     generated_debug_info: List[Tuple[DependencyNode, Any]],
-) -> tuple[Any, int]:
+) -> tuple[Any, int] | None:
     """
     Determine the appropriate debug type for a field based on its Python/ctypes type.
 
@@ -78,7 +79,11 @@ def _get_field_debug_type(
     """
     # Handle complex types (arrays, pointers)
     if field.ctype_complex_type is not None:
-        if issubclass(field.ctype_complex_type, ctypes.Array):
+        #TODO: Check if this is a CFUNCTYPE (function pointer), but sadly it just checks callable for now
+        if callable(field.ctype_complex_type):
+            # Handle function pointer types, create a void pointer as a placeholder
+            return generator.create_pointer_type(None), 64
+        elif issubclass(field.ctype_complex_type, ctypes.Array):
             # Handle array types
             element_type, base_type_size = _get_basic_debug_type(
                 field.containing_type, generator
