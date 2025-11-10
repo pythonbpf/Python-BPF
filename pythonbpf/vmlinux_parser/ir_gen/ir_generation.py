@@ -86,6 +86,7 @@ class IRGenerator:
                 members_dict = {}
                 for field_name, field in struct.fields.items():
                     # Get the generated field name from our dictionary, or use field_name if not found
+                    print(f"DEBUG: {struct.name}, {field_name}")
                     if (
                         struct.name in self.generated_field_names
                         and field_name in self.generated_field_names[struct.name]
@@ -181,12 +182,25 @@ class IRGenerator:
                 containing_type = field.containing_type
                 if containing_type.__module__ == "vmlinux":
                     print(struct)
-                    containing_type_size = self.handler[
-                        containing_type.__name__
-                    ].current_offset
-                    for i in range(0, array_size):
+                    # Unwrap all pointer layers to get the base struct type
+                    base_containing_type = containing_type
+                    while hasattr(base_containing_type, "_type_"):
+                        next_type = base_containing_type._type_
+                        # Stop if _type_ is a string (like 'c' for c_char)
+                        #TODO: stacked pointers not handl;ing ctypes check here as well
+                        if isinstance(next_type, str):
+                            break
+                        base_containing_type = next_type
+
+                    # Get the base struct name
+                    base_struct_name = base_containing_type.__name__ if hasattr(base_containing_type, "__name__") else str(base_containing_type)
+
+                    # Look up the size using the base struct name
+                    containing_type_size = self.handler[base_struct_name].current_offset
+                    print(f"GAY: {array_size}, {struct.name}, {field_name}")
+                    if array_size == 0:
                         field_co_re_name, returned = self._struct_name_generator(
-                            struct, field, field_index, True, i, containing_type_size
+                            struct, field, field_index, True, 0, containing_type_size
                         )
                         globvar = ir.GlobalVariable(
                             self.llvm_module, ir.IntType(64), name=field_co_re_name
@@ -194,7 +208,19 @@ class IRGenerator:
                         globvar.linkage = "external"
                         globvar.set_metadata("llvm.preserve.access.index", debug_info)
                         self.generated_field_names[struct.name][field_name] = globvar
-                    field_index += 1
+                        field_index += 1
+                    else:
+                        for i in range(0, array_size):
+                            field_co_re_name, returned = self._struct_name_generator(
+                                struct, field, field_index, True, i, containing_type_size
+                            )
+                            globvar = ir.GlobalVariable(
+                                self.llvm_module, ir.IntType(64), name=field_co_re_name
+                            )
+                            globvar.linkage = "external"
+                            globvar.set_metadata("llvm.preserve.access.index", debug_info)
+                            self.generated_field_names[struct.name][field_name] = globvar
+                        field_index += 1
             else:
                 field_co_re_name, returned = self._struct_name_generator(
                     struct, field, field_index
