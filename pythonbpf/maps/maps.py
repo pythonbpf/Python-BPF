@@ -36,7 +36,7 @@ class PerfEventArray:
         pass  # Placeholder for output method
 
 
-class RingBuf:
+class RingBuffer:
     def __init__(self, max_entries):
         self.max_entries = max_entries
 

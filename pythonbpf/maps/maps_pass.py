@@ -79,7 +79,7 @@ def _parse_map_params(rval, expected_args=None):
     return params
 
 
-@MapProcessorRegistry.register("RingBuf")
+@MapProcessorRegistry.register("RingBuffer")
 def process_ringbuf_map(map_name, rval, module):
     """Process a BPF_RINGBUF map declaration"""
     logger.info(f"Processing Ringbuf: {map_name}")
