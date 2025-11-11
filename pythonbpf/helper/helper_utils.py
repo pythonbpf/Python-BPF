@@ -287,7 +287,9 @@ def get_char_array_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab)
 
         field_type = struct_info.field_type(field_name)
         if not _is_char_array(field_type):
-            logger.info("Field is not a char array, falling back to int or ptr detection")
+            logger.info(
+                "Field is not a char array, falling back to int or ptr detection"
+            )
             return None, 0
 
         struct_ptr = local_sym_tab[var_name].var
