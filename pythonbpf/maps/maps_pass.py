@@ -86,6 +86,17 @@ def process_ringbuf_map(map_name, rval, module):
     map_params = _parse_map_params(rval, expected_args=["max_entries"])
     map_params["type"] = BPFMapType.RINGBUF
 
+    # NOTE: constraints borrowed from https://docs.ebpf.io/linux/map-type/BPF_MAP_TYPE_RINGBUF/
+    max_entries = map_params.get("max_entries")
+    if (
+        not isinstance(max_entries, int)
+        or max_entries < 4096
+        or (max_entries & (max_entries - 1)) != 0
+    ):
+        raise ValueError(
+            "Ringbuf max_entries must be a power of two greater than or equal to the page size (4096)"
+        )
+
     logger.info(f"Ringbuf map parameters: {map_params}")
 
     map_global = create_bpf_map(module, map_name, map_params)
