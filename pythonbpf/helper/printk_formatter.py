@@ -220,11 +220,12 @@ def _prepare_expr_args(expr, func, module, builder, local_sym_tab, struct_sym_ta
     """Evaluate and prepare an expression to use as an arg for bpf_printk."""
 
     # Special case: struct field char array needs pointer to first element
-    char_array_ptr, _ = get_char_array_ptr_and_size(
-        expr, builder, local_sym_tab, struct_sym_tab
-    )
-    if char_array_ptr:
-        return char_array_ptr
+    if isinstance(expr, ast.Attribute):
+        char_array_ptr, _ = get_char_array_ptr_and_size(
+            expr, builder, local_sym_tab, struct_sym_tab
+        )
+        if char_array_ptr:
+            return char_array_ptr
 
     # Regular expression evaluation
     val, _ = eval_expr(func, module, builder, expr, local_sym_tab, None, struct_sym_tab)
