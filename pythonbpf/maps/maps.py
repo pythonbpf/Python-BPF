@@ -40,6 +40,9 @@ class RingBuffer:
     def __init__(self, max_entries):
         self.max_entries = max_entries
 
+    def output(self, data, flags=0):
+        pass
+
     def reserve(self, size: int, flags=0):
         if size > self.max_entries:
             raise ValueError("size cannot be greater than set maximum entries")
