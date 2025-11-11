@@ -48,4 +48,7 @@ class RingBuffer:
     def submit(self, data, flags=0):
         pass
 
+    def discard(self, data, flags=0):
+        pass
+
     # add discard, output and also give names to flags and stuff
