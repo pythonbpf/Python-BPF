@@ -218,13 +218,11 @@ def compile(loglevel=logging.WARNING) -> bool:
 def BPF(loglevel=logging.WARNING) -> BpfObject:
     caller_frame = inspect.stack()[1]
     src = inspect.getsource(caller_frame.frame)
-    with tempfile.NamedTemporaryFile(
-        mode="w+", delete=True, suffix=".py"
-    ) as f, tempfile.NamedTemporaryFile(
-        mode="w+", delete=True, suffix=".ll"
-    ) as inter, tempfile.NamedTemporaryFile(
-        mode="w+", delete=False, suffix=".o"
-    ) as obj_file:
+    with (
+        tempfile.NamedTemporaryFile(mode="w+", delete=True, suffix=".py") as f,
+        tempfile.NamedTemporaryFile(mode="w+", delete=True, suffix=".ll") as inter,
+        tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".o") as obj_file,
+    ):
         f.write(src)
         f.flush()
         source = f.name
