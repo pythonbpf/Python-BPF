@@ -3,7 +3,7 @@ import logging
 from logging import Logger
 from llvmlite import ir
 
-from .maps_utils import MapProcessorRegistry
+from .maps_utils import MapProcessorRegistry, MapSymbol
 from .map_types import BPFMapType
 from .map_debug_info import create_map_debug_info, create_ringbuf_debug_info
 from pythonbpf.expr.vmlinux_registry import VmlinuxHandlerRegistry
@@ -46,7 +46,7 @@ def create_bpf_map(module, map_name, map_params):
     map_global.align = 8
 
     logger.info(f"Created BPF map: {map_name} with params {map_params}")
-    return map_global
+    return MapSymbol(type=map_params["type"], sym=map_global)
 
 
 def _parse_map_params(rval, expected_args=None):
@@ -100,7 +100,7 @@ def process_ringbuf_map(map_name, rval, module):
     logger.info(f"Ringbuf map parameters: {map_params}")
 
     map_global = create_bpf_map(module, map_name, map_params)
-    create_ringbuf_debug_info(module, map_global, map_name, map_params)
+    create_ringbuf_debug_info(module, map_global.sym, map_name, map_params)
     return map_global
 
 
@@ -114,7 +114,7 @@ def process_hash_map(map_name, rval, module):
     logger.info(f"Map parameters: {map_params}")
     map_global = create_bpf_map(module, map_name, map_params)
     # Generate debug info for BTF
-    create_map_debug_info(module, map_global, map_name, map_params)
+    create_map_debug_info(module, map_global.sym, map_name, map_params)
     return map_global
 
 
@@ -128,7 +128,7 @@ def process_perf_event_map(map_name, rval, module):
     logger.info(f"Map parameters: {map_params}")
     map_global = create_bpf_map(module, map_name, map_params)
     # Generate debug info for BTF
-    create_map_debug_info(module, map_global, map_name, map_params)
+    create_map_debug_info(module, map_global.sym, map_name, map_params)
     return map_global
 
 

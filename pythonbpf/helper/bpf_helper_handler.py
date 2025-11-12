@@ -12,11 +12,9 @@ from .helper_utils import (
     get_int_value_from_arg,
 )
 from .printk_formatter import simple_string_print, handle_fstring_print
-
-from logging import Logger
 import logging
 
-logger: Logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class BPFHelperID(Enum):
@@ -377,6 +375,10 @@ def bpf_perf_event_output_handler(
     struct_sym_tab=None,
     map_sym_tab=None,
 ):
+    """
+    Emit LLVM IR for bpf_perf_event_output helper function call.
+    """
+
     if len(call.args) != 1:
         raise ValueError(
             f"Perf event output expects exactly one argument, got {len(call.args)}"
@@ -904,6 +906,6 @@ def handle_helper_call(
         if not map_sym_tab or map_name not in map_sym_tab:
             raise ValueError(f"Map '{map_name}' not found in symbol table")
 
-        return invoke_helper(method_name, map_sym_tab[map_name])
+        return invoke_helper(method_name, map_sym_tab[map_name].sym)
 
     return None
