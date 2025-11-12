@@ -12,6 +12,7 @@ from .helper_utils import (
     get_int_value_from_arg,
 )
 from .printk_formatter import simple_string_print, handle_fstring_print
+from pythonbpf.maps import BPFMapType
 import logging
 
 logger = logging.getLogger(__name__)
@@ -360,11 +361,6 @@ def bpf_get_current_pid_tgid_emitter(
     return pid, ir.IntType(64)
 
 
-@HelperHandlerRegistry.register(
-    "output",
-    param_types=[ir.PointerType(ir.IntType(8))],
-    return_type=ir.IntType(64),
-)
 def bpf_perf_event_output_handler(
     call,
     map_ptr,
@@ -414,6 +410,98 @@ def bpf_perf_event_output_handler(
         fn_ptr, [ctx_ptr, map_void_ptr, flags_val, data_void_ptr, size_val], tail=False
     )
     return result, None
+
+
+def bpf_ringbuf_output_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_ringbuf_output helper function call.
+    """
+
+    if len(call.args) != 1:
+        raise ValueError(
+            f"Ringbuf output expects exactly one argument, got {len(call.args)}"
+        )
+    data_arg = call.args[0]
+    data_ptr, size_val = get_data_ptr_and_size(data_arg, local_sym_tab, struct_sym_tab)
+    flags_val = ir.Constant(ir.IntType(64), 0)
+
+    map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
+    data_void_ptr = builder.bitcast(data_ptr, ir.PointerType())
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [
+            ir.PointerType(),
+            ir.PointerType(),
+            ir.IntType(64),
+            ir.IntType(64),
+        ],
+        var_arg=False,
+    )
+    fn_ptr_type = ir.PointerType(fn_type)
+
+    # helper id
+    fn_addr = ir.Constant(ir.IntType(64), BPFHelperID.BPF_RINGBUF_OUTPUT.value)
+    fn_ptr = builder.inttoptr(fn_addr, fn_ptr_type)
+
+    result = builder.call(
+        fn_ptr, [map_void_ptr, data_void_ptr, size_val, flags_val], tail=False
+    )
+    return result, None
+
+
+@HelperHandlerRegistry.register(
+    "output",
+    param_types=[ir.PointerType(ir.IntType(8))],
+    return_type=ir.IntType(64),
+)
+def handle_output_helper(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Route output helper to the appropriate emitter based on map type.
+    """
+    match map_sym_tab[map_ptr.name].type:
+        case BPFMapType.PERF_EVENT_ARRAY:
+            return bpf_perf_event_output_handler(
+                call,
+                map_ptr,
+                module,
+                builder,
+                func,
+                local_sym_tab,
+                struct_sym_tab,
+                map_sym_tab,
+            )
+        case BPFMapType.RINGBUF:
+            return bpf_ringbuf_output_emitter(
+                call,
+                map_ptr,
+                module,
+                builder,
+                func,
+                local_sym_tab,
+                struct_sym_tab,
+                map_sym_tab,
+            )
+        case _:
+            logger.error("Unsupported map type for output helper.")
+    raise NotImplementedError("Output helper for this map type is not implemented.")
 
 
 def emit_probe_read_kernel_str_call(builder, dst_ptr, dst_size, src_ptr):
