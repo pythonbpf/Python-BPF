@@ -806,7 +806,10 @@ def bpf_skb_store_bytes_emitter(
         flags_val = get_flags_val(call.args[3], builder, local_sym_tab)
     else:
         flags_val = 0
-    flags = ir.Constant(ir.IntType(64), flags_val)
+    if isinstance(flags_val, int):
+        flags = ir.Constant(ir.IntType(64), flags_val)
+    else:
+        flags = flags_val
     fn_type = ir.FunctionType(
         ir.IntType(64),
         args_signature,
@@ -922,8 +925,8 @@ def bpf_ringbuf_submit_emitter(
     )
 
     flags_const = get_flags_val(flags_arg, builder, local_sym_tab)
-    if not flags_arg:
-        flags_const = ir.Constant(ir.IntType(64), 0)
+    if isinstance(flags_const, int):
+        flags_const = ir.Constant(ir.IntType(64), flags_const)
 
     map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
     fn_type = ir.FunctionType(
@@ -962,11 +965,14 @@ def bpf_get_stack_emitter(
         )
     ctx_ptr = func.args[0]  # First argument to the function is ctx
     buf_arg = call.args[0]
-    flags_arg = call.args[1] if len(call.args) == 2 else 0
+    flags_arg = call.args[1] if len(call.args) == 2 else None
     buf_ptr, buf_size = get_buffer_ptr_and_size(
         buf_arg, builder, local_sym_tab, struct_sym_tab
     )
     flags_val = get_flags_val(flags_arg, builder, local_sym_tab)
+    if isinstance(flags_val, int):
+        flags_val = ir.Constant(ir.IntType(64), flags_val)
+
     buf_void_ptr = builder.bitcast(buf_ptr, ir.PointerType())
     fn_type = ir.FunctionType(
         ir.IntType(64),
