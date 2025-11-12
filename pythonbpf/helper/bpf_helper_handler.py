@@ -956,8 +956,37 @@ def bpf_get_stack_emitter(
     struct_sym_tab=None,
     map_sym_tab=None,
 ):
-    # TODO: Implement bpf_get_stack emitter
-    pass
+    if len(call.args) not in (1, 2):
+        raise ValueError(
+            f"get_stack expects atmost two arguments (buf, flags), got {len(call.args)}"
+        )
+    ctx_ptr = func.args[0]  # First argument to the function is ctx
+    buf_arg = call.args[0]
+    flags_arg = call.args[1] if len(call.args) == 2 else 0
+    buf_ptr, buf_size = get_buffer_ptr_and_size(
+        buf_arg, builder, local_sym_tab, struct_sym_tab
+    )
+    flags_val = get_flags_val(flags_arg, builder, local_sym_tab)
+    buf_void_ptr = builder.bitcast(buf_ptr, ir.PointerType())
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [
+            ir.PointerType(ir.IntType(8)),
+            ir.PointerType(),
+            ir.IntType(64),
+            ir.IntType(64),
+        ],
+        var_arg=False,
+    )
+    fn_ptr_type = ir.PointerType(fn_type)
+    fn_addr = ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_STACK.value)
+    fn_ptr = builder.inttoptr(fn_addr, fn_ptr_type)
+    result = builder.call(
+        fn_ptr,
+        [ctx_ptr, buf_void_ptr, ir.Constant(ir.IntType(64), buf_size), flags_val],
+        tail=False,
+    )
+    return result, ir.IntType(64)
 
 
 def handle_helper_call(

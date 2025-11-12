@@ -52,6 +52,11 @@ def skb_store_bytes(offset, from_buf, size, flags=0):
     return ctypes.c_int64(0)
 
 
+def get_stack(buf, flags=0):
+    """get the current stack trace"""
+    return ctypes.c_int64(0)
+
+
 XDP_ABORTED = ctypes.c_int64(0)
 XDP_DROP = ctypes.c_int64(1)
 XDP_PASS = ctypes.c_int64(2)
