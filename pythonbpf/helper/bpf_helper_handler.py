@@ -32,6 +32,7 @@ class BPFHelperID(Enum):
     BPF_GET_CURRENT_UID_GID = 15
     BPF_GET_CURRENT_COMM = 16
     BPF_PERF_EVENT_OUTPUT = 25
+    BPF_GET_STACK = 67
     BPF_PROBE_READ_KERNEL_STR = 115
     BPF_RINGBUF_OUTPUT = 130
     BPF_RINGBUF_RESERVE = 131
@@ -938,6 +939,25 @@ def bpf_ringbuf_submit_emitter(
     result = builder.call(fn_ptr, [map_void_ptr, data_ptr, flags_const], tail=False)
 
     return result, None
+
+
+@HelperHandlerRegistry.register(
+    "get_stack",
+    param_types=[ir.PointerType(ir.IntType(8)), ir.IntType(64)],
+    return_type=ir.IntType(64),
+)
+def bpf_get_stack_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    # TODO: Implement bpf_get_stack emitter
+    pass
 
 
 def handle_helper_call(
