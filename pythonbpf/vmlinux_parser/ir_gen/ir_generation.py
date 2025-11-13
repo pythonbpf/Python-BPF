@@ -14,6 +14,7 @@ class IRGenerator:
     # This field keeps track of the non_struct names to avoid duplicate name errors.
     type_number = 0
     unprocessed_store = []
+
     # get the assignments dict and add this stuff to it.
     def __init__(self, llvm_module, handler: DependencyHandler, assignments):
         self.llvm_module = llvm_module
@@ -187,13 +188,17 @@ class IRGenerator:
                     while hasattr(base_containing_type, "_type_"):
                         next_type = base_containing_type._type_
                         # Stop if _type_ is a string (like 'c' for c_char)
-                        #TODO: stacked pointers not handl;ing ctypes check here as well
+                        # TODO: stacked pointers not handl;ing ctypes check here as well
                         if isinstance(next_type, str):
                             break
                         base_containing_type = next_type
 
                     # Get the base struct name
-                    base_struct_name = base_containing_type.__name__ if hasattr(base_containing_type, "__name__") else str(base_containing_type)
+                    base_struct_name = (
+                        base_containing_type.__name__
+                        if hasattr(base_containing_type, "__name__")
+                        else str(base_containing_type)
+                    )
 
                     # Look up the size using the base struct name
                     containing_type_size = self.handler[base_struct_name].current_offset
@@ -212,14 +217,23 @@ class IRGenerator:
                     else:
                         for i in range(0, array_size):
                             field_co_re_name, returned = self._struct_name_generator(
-                                struct, field, field_index, True, i, containing_type_size
+                                struct,
+                                field,
+                                field_index,
+                                True,
+                                i,
+                                containing_type_size,
                             )
                             globvar = ir.GlobalVariable(
                                 self.llvm_module, ir.IntType(64), name=field_co_re_name
                             )
                             globvar.linkage = "external"
-                            globvar.set_metadata("llvm.preserve.access.index", debug_info)
-                            self.generated_field_names[struct.name][field_name] = globvar
+                            globvar.set_metadata(
+                                "llvm.preserve.access.index", debug_info
+                            )
+                            self.generated_field_names[struct.name][field_name] = (
+                                globvar
+                            )
                         field_index += 1
             else:
                 field_co_re_name, returned = self._struct_name_generator(
@@ -272,7 +286,7 @@ class IRGenerator:
                 return unprocessed_type + "_" + str(self.type_number), False
             else:
                 self.unprocessed_store.append(unprocessed_type)
-                return unprocessed_type,  False
+                return unprocessed_type, False
             # raise TypeError(
             #     "Name generation cannot occur due to type name not starting with struct"
             # )

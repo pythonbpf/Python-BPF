@@ -7,8 +7,8 @@ from ctypes import c_int64, c_void_p
 @bpf
 @section("kprobe/blk_mq_start_request")
 def example(ctx: c_void_p) -> c_int64:
-    d = XDP_PASS # This gives an error, but
-    e = XDP_PASS + 0 # this does not
+    d = XDP_PASS  # This gives an error, but
+    e = XDP_PASS + 0  # this does not
     print(f"test1 {e} test2 {d}")
     return c_int64(0)
 

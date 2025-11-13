@@ -1,4 +1,4 @@
-from vmlinux import struct_request, struct_pt_regs, XDP_PASS
+from vmlinux import struct_pt_regs
 from pythonbpf import bpf, section, bpfglobal, compile_to_ir
 import logging
 from ctypes import c_int64

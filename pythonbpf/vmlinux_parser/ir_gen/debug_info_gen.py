@@ -79,7 +79,7 @@ def _get_field_debug_type(
     """
     # Handle complex types (arrays, pointers)
     if field.ctype_complex_type is not None:
-        #TODO: Check if this is a CFUNCTYPE (function pointer), but sadly it just checks callable for now
+        # TODO: Check if this is a CFUNCTYPE (function pointer), but sadly it just checks callable for now
         if callable(field.ctype_complex_type):
             # Handle function pointer types, create a void pointer as a placeholder
             return generator.create_pointer_type(None), 64
