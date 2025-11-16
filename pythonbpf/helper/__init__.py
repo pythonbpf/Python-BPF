@@ -12,6 +12,7 @@ from .helpers import (
     smp_processor_id,
     uid,
     skb_store_bytes,
+    get_stack,
     XDP_DROP,
     XDP_PASS,
 )
@@ -83,6 +84,7 @@ __all__ = [
     "smp_processor_id",
     "uid",
     "skb_store_bytes",
+    "get_stack",
     "XDP_DROP",
     "XDP_PASS",
 ]
