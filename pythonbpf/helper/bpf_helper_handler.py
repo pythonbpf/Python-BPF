@@ -959,6 +959,9 @@ def bpf_get_stack_emitter(
     struct_sym_tab=None,
     map_sym_tab=None,
 ):
+    """
+    Emit LLVM IR for bpf_get_stack helper function call.
+    """
     if len(call.args) not in (1, 2):
         raise ValueError(
             f"get_stack expects atmost two arguments (buf, flags), got {len(call.args)}"
