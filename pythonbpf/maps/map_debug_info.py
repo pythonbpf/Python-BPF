@@ -2,7 +2,7 @@ from pythonbpf.debuginfo import DebugInfoGenerator
 from .map_types import BPFMapType
 
 
-def create_map_debug_info(module, map_global, map_name, map_params):
+def create_map_debug_info(module, map_global, map_name, map_params, structs_sym_tab):
     """Generate debug info metadata for BPF maps HASH and PERF_EVENT_ARRAY"""
     generator = DebugInfoGenerator(module)
 
@@ -64,7 +64,13 @@ def create_map_debug_info(module, map_global, map_name, map_params):
     return global_var
 
 
-def create_ringbuf_debug_info(module, map_global, map_name, map_params):
+# TODO: This should not be exposed outside of the module.
+# Ideally we should expose a single create_map_debug_info function that handles all map types.
+# We can probably use a registry pattern to register different map types and their debug info generators.
+# map_params["type"] will be used to determine which generator to use.
+def create_ringbuf_debug_info(
+    module, map_global, map_name, map_params, structs_sym_tab
+):
     """Generate debug information metadata for BPF RINGBUF map"""
     generator = DebugInfoGenerator(module)
 
