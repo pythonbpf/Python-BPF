@@ -12,7 +12,7 @@ from pythonbpf.expr.vmlinux_registry import VmlinuxHandlerRegistry
 logger: Logger = logging.getLogger(__name__)
 
 
-def maps_proc(tree, module, chunks):
+def maps_proc(tree, module, chunks, structs_sym_tab):
     """Process all functions decorated with @map to find BPF maps"""
     map_sym_tab = {}
     for func_node in chunks:
