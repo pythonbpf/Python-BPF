@@ -1,5 +1,8 @@
+import logging
 from pythonbpf.debuginfo import DebugInfoGenerator
 from .map_types import BPFMapType
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 def create_map_debug_info(module, map_global, map_name, map_params, structs_sym_tab):
@@ -97,3 +100,24 @@ def create_ringbuf_debug_info(
     )
     map_global.set_metadata("dbg", global_var)
     return global_var
+
+
+def _get_key_val_dbg_type(name, generator, structs_sym_tab):
+    """Get the debug type for key/value based on type object"""
+    type_obj = structs_sym_tab.get(name)
+    if type_obj:
+        return _get_struct_debug_type(type_obj, generator, structs_sym_tab)
+
+    # Fallback to basic types
+    logger.info(f"No struct named {name}, falling back to basic type")
+
+    # NOTE: Only handling int and long for now
+    if name in ["c_int32", "c_uint32"]:
+        return generator.get_uint32_type()
+
+    # Default fallback for now
+    return generator.get_uint64_type()
+
+
+def _get_struct_debug_type(struct_obj, generator, structs_sym_tab):
+    pass
