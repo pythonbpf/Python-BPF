@@ -18,7 +18,9 @@ def maps_proc(tree, module, chunks, structs_sym_tab):
     for func_node in chunks:
         if is_map(func_node):
             logger.info(f"Found BPF map: {func_node.name}")
-            map_sym_tab[func_node.name] = process_bpf_map(func_node, module)
+            map_sym_tab[func_node.name] = process_bpf_map(
+                func_node, module, structs_sym_tab
+            )
     return map_sym_tab
 
 
@@ -60,7 +62,8 @@ def _parse_map_params(rval, expected_args=None):
             if i < len(rval.args):
                 arg = rval.args[i]
                 if isinstance(arg, ast.Name):
-                    params[arg_name] = arg.id
+                    result = _get_vmlinux_enum(handler, arg.id)
+                    params[arg_name] = result if result is not None else arg.id
                 elif isinstance(arg, ast.Constant):
                     params[arg_name] = arg.value
 
@@ -68,19 +71,21 @@ def _parse_map_params(rval, expected_args=None):
     for keyword in rval.keywords:
         if isinstance(keyword.value, ast.Name):
             name = keyword.value.id
-            if handler and handler.is_vmlinux_enum(name):
-                result = handler.get_vmlinux_enum_value(name)
-                params[keyword.arg] = result if result is not None else name
-            else:
-                params[keyword.arg] = name
+            result = _get_vmlinux_enum(handler, name)
+            params[keyword.arg] = result if result is not None else name
         elif isinstance(keyword.value, ast.Constant):
             params[keyword.arg] = keyword.value.value
 
     return params
 
 
+def _get_vmlinux_enum(handler, name):
+    if handler and handler.is_vmlinux_enum(name):
+        return handler.get_vmlinux_enum_value(name)
+
+
 @MapProcessorRegistry.register("RingBuffer")
-def process_ringbuf_map(map_name, rval, module):
+def process_ringbuf_map(map_name, rval, module, structs_sym_tab):
     """Process a BPF_RINGBUF map declaration"""
     logger.info(f"Processing Ringbuf: {map_name}")
     map_params = _parse_map_params(rval, expected_args=["max_entries"])
@@ -105,7 +110,7 @@ def process_ringbuf_map(map_name, rval, module):
 
 
 @MapProcessorRegistry.register("HashMap")
-def process_hash_map(map_name, rval, module):
+def process_hash_map(map_name, rval, module, structs_sym_tab):
     """Process a BPF_HASH map declaration"""
     logger.info(f"Processing HashMap: {map_name}")
     map_params = _parse_map_params(rval, expected_args=["key", "value", "max_entries"])
@@ -119,7 +124,7 @@ def process_hash_map(map_name, rval, module):
 
 
 @MapProcessorRegistry.register("PerfEventArray")
-def process_perf_event_map(map_name, rval, module):
+def process_perf_event_map(map_name, rval, module, structs_sym_tab):
     """Process a BPF_PERF_EVENT_ARRAY map declaration"""
     logger.info(f"Processing PerfEventArray: {map_name}")
     map_params = _parse_map_params(rval, expected_args=["key_size", "value_size"])
@@ -132,7 +137,7 @@ def process_perf_event_map(map_name, rval, module):
     return map_global
 
 
-def process_bpf_map(func_node, module):
+def process_bpf_map(func_node, module, structs_sym_tab):
     """Process a BPF map (a function decorated with @map)"""
     map_name = func_node.name
     logger.info(f"Processing BPF map: {map_name}")
@@ -151,7 +156,7 @@ def process_bpf_map(func_node, module):
     if isinstance(rval, ast.Call) and isinstance(rval.func, ast.Name):
         handler = MapProcessorRegistry.get_processor(rval.func.id)
         if handler:
-            return handler(map_name, rval, module)
+            return handler(map_name, rval, module, structs_sym_tab)
         else:
             logger.warning(f"Unknown map type {rval.func.id}, defaulting to HashMap")
             return process_hash_map(map_name, rval, module)
