@@ -11,6 +11,7 @@ class MapSymbol:
 
     type: BPFMapType
     sym: ir.GlobalVariable
+    params: dict[str, Any] | None = None
 
 
 class MapProcessorRegistry:

@@ -147,7 +147,9 @@ def allocate_mem(
                 structs_sym_tab,
             )
         elif isinstance(stmt, ast.Assign):
-            handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab)
+            handle_assign_allocation(
+                builder, stmt, local_sym_tab, map_sym_tab, structs_sym_tab
+            )
 
     allocate_temp_pool(builder, max_temps_needed, local_sym_tab)
 

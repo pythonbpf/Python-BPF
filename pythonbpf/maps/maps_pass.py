@@ -48,7 +48,7 @@ def create_bpf_map(module, map_name, map_params):
     map_global.align = 8
 
     logger.info(f"Created BPF map: {map_name} with params {map_params}")
-    return MapSymbol(type=map_params["type"], sym=map_global)
+    return MapSymbol(type=map_params["type"], sym=map_global, params=map_params)
 
 
 def _parse_map_params(rval, expected_args=None):
