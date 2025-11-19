@@ -195,9 +195,80 @@ def process_vmlinux_post_ast(
                                 if hasattr(base_type, "__name__")
                                 else str(base_type)
                             )
+                            # ONLY add vmlinux types as dependencies
                             new_dep_node.add_dependent(base_type_name)
-                        elif base_type_module == ctypes.__name__ or base_type_module is None:
+
+                            logger.debug(
+                                f"{containing_type} containing type of parent {elem_name} with {elem_type} and ctype {ctype_complex_type} and length {type_length}"
+                            )
+                            new_dep_node.set_field_containing_type(
+                                elem_name, containing_type
+                            )
+                            new_dep_node.set_field_type_size(elem_name, type_length)
+                            new_dep_node.set_field_ctype_complex_type(
+                                elem_name, ctype_complex_type
+                            )
+                            new_dep_node.set_field_type(elem_name, elem_type)
+
+                            # Check the containing_type module to decide whether to recurse
+                            containing_type_module = getattr(
+                                containing_type, "__module__", None
+                            )
+                            if containing_type_module == "vmlinux":
+                                # Also unwrap containing_type to get base type name
+                                base_containing_type = unwrap_pointer_type(
+                                    containing_type
+                                )
+                                containing_type_name = (
+                                    base_containing_type.__name__
+                                    if hasattr(base_containing_type, "__name__")
+                                    else str(base_containing_type)
+                                )
+
+                                # Check for self-reference or already processed
+                                if containing_type_name == current_symbol_name:
+                                    # Self-referential pointer
+                                    logger.debug(
+                                        f"Self-referential pointer in {current_symbol_name}.{elem_name}"
+                                    )
+                                    new_dep_node.set_field_ready(elem_name, True)
+                                elif handler.has_node(containing_type_name):
+                                    # Already processed
+                                    logger.debug(
+                                        f"Reusing already processed {containing_type_name}"
+                                    )
+                                    new_dep_node.set_field_ready(elem_name, True)
+                                else:
+                                    # Process recursively - use base containing type, not the pointer wrapper
+                                    new_dep_node.add_dependent(containing_type_name)
+                                    process_vmlinux_post_ast(
+                                        base_containing_type,
+                                        llvm_handler,
+                                        handler,
+                                        processing_stack,
+                                    )
+                                    new_dep_node.set_field_ready(elem_name, True)
+                            elif (
+                                containing_type_module == ctypes.__name__
+                                or containing_type_module is None
+                            ):
+                                logger.debug(
+                                    f"Processing ctype internal{containing_type}"
+                                )
+                                new_dep_node.set_field_ready(elem_name, True)
+                            else:
+                                raise TypeError(
+                                    f"Module not supported in recursive resolution: {containing_type_module}"
+                                )
+                        elif (
+                            base_type_module == ctypes.__name__
+                            or base_type_module is None
+                        ):
                             # Handle ctypes or types with no module (like some internal ctypes types)
+                            # DO NOT add ctypes as dependencies - just set field metadata and mark ready
+                            logger.debug(
+                                f"Base type {base_type} is ctypes - NOT adding as dependency, just processing field"
+                            )
                             if isinstance(elem_type, type):
                                 if issubclass(elem_type, ctypes.Array):
                                     ctype_complex_type = ctypes.Array
@@ -209,62 +280,20 @@ def process_vmlinux_post_ast(
                                     )
                             else:
                                 raise TypeError("Unsupported ctypes subclass")
+
+                            # Set field metadata but DO NOT add dependency or recurse
+                            new_dep_node.set_field_containing_type(
+                                elem_name, containing_type
+                            )
+                            new_dep_node.set_field_type_size(elem_name, type_length)
+                            new_dep_node.set_field_ctype_complex_type(
+                                elem_name, ctype_complex_type
+                            )
+                            new_dep_node.set_field_type(elem_name, elem_type)
+                            new_dep_node.set_field_ready(elem_name, True)
                         else:
                             raise ImportError(
                                 f"Unsupported module of {base_type}: {base_type_module}"
-                            )
-                        logger.debug(
-                            f"{containing_type} containing type of parent {elem_name} with {elem_type} and ctype {ctype_complex_type} and length {type_length}"
-                        )
-                        new_dep_node.set_field_containing_type(
-                            elem_name, containing_type
-                        )
-                        new_dep_node.set_field_type_size(elem_name, type_length)
-                        new_dep_node.set_field_ctype_complex_type(
-                            elem_name, ctype_complex_type
-                        )
-                        new_dep_node.set_field_type(elem_name, elem_type)
-
-                        # Check the containing_type module to decide whether to recurse
-                        containing_type_module = getattr(containing_type, "__module__", None)
-                        if containing_type_module == "vmlinux":
-                            # Also unwrap containing_type to get base type name
-                            base_containing_type = unwrap_pointer_type(containing_type)
-                            containing_type_name = (
-                                base_containing_type.__name__
-                                if hasattr(base_containing_type, "__name__")
-                                else str(base_containing_type)
-                            )
-
-                            # Check for self-reference or already processed
-                            if containing_type_name == current_symbol_name:
-                                # Self-referential pointer
-                                logger.debug(
-                                    f"Self-referential pointer in {current_symbol_name}.{elem_name}"
-                                )
-                                new_dep_node.set_field_ready(elem_name, True)
-                            elif handler.has_node(containing_type_name):
-                                # Already processed
-                                logger.debug(
-                                    f"Reusing already processed {containing_type_name}"
-                                )
-                                new_dep_node.set_field_ready(elem_name, True)
-                            else:
-                                # Process recursively - use base containing type, not the pointer wrapper
-                                new_dep_node.add_dependent(containing_type_name)
-                                process_vmlinux_post_ast(
-                                    base_containing_type,
-                                    llvm_handler,
-                                    handler,
-                                    processing_stack,
-                                )
-                                new_dep_node.set_field_ready(elem_name, True)
-                        elif containing_type_module == ctypes.__name__ or containing_type_module is None:
-                            logger.debug(f"Processing ctype internal{containing_type}")
-                            new_dep_node.set_field_ready(elem_name, True)
-                        else:
-                            raise TypeError(
-                                f"Module not supported in recursive resolution: {containing_type_module}"
                             )
                     else:
                         new_dep_node.add_dependent(
