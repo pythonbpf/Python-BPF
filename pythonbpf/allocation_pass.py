@@ -1,12 +1,13 @@
 import ast
 import logging
-
+import ctypes
 from llvmlite import ir
 from .local_symbol import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
 from pythonbpf.type_deducer import ctypes_to_ir
+from pythonbpf.maps import BPFMapType
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,9 @@ def create_targets_and_rvals(stmt):
     return stmt.targets, [stmt.value]
 
 
-def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
+def handle_assign_allocation(
+    builder, stmt, local_sym_tab, map_sym_tab, structs_sym_tab
+):
     """Handle memory allocation for assignment statements."""
 
     logger.info(f"Handling assignment for allocation: {ast.dump(stmt)}")
@@ -55,7 +58,9 @@ def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
 
         # Determine type and allocate based on rval
         if isinstance(rval, ast.Call):
-            _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab)
+            _allocate_for_call(
+                builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+            )
         elif isinstance(rval, ast.Constant):
             _allocate_for_constant(builder, var_name, rval, local_sym_tab)
         elif isinstance(rval, ast.BinOp):
@@ -74,14 +79,16 @@ def handle_assign_allocation(builder, stmt, local_sym_tab, structs_sym_tab):
             )
 
 
-def _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab):
+def _allocate_for_call(
+    builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+):
     """Allocate memory for variable assigned from a call."""
 
     if isinstance(rval.func, ast.Name):
         call_type = rval.func.id
 
         # C type constructors
-        if call_type in ("c_int32", "c_int64", "c_uint32", "c_uint64"):
+        if call_type in ("c_int32", "c_int64", "c_uint32", "c_uint64", "c_void_p"):
             ir_type = ctypes_to_ir(call_type)
             var = builder.alloca(ir_type, name=var_name)
             var.align = ir_type.width // 8
@@ -116,14 +123,73 @@ def _allocate_for_call(builder, var_name, rval, local_sym_tab, structs_sym_tab):
 
     elif isinstance(rval.func, ast.Attribute):
         # Map method calls - need double allocation for ptr handling
-        _allocate_for_map_method(builder, var_name, local_sym_tab)
+        _allocate_for_map_method(
+            builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+        )
 
     else:
         logger.warning(f"Unsupported call function type for {var_name}")
 
 
-def _allocate_for_map_method(builder, var_name, local_sym_tab):
+def _allocate_for_map_method(
+    builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+):
     """Allocate memory for variable assigned from map method (double alloc)."""
+
+    map_name = rval.func.value.id
+    method_name = rval.func.attr
+
+    # NOTE: We will have to special case HashMap.lookup which returns a pointer to value type
+    # The value type can be a struct as well, so we need to handle that properly
+    # This special casing is not ideal, as over time other map methods may need similar handling
+    # But for now, we will just handle lookup specifically
+    if map_name not in map_sym_tab:
+        logger.error(f"Map '{map_name}' not found for allocation")
+        return
+
+    if method_name != "lookup":
+        # Fallback allocation for other map methods
+        _allocate_for_map_method_fallback(builder, var_name, local_sym_tab)
+        return
+
+    map_params = map_sym_tab[map_name].params
+    if map_params["type"] != BPFMapType.HASH:
+        logger.warning(
+            "Map method lookup used on non-hash map, using fallback allocation"
+        )
+        _allocate_for_map_method_fallback(builder, var_name, local_sym_tab)
+        return
+
+    value_type = map_params["value"]
+    # Determine IR type for value
+    if isinstance(value_type, str) and value_type in structs_sym_tab:
+        struct_info = structs_sym_tab[value_type]
+        value_ir_type = struct_info.ir_type
+    else:
+        value_ir_type = ctypes_to_ir(value_type)
+
+    if value_ir_type is None:
+        logger.warning(
+            f"Could not determine IR type for map value '{value_type}', using fallback allocation"
+        )
+        _allocate_for_map_method_fallback(builder, var_name, local_sym_tab)
+        return
+
+    # Main variable (pointer to pointer)
+    ir_type = ir.PointerType(ir.IntType(64))
+    var = builder.alloca(ir_type, name=var_name)
+    local_sym_tab[var_name] = LocalSymbol(var, ir_type)
+    # Temporary variable for computed values
+    tmp_ir_type = value_ir_type
+    var_tmp = builder.alloca(tmp_ir_type, name=f"{var_name}_tmp")
+    local_sym_tab[f"{var_name}_tmp"] = LocalSymbol(var_tmp, tmp_ir_type)
+    logger.info(
+        f"Pre-allocated {var_name} and {var_name}_tmp for map method lookup of type {value_ir_type}"
+    )
+
+
+def _allocate_for_map_method_fallback(builder, var_name, local_sym_tab):
+    """Fallback allocation for map method variable (i64* and i64**)."""
 
     # Main variable (pointer to pointer)
     ir_type = ir.PointerType(ir.IntType(64))
@@ -135,7 +201,9 @@ def _allocate_for_map_method(builder, var_name, local_sym_tab):
     var_tmp = builder.alloca(tmp_ir_type, name=f"{var_name}_tmp")
     local_sym_tab[f"{var_name}_tmp"] = LocalSymbol(var_tmp, tmp_ir_type)
 
-    logger.info(f"Pre-allocated {var_name} and {var_name}_tmp for map method")
+    logger.info(
+        f"Pre-allocated {var_name} and {var_name}_tmp for map method (fallback)"
+    )
 
 
 def _allocate_for_constant(builder, var_name, rval, local_sym_tab):
@@ -177,17 +245,33 @@ def _allocate_for_binop(builder, var_name, local_sym_tab):
     logger.info(f"Pre-allocated {var_name} for binop result")
 
 
+def _get_type_name(ir_type):
+    """Get a string representation of an IR type."""
+    if isinstance(ir_type, ir.IntType):
+        return f"i{ir_type.width}"
+    elif isinstance(ir_type, ir.PointerType):
+        return "ptr"
+    elif isinstance(ir_type, ir.ArrayType):
+        return f"[{ir_type.count}x{_get_type_name(ir_type.element)}]"
+    else:
+        return str(ir_type).replace(" ", "")
+
+
 def allocate_temp_pool(builder, max_temps, local_sym_tab):
     """Allocate the temporary scratch space pool for helper arguments."""
-    if max_temps == 0:
+    if not max_temps:
+        logger.info("No temp pool allocation needed")
         return
 
-    logger.info(f"Allocating temp pool of {max_temps} variables")
-    for i in range(max_temps):
-        temp_name = f"__helper_temp_{i}"
-        temp_var = builder.alloca(ir.IntType(64), name=temp_name)
-        temp_var.align = 8
-        local_sym_tab[temp_name] = LocalSymbol(temp_var, ir.IntType(64))
+    for tmp_type, cnt in max_temps.items():
+        type_name = _get_type_name(tmp_type)
+        logger.info(f"Allocating temp pool of {cnt} variables of type {type_name}")
+        for i in range(cnt):
+            temp_name = f"__helper_temp_{type_name}_{i}"
+            temp_var = builder.alloca(tmp_type, name=temp_name)
+            temp_var.align = _get_alignment(tmp_type)
+            local_sym_tab[temp_name] = LocalSymbol(temp_var, tmp_type)
+            logger.debug(f"Allocated temp variable: {temp_name}")
 
 
 def _allocate_for_name(builder, var_name, rval, local_sym_tab):
@@ -249,7 +333,58 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
             ].var = base_ptr  # This is repurposing of var to store the pointer of the base type
             local_sym_tab[struct_var].ir_type = field_ir
 
-            actual_ir_type = ir.IntType(64)
+            # Determine the actual IR type based on the field's type
+            actual_ir_type = None
+
+            # Check if it's a ctypes primitive
+            if field.type.__module__ == ctypes.__name__:
+                try:
+                    field_size_bytes = ctypes.sizeof(field.type)
+                    field_size_bits = field_size_bytes * 8
+
+                    if field_size_bits in [8, 16, 32, 64]:
+                        # Special case: struct_xdp_md i32 fields should allocate as i64
+                        # because load_ctx_field will zero-extend them to i64
+                        if (
+                            vmlinux_struct_name == "struct_xdp_md"
+                            and field_size_bits == 32
+                        ):
+                            actual_ir_type = ir.IntType(64)
+                            logger.info(
+                                f"Allocating {var_name} as i64 for i32 field from struct_xdp_md.{field_name} "
+                                "(will be zero-extended during load)"
+                            )
+                        else:
+                            actual_ir_type = ir.IntType(field_size_bits)
+                    else:
+                        logger.warning(
+                            f"Unusual field size {field_size_bits} bits for {field_name}"
+                        )
+                        actual_ir_type = ir.IntType(64)
+                except Exception as e:
+                    logger.warning(
+                        f"Could not determine size for ctypes field {field_name}: {e}"
+                    )
+                    actual_ir_type = ir.IntType(64)
+
+            # Check if it's a nested vmlinux struct or complex type
+            elif field.type.__module__ == "vmlinux":
+                # For pointers to structs, use pointer type (64-bit)
+                if field.ctype_complex_type is not None and issubclass(
+                    field.ctype_complex_type, ctypes._Pointer
+                ):
+                    actual_ir_type = ir.IntType(64)  # Pointer is always 64-bit
+                # For embedded structs, this is more complex - might need different handling
+                else:
+                    logger.warning(
+                        f"Field {field_name} is a nested vmlinux struct, using i64 for now"
+                    )
+                    actual_ir_type = ir.IntType(64)
+            else:
+                logger.warning(
+                    f"Unknown field type module {field.type.__module__} for {field_name}"
+                )
+                actual_ir_type = ir.IntType(64)
 
             # Allocate with the actual IR type, not the GlobalVariable
             var = _allocate_with_type(builder, var_name, actual_ir_type)

@@ -49,17 +49,27 @@ def generate_function_debug_info(
                 "The first argument should always be a pointer to a struct or a void pointer"
             )
         context_debug_info = VmlinuxHandlerRegistry.get_struct_debug_info(annotation.id)
+
+        # Create pointer to context this must be created fresh for each function
+        # to avoid circular reference issues when the same struct is used in multiple functions
         pointer_to_context_debug_info = generator.create_pointer_type(
             context_debug_info, 64
         )
+
+        # Create subroutine type - also fresh for each function
         subroutine_type = generator.create_subroutine_type(
             return_type, pointer_to_context_debug_info
         )
+
+        # Create local variable - fresh for each function with unique name
         context_local_variable = generator.create_local_variable_debug_info(
             leading_argument_name, 1, pointer_to_context_debug_info
         )
+
         retained_nodes = [context_local_variable]
-        print("function name", func_node.name)
+        logger.info(f"Generating debug info for function {func_node.name}")
+
+        # Create subprogram with is_distinct=True to ensure each function gets unique debug info
         subprogram_debug_info = generator.create_subprogram(
             func_node.name, subroutine_type, retained_nodes
         )

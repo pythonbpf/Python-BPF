@@ -86,7 +86,7 @@ def processor(source_code, filename, module):
     license_processing(tree, module)
     globals_processing(tree, module)
     structs_sym_tab = structs_proc(tree, module, bpf_chunks)
-    map_sym_tab = maps_proc(tree, module, bpf_chunks)
+    map_sym_tab = maps_proc(tree, module, bpf_chunks, structs_sym_tab)
     func_proc(tree, module, bpf_chunks, map_sym_tab, structs_sym_tab)
 
     globals_list_creation(tree, module)
@@ -218,13 +218,11 @@ def compile(loglevel=logging.WARNING) -> bool:
 def BPF(loglevel=logging.WARNING) -> BpfObject:
     caller_frame = inspect.stack()[1]
     src = inspect.getsource(caller_frame.frame)
-    with tempfile.NamedTemporaryFile(
-        mode="w+", delete=True, suffix=".py"
-    ) as f, tempfile.NamedTemporaryFile(
-        mode="w+", delete=True, suffix=".ll"
-    ) as inter, tempfile.NamedTemporaryFile(
-        mode="w+", delete=False, suffix=".o"
-    ) as obj_file:
+    with (
+        tempfile.NamedTemporaryFile(mode="w+", delete=True, suffix=".py") as f,
+        tempfile.NamedTemporaryFile(mode="w+", delete=True, suffix=".ll") as inter,
+        tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".o") as obj_file,
+    ):
         f.write(src)
         f.flush()
         source = f.name

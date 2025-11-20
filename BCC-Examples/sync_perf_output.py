@@ -68,8 +68,6 @@ def callback(cpu, event):
 
 perf = b["events"].open_perf_buffer(callback, struct_name="data_t")
 print("Starting to poll... (Ctrl+C to stop)")
-print("Try running: fork() or clone() system calls to trigger events")
-
 try:
     while True:
         b["events"].poll(1000)

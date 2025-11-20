@@ -8,30 +8,43 @@ from .helper_utils import (
     get_flags_val,
     get_data_ptr_and_size,
     get_buffer_ptr_and_size,
-    get_char_array_ptr_and_size,
     get_ptr_from_arg,
+    get_int_value_from_arg,
 )
 from .printk_formatter import simple_string_print, handle_fstring_print
-
-from logging import Logger
+from pythonbpf.maps import BPFMapType
 import logging
 
-logger: Logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class BPFHelperID(Enum):
     BPF_MAP_LOOKUP_ELEM = 1
     BPF_MAP_UPDATE_ELEM = 2
     BPF_MAP_DELETE_ELEM = 3
+    BPF_PROBE_READ = 4
     BPF_KTIME_GET_NS = 5
     BPF_PRINTK = 6
+    BPF_GET_PRANDOM_U32 = 7
+    BPF_GET_SMP_PROCESSOR_ID = 8
+    BPF_SKB_STORE_BYTES = 9
     BPF_GET_CURRENT_PID_TGID = 14
+    BPF_GET_CURRENT_UID_GID = 15
     BPF_GET_CURRENT_COMM = 16
     BPF_PERF_EVENT_OUTPUT = 25
+    BPF_GET_STACK = 67
     BPF_PROBE_READ_KERNEL_STR = 115
+    BPF_RINGBUF_OUTPUT = 130
+    BPF_RINGBUF_RESERVE = 131
+    BPF_RINGBUF_SUBMIT = 132
+    BPF_RINGBUF_DISCARD = 133
 
 
-@HelperHandlerRegistry.register("ktime")
+@HelperHandlerRegistry.register(
+    "ktime",
+    param_types=[],
+    return_type=ir.IntType(64),
+)
 def bpf_ktime_get_ns_emitter(
     call,
     map_ptr,
@@ -54,7 +67,11 @@ def bpf_ktime_get_ns_emitter(
     return result, ir.IntType(64)
 
 
-@HelperHandlerRegistry.register("lookup")
+@HelperHandlerRegistry.register(
+    "lookup",
+    param_types=[ir.PointerType(ir.IntType(64))],
+    return_type=ir.PointerType(ir.IntType(64)),
+)
 def bpf_map_lookup_elem_emitter(
     call,
     map_ptr,
@@ -96,6 +113,7 @@ def bpf_map_lookup_elem_emitter(
     return result, ir.PointerType()
 
 
+# NOTE: This has special handling so we won't reflect the signature here.
 @HelperHandlerRegistry.register("print")
 def bpf_printk_emitter(
     call,
@@ -144,7 +162,15 @@ def bpf_printk_emitter(
     return True
 
 
-@HelperHandlerRegistry.register("update")
+@HelperHandlerRegistry.register(
+    "update",
+    param_types=[
+        ir.PointerType(ir.IntType(64)),
+        ir.PointerType(ir.IntType(64)),
+        ir.IntType(64),
+    ],
+    return_type=ir.PointerType(ir.IntType(64)),
+)
 def bpf_map_update_elem_emitter(
     call,
     map_ptr,
@@ -199,7 +225,11 @@ def bpf_map_update_elem_emitter(
     return result, None
 
 
-@HelperHandlerRegistry.register("delete")
+@HelperHandlerRegistry.register(
+    "delete",
+    param_types=[ir.PointerType(ir.IntType(64))],
+    return_type=ir.PointerType(ir.IntType(64)),
+)
 def bpf_map_delete_elem_emitter(
     call,
     map_ptr,
@@ -239,7 +269,11 @@ def bpf_map_delete_elem_emitter(
     return result, None
 
 
-@HelperHandlerRegistry.register("comm")
+@HelperHandlerRegistry.register(
+    "comm",
+    param_types=[ir.PointerType(ir.IntType(8))],
+    return_type=ir.IntType(64),
+)
 def bpf_get_current_comm_emitter(
     call,
     map_ptr,
@@ -296,7 +330,11 @@ def bpf_get_current_comm_emitter(
     return result, None
 
 
-@HelperHandlerRegistry.register("pid")
+@HelperHandlerRegistry.register(
+    "pid",
+    param_types=[],
+    return_type=ir.IntType(64),
+)
 def bpf_get_current_pid_tgid_emitter(
     call,
     map_ptr,
@@ -318,12 +356,12 @@ def bpf_get_current_pid_tgid_emitter(
     result = builder.call(fn_ptr, [], tail=False)
 
     # Extract the lower 32 bits (PID) using bitwise AND with 0xFFFFFFFF
+    # TODO: return both PID and TGID if we end up needing TGID somewhere
     mask = ir.Constant(ir.IntType(64), 0xFFFFFFFF)
     pid = builder.and_(result, mask)
     return pid, ir.IntType(64)
 
 
-@HelperHandlerRegistry.register("output")
 def bpf_perf_event_output_handler(
     call,
     map_ptr,
@@ -334,6 +372,10 @@ def bpf_perf_event_output_handler(
     struct_sym_tab=None,
     map_sym_tab=None,
 ):
+    """
+    Emit LLVM IR for bpf_perf_event_output helper function call.
+    """
+
     if len(call.args) != 1:
         raise ValueError(
             f"Perf event output expects exactly one argument, got {len(call.args)}"
@@ -371,6 +413,98 @@ def bpf_perf_event_output_handler(
     return result, None
 
 
+def bpf_ringbuf_output_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_ringbuf_output helper function call.
+    """
+
+    if len(call.args) != 1:
+        raise ValueError(
+            f"Ringbuf output expects exactly one argument, got {len(call.args)}"
+        )
+    data_arg = call.args[0]
+    data_ptr, size_val = get_data_ptr_and_size(data_arg, local_sym_tab, struct_sym_tab)
+    flags_val = ir.Constant(ir.IntType(64), 0)
+
+    map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
+    data_void_ptr = builder.bitcast(data_ptr, ir.PointerType())
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [
+            ir.PointerType(),
+            ir.PointerType(),
+            ir.IntType(64),
+            ir.IntType(64),
+        ],
+        var_arg=False,
+    )
+    fn_ptr_type = ir.PointerType(fn_type)
+
+    # helper id
+    fn_addr = ir.Constant(ir.IntType(64), BPFHelperID.BPF_RINGBUF_OUTPUT.value)
+    fn_ptr = builder.inttoptr(fn_addr, fn_ptr_type)
+
+    result = builder.call(
+        fn_ptr, [map_void_ptr, data_void_ptr, size_val, flags_val], tail=False
+    )
+    return result, None
+
+
+@HelperHandlerRegistry.register(
+    "output",
+    param_types=[ir.PointerType(ir.IntType(8))],
+    return_type=ir.IntType(64),
+)
+def handle_output_helper(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Route output helper to the appropriate emitter based on map type.
+    """
+    match map_sym_tab[map_ptr.name].type:
+        case BPFMapType.PERF_EVENT_ARRAY:
+            return bpf_perf_event_output_handler(
+                call,
+                map_ptr,
+                module,
+                builder,
+                func,
+                local_sym_tab,
+                struct_sym_tab,
+                map_sym_tab,
+            )
+        case BPFMapType.RINGBUF:
+            return bpf_ringbuf_output_emitter(
+                call,
+                map_ptr,
+                module,
+                builder,
+                func,
+                local_sym_tab,
+                struct_sym_tab,
+                map_sym_tab,
+            )
+        case _:
+            logger.error("Unsupported map type for output helper.")
+    raise NotImplementedError("Output helper for this map type is not implemented.")
+
+
 def emit_probe_read_kernel_str_call(builder, dst_ptr, dst_size, src_ptr):
     """Emit LLVM IR call to bpf_probe_read_kernel_str"""
 
@@ -398,7 +532,14 @@ def emit_probe_read_kernel_str_call(builder, dst_ptr, dst_size, src_ptr):
     return result
 
 
-@HelperHandlerRegistry.register("probe_read_str")
+@HelperHandlerRegistry.register(
+    "probe_read_str",
+    param_types=[
+        ir.PointerType(ir.IntType(8)),
+        ir.PointerType(ir.IntType(8)),
+    ],
+    return_type=ir.IntType(64),
+)
 def bpf_probe_read_kernel_str_emitter(
     call,
     map_ptr,
@@ -417,8 +558,8 @@ def bpf_probe_read_kernel_str_emitter(
         )
 
     # Get destination buffer (char array -> i8*)
-    dst_ptr, dst_size = get_char_array_ptr_and_size(
-        call.args[0], builder, local_sym_tab, struct_sym_tab
+    dst_ptr, dst_size = get_or_create_ptr_from_arg(
+        func, module, call.args[0], builder, local_sym_tab, map_sym_tab, struct_sym_tab
     )
 
     # Get source pointer (evaluate expression)
@@ -430,6 +571,430 @@ def bpf_probe_read_kernel_str_emitter(
     result = emit_probe_read_kernel_str_call(builder, dst_ptr, dst_size, src_ptr)
 
     logger.info(f"Emitted bpf_probe_read_kernel_str (size={dst_size})")
+    return result, ir.IntType(64)
+
+
+@HelperHandlerRegistry.register(
+    "random",
+    param_types=[],
+    return_type=ir.IntType(32),
+)
+def bpf_get_prandom_u32_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_get_prandom_u32 helper function call.
+    """
+    helper_id = ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_PRANDOM_U32.value)
+    fn_type = ir.FunctionType(ir.IntType(32), [], var_arg=False)
+    fn_ptr_type = ir.PointerType(fn_type)
+    fn_ptr = builder.inttoptr(helper_id, fn_ptr_type)
+    result = builder.call(fn_ptr, [], tail=False)
+    return result, ir.IntType(32)
+
+
+@HelperHandlerRegistry.register(
+    "probe_read",
+    param_types=[
+        ir.PointerType(ir.IntType(8)),
+        ir.IntType(32),
+        ir.PointerType(ir.IntType(8)),
+    ],
+    return_type=ir.IntType(64),
+)
+def bpf_probe_read_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_probe_read helper function
+    """
+
+    if len(call.args) != 3:
+        logger.warn("Expected 3 args for probe_read helper")
+        return
+    dst_ptr = get_or_create_ptr_from_arg(
+        func,
+        module,
+        call.args[0],
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+        ir.IntType(8),
+    )
+    size_val = get_int_value_from_arg(
+        call.args[1],
+        func,
+        module,
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+    )
+    src_ptr = get_or_create_ptr_from_arg(
+        func,
+        module,
+        call.args[2],
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+        ir.IntType(8),
+    )
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [ir.PointerType(), ir.IntType(32), ir.PointerType()],
+        var_arg=False,
+    )
+    fn_ptr = builder.inttoptr(
+        ir.Constant(ir.IntType(64), BPFHelperID.BPF_PROBE_READ.value),
+        ir.PointerType(fn_type),
+    )
+    result = builder.call(
+        fn_ptr,
+        [
+            builder.bitcast(dst_ptr, ir.PointerType()),
+            builder.trunc(size_val, ir.IntType(32)),
+            builder.bitcast(src_ptr, ir.PointerType()),
+        ],
+        tail=False,
+    )
+    logger.info(f"Emitted bpf_probe_read (size={size_val})")
+    return result, ir.IntType(64)
+
+
+@HelperHandlerRegistry.register(
+    "smp_processor_id",
+    param_types=[],
+    return_type=ir.IntType(32),
+)
+def bpf_get_smp_processor_id_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_get_smp_processor_id helper function call.
+    """
+    helper_id = ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_SMP_PROCESSOR_ID.value)
+    fn_type = ir.FunctionType(ir.IntType(32), [], var_arg=False)
+    fn_ptr_type = ir.PointerType(fn_type)
+    fn_ptr = builder.inttoptr(helper_id, fn_ptr_type)
+    result = builder.call(fn_ptr, [], tail=False)
+    logger.info("Emitted bpf_get_smp_processor_id call")
+    return result, ir.IntType(32)
+
+
+@HelperHandlerRegistry.register(
+    "uid",
+    param_types=[],
+    return_type=ir.IntType(64),
+)
+def bpf_get_current_uid_gid_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_get_current_uid_gid helper function call.
+    """
+    helper_id = ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_CURRENT_UID_GID.value)
+    fn_type = ir.FunctionType(ir.IntType(64), [], var_arg=False)
+    fn_ptr_type = ir.PointerType(fn_type)
+    fn_ptr = builder.inttoptr(helper_id, fn_ptr_type)
+    result = builder.call(fn_ptr, [], tail=False)
+
+    # Extract the lower 32 bits (UID) using bitwise AND with 0xFFFFFFFF
+    # TODO: return both UID and GID if we end up needing GID somewhere
+    mask = ir.Constant(ir.IntType(64), 0xFFFFFFFF)
+    pid = builder.and_(result, mask)
+    return pid, ir.IntType(64)
+
+
+@HelperHandlerRegistry.register(
+    "skb_store_bytes",
+    param_types=[
+        ir.IntType(32),
+        ir.PointerType(ir.IntType(8)),
+        ir.IntType(32),
+        ir.IntType(64),
+    ],
+    return_type=ir.IntType(64),
+)
+def bpf_skb_store_bytes_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_skb_store_bytes helper function call.
+    Expected call signature: skb_store_bytes(skb, offset, from, len, flags)
+    """
+
+    args_signature = [
+        ir.PointerType(),  # skb pointer
+        ir.IntType(32),  # offset
+        ir.PointerType(),  # from
+        ir.IntType(32),  # len
+        ir.IntType(64),  # flags
+    ]
+
+    if len(call.args) not in (3, 4):
+        raise ValueError(
+            f"skb_store_bytes expects 3 or 4 args (offset, from, len, flags), got {len(call.args)}"
+        )
+
+    skb_ptr = func.args[0]  # First argument to the function is skb
+    offset_val = get_int_value_from_arg(
+        call.args[0],
+        func,
+        module,
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+    )
+    from_ptr = get_or_create_ptr_from_arg(
+        func,
+        module,
+        call.args[1],
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+        args_signature[2],
+    )
+    len_val = get_int_value_from_arg(
+        call.args[2],
+        func,
+        module,
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+    )
+    if len(call.args) == 4:
+        flags_val = get_flags_val(call.args[3], builder, local_sym_tab)
+    else:
+        flags_val = 0
+    if isinstance(flags_val, int):
+        flags = ir.Constant(ir.IntType(64), flags_val)
+    else:
+        flags = flags_val
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        args_signature,
+        var_arg=False,
+    )
+    fn_ptr = builder.inttoptr(
+        ir.Constant(ir.IntType(64), BPFHelperID.BPF_SKB_STORE_BYTES.value),
+        ir.PointerType(fn_type),
+    )
+    result = builder.call(
+        fn_ptr,
+        [
+            builder.bitcast(skb_ptr, ir.PointerType()),
+            builder.trunc(offset_val, ir.IntType(32)),
+            builder.bitcast(from_ptr, ir.PointerType()),
+            builder.trunc(len_val, ir.IntType(32)),
+            flags,
+        ],
+        tail=False,
+    )
+    logger.info("Emitted bpf_skb_store_bytes call")
+    return result, ir.IntType(64)
+
+
+@HelperHandlerRegistry.register(
+    "reserve",
+    param_types=[ir.IntType(64)],
+    return_type=ir.PointerType(ir.IntType(8)),
+)
+def bpf_ringbuf_reserve_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_ringbuf_reserve helper function call.
+    Expected call signature: ringbuf.reserve(size)
+    """
+
+    if len(call.args) != 1:
+        raise ValueError(
+            f"ringbuf.reserve expects exactly one argument (size), got {len(call.args)}"
+        )
+
+    size_val = get_int_value_from_arg(
+        call.args[0],
+        func,
+        module,
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+    )
+
+    map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
+    fn_type = ir.FunctionType(
+        ir.PointerType(ir.IntType(8)),
+        [ir.PointerType(), ir.IntType(64)],
+        var_arg=False,
+    )
+    fn_ptr_type = ir.PointerType(fn_type)
+
+    fn_addr = ir.Constant(ir.IntType(64), BPFHelperID.BPF_RINGBUF_RESERVE.value)
+    fn_ptr = builder.inttoptr(fn_addr, fn_ptr_type)
+
+    result = builder.call(fn_ptr, [map_void_ptr, size_val], tail=False)
+
+    return result, ir.PointerType(ir.IntType(8))
+
+
+@HelperHandlerRegistry.register(
+    "submit",
+    param_types=[ir.PointerType(ir.IntType(8)), ir.IntType(64)],
+    return_type=ir.VoidType(),
+)
+def bpf_ringbuf_submit_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_ringbuf_submit helper function call.
+    Expected call signature: ringbuf.submit(data, flags=0)
+    """
+
+    if len(call.args) not in (1, 2):
+        raise ValueError(
+            f"ringbuf.submit expects 1 or 2 args (data, flags), got {len(call.args)}"
+        )
+
+    data_arg = call.args[0]
+    flags_arg = call.args[1] if len(call.args) == 2 else None
+
+    data_ptr = get_or_create_ptr_from_arg(
+        func,
+        module,
+        data_arg,
+        builder,
+        local_sym_tab,
+        map_sym_tab,
+        struct_sym_tab,
+        ir.PointerType(ir.IntType(8)),
+    )
+
+    flags_const = get_flags_val(flags_arg, builder, local_sym_tab)
+    if isinstance(flags_const, int):
+        flags_const = ir.Constant(ir.IntType(64), flags_const)
+
+    map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
+    fn_type = ir.FunctionType(
+        ir.VoidType(),
+        [ir.PointerType(), ir.PointerType(), ir.IntType(64)],
+        var_arg=False,
+    )
+    fn_ptr_type = ir.PointerType(fn_type)
+
+    fn_addr = ir.Constant(ir.IntType(64), BPFHelperID.BPF_RINGBUF_SUBMIT.value)
+    fn_ptr = builder.inttoptr(fn_addr, fn_ptr_type)
+
+    result = builder.call(fn_ptr, [map_void_ptr, data_ptr, flags_const], tail=False)
+
+    return result, None
+
+
+@HelperHandlerRegistry.register(
+    "get_stack",
+    param_types=[ir.PointerType(ir.IntType(8)), ir.IntType(64)],
+    return_type=ir.IntType(64),
+)
+def bpf_get_stack_emitter(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_get_stack helper function call.
+    """
+    if len(call.args) not in (1, 2):
+        raise ValueError(
+            f"get_stack expects atmost two arguments (buf, flags), got {len(call.args)}"
+        )
+    ctx_ptr = func.args[0]  # First argument to the function is ctx
+    buf_arg = call.args[0]
+    flags_arg = call.args[1] if len(call.args) == 2 else None
+    buf_ptr, buf_size = get_buffer_ptr_and_size(
+        buf_arg, builder, local_sym_tab, struct_sym_tab
+    )
+    flags_val = get_flags_val(flags_arg, builder, local_sym_tab)
+    if isinstance(flags_val, int):
+        flags_val = ir.Constant(ir.IntType(64), flags_val)
+
+    buf_void_ptr = builder.bitcast(buf_ptr, ir.PointerType())
+    fn_type = ir.FunctionType(
+        ir.IntType(64),
+        [
+            ir.PointerType(ir.IntType(8)),
+            ir.PointerType(),
+            ir.IntType(64),
+            ir.IntType(64),
+        ],
+        var_arg=False,
+    )
+    fn_ptr_type = ir.PointerType(fn_type)
+    fn_addr = ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_STACK.value)
+    fn_ptr = builder.inttoptr(fn_addr, fn_ptr_type)
+    result = builder.call(
+        fn_ptr,
+        [ctx_ptr, buf_void_ptr, ir.Constant(ir.IntType(64), buf_size), flags_val],
+        tail=False,
+    )
     return result, ir.IntType(64)
 
 
@@ -487,6 +1052,6 @@ def handle_helper_call(
         if not map_sym_tab or map_name not in map_sym_tab:
             raise ValueError(f"Map '{map_name}' not found in symbol table")
 
-        return invoke_helper(method_name, map_sym_tab[map_name])
+        return invoke_helper(method_name, map_sym_tab[map_name].sym)
 
     return None

@@ -27,6 +27,36 @@ def probe_read_str(dst, src):
     return ctypes.c_int64(0)
 
 
+def random():
+    """get a pseudorandom u32 number"""
+    return ctypes.c_int32(0)
+
+
+def probe_read(dst, size, src):
+    """Safely read data from kernel memory"""
+    return ctypes.c_int64(0)
+
+
+def smp_processor_id():
+    """get the current CPU id"""
+    return ctypes.c_int32(0)
+
+
+def uid():
+    """get current user id"""
+    return ctypes.c_int32(0)
+
+
+def skb_store_bytes(offset, from_buf, size, flags=0):
+    """store bytes into a socket buffer"""
+    return ctypes.c_int64(0)
+
+
+def get_stack(buf, flags=0):
+    """get the current stack trace"""
+    return ctypes.c_int64(0)
+
+
 XDP_ABORTED = ctypes.c_int64(0)
 XDP_DROP = ctypes.c_int64(1)
 XDP_PASS = ctypes.c_int64(2)

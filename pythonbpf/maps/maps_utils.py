@@ -1,5 +1,17 @@
 from collections.abc import Callable
+from dataclasses import dataclass
+from llvmlite import ir
 from typing import Any
+from .map_types import BPFMapType
+
+
+@dataclass
+class MapSymbol:
+    """Class representing a symbol on the map"""
+
+    type: BPFMapType
+    sym: ir.GlobalVariable
+    params: dict[str, Any] | None = None
 
 
 class MapProcessorRegistry:

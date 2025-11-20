@@ -14,26 +14,43 @@ class ScratchPoolManager:
     """Manage the temporary helper variables in local_sym_tab"""
 
     def __init__(self):
-        self._counter = 0
+        self._counters = {}
 
     @property
     def counter(self):
-        return self._counter
+        return sum(self._counters.values())
 
     def reset(self):
-        self._counter = 0
+        self._counters.clear()
         logger.debug("Scratch pool counter reset to 0")
 
-    def get_next_temp(self, local_sym_tab):
-        temp_name = f"__helper_temp_{self._counter}"
-        self._counter += 1
+    def _get_type_name(self, ir_type):
+        if isinstance(ir_type, ir.PointerType):
+            return "ptr"
+        elif isinstance(ir_type, ir.IntType):
+            return f"i{ir_type.width}"
+        elif isinstance(ir_type, ir.ArrayType):
+            return f"[{ir_type.count}x{self._get_type_name(ir_type.element)}]"
+        else:
+            return str(ir_type).replace(" ", "")
+
+    def get_next_temp(self, local_sym_tab, expected_type=None):
+        # Default to i64 if no expected type provided
+        type_name = self._get_type_name(expected_type) if expected_type else "i64"
+        if type_name not in self._counters:
+            self._counters[type_name] = 0
+
+        counter = self._counters[type_name]
+        temp_name = f"__helper_temp_{type_name}_{counter}"
+        self._counters[type_name] += 1
 
         if temp_name not in local_sym_tab:
             raise ValueError(
                 f"Scratch pool exhausted or inadequate: {temp_name}. "
-                f"Current counter: {self._counter}"
+                f"Type: {type_name} Counter: {counter}"
             )
 
+        logger.debug(f"Using {temp_name} for type {type_name}")
         return local_sym_tab[temp_name].var, temp_name
 
 
@@ -60,24 +77,73 @@ def get_var_ptr_from_name(var_name, local_sym_tab):
 def create_int_constant_ptr(value, builder, local_sym_tab, int_width=64):
     """Create a pointer to an integer constant."""
 
-    # Default to 64-bit integer
-    ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab)
+    int_type = ir.IntType(int_width)
+    ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab, int_type)
     logger.info(f"Using temp variable '{temp_name}' for int constant {value}")
-    const_val = ir.Constant(ir.IntType(int_width), value)
+    const_val = ir.Constant(int_type, value)
     builder.store(const_val, ptr)
     return ptr
 
 
 def get_or_create_ptr_from_arg(
-    func, module, arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab=None
+    func,
+    module,
+    arg,
+    builder,
+    local_sym_tab,
+    map_sym_tab,
+    struct_sym_tab=None,
+    expected_type=None,
 ):
     """Extract or create pointer from the call arguments."""
 
+    logger.info(f"Getting pointer from arg: {ast.dump(arg)}")
+    sz = None
     if isinstance(arg, ast.Name):
+        # Stack space is already allocated
         ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
     elif isinstance(arg, ast.Constant) and isinstance(arg.value, int):
-        ptr = create_int_constant_ptr(arg.value, builder, local_sym_tab)
+        int_width = 64  # Default to i64
+        if expected_type and isinstance(expected_type, ir.IntType):
+            int_width = expected_type.width
+        ptr = create_int_constant_ptr(arg.value, builder, local_sym_tab, int_width)
+    elif isinstance(arg, ast.Attribute):
+        # A struct field
+        struct_name = arg.value.id
+        field_name = arg.attr
+
+        if not local_sym_tab or struct_name not in local_sym_tab:
+            raise ValueError(f"Struct '{struct_name}' not found")
+
+        struct_type = local_sym_tab[struct_name].metadata
+        if not struct_sym_tab or struct_type not in struct_sym_tab:
+            raise ValueError(f"Struct type '{struct_type}' not found")
+
+        struct_info = struct_sym_tab[struct_type]
+        if field_name not in struct_info.fields:
+            raise ValueError(
+                f"Field '{field_name}' not found in struct '{struct_name}'"
+            )
+
+        field_type = struct_info.field_type(field_name)
+        struct_ptr = local_sym_tab[struct_name].var
+
+        # Special handling for char arrays
+        if (
+            isinstance(field_type, ir.ArrayType)
+            and isinstance(field_type.element, ir.IntType)
+            and field_type.element.width == 8
+        ):
+            ptr, sz = get_char_array_ptr_and_size(
+                arg, builder, local_sym_tab, struct_sym_tab
+            )
+            if not ptr:
+                raise ValueError("Failed to get char array pointer from struct field")
+        else:
+            ptr = struct_info.gep(builder, struct_ptr, field_name)
+
     else:
+        # NOTE: For any integer expression reaching this branch, it is probably a struct field or a binop
         # Evaluate the expression and store the result in a temp variable
         val = get_operand_value(
             func, module, arg, builder, local_sym_tab, map_sym_tab, struct_sym_tab
@@ -85,12 +151,19 @@ def get_or_create_ptr_from_arg(
         if val is None:
             raise ValueError("Failed to evaluate expression for helper arg.")
 
-        # NOTE: We assume the result is an int64 for now
-        # if isinstance(arg, ast.Attribute):
-        # return val
-        ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab)
+        ptr, temp_name = _temp_pool_manager.get_next_temp(local_sym_tab, expected_type)
         logger.info(f"Using temp variable '{temp_name}' for expression result")
+        if (
+            isinstance(val.type, ir.IntType)
+            and expected_type
+            and val.type.width > expected_type.width
+        ):
+            val = builder.trunc(val, expected_type)
         builder.store(val, ptr)
+
+    # NOTE: For char arrays, also return size
+    if sz:
+        return ptr, sz
 
     return ptr
 
@@ -214,7 +287,10 @@ def get_char_array_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab)
 
         field_type = struct_info.field_type(field_name)
         if not _is_char_array(field_type):
-            raise ValueError("Expected char array field")
+            logger.info(
+                "Field is not a char array, falling back to int or ptr detection"
+            )
+            return None, 0
 
         struct_ptr = local_sym_tab[var_name].var
         field_ptr = struct_info.gep(builder, struct_ptr, field_name)
@@ -274,3 +350,23 @@ def get_ptr_from_arg(
         raise ValueError(f"Expected pointer type, got {val_type}")
 
     return val, val_type
+
+
+def get_int_value_from_arg(
+    arg, func, module, builder, local_sym_tab, map_sym_tab, struct_sym_tab
+):
+    """Evaluate argument and return integer value"""
+
+    result = eval_expr(
+        func, module, builder, arg, local_sym_tab, map_sym_tab, struct_sym_tab
+    )
+
+    if not result:
+        raise ValueError("Failed to evaluate argument")
+
+    val, val_type = result
+
+    if not isinstance(val_type, ir.IntType):
+        raise ValueError(f"Expected integer type, got {val_type}")
+
+    return val
