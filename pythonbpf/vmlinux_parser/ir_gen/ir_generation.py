@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class IRGenerator:
     # This field keeps track of the non_struct names to avoid duplicate name errors.
     type_number = 0
-    unprocessed_store = []
+    unprocessed_store: list[str] = []
 
     # get the assignments dict and add this stuff to it.
     def __init__(self, llvm_module, handler: DependencyHandler, assignments):
