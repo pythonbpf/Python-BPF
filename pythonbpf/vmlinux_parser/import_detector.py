@@ -66,7 +66,6 @@ def detect_import_statement(
                     )
 
     logger.info(f"Total vmlinux imports detected: {len(vmlinux_imports)}")
-    # print(f"\n**************\n{vmlinux_imports}\n**************\n")
     return vmlinux_imports
 
 

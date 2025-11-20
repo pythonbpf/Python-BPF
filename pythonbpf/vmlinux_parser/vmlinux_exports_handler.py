@@ -98,11 +98,9 @@ class VmlinuxHandler:
                 python_type.__name__, field_name
             )
             builder.function.args[0].type = ir.PointerType(ir.IntType(8))
-            print(builder.function.args[0])
             field_ptr = self.load_ctx_field(
                 builder, builder.function.args[0], globvar_ir
             )
-            print(field_ptr)
             # Return pointer to field and field type
             return field_ptr, field_data
         else:

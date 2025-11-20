@@ -72,7 +72,6 @@ class IRGenerator:
                                 dep_node_from_dependency, processing_stack
                             )
                         else:
-                            print(struct)
                             raise RuntimeError(
                                 f"Warning: Dependency {dependency} not found in handler"
                             )
@@ -87,7 +86,6 @@ class IRGenerator:
                 members_dict = {}
                 for field_name, field in struct.fields.items():
                     # Get the generated field name from our dictionary, or use field_name if not found
-                    print(f"DEBUG: {struct.name}, {field_name}")
                     if (
                         struct.name in self.generated_field_names
                         and field_name in self.generated_field_names[struct.name]
@@ -140,7 +138,6 @@ class IRGenerator:
                 field_co_re_name, returned = self._struct_name_generator(
                     struct, field, field_index
                 )
-                print(field_co_re_name)
                 field_index += 1
                 globvar = ir.GlobalVariable(
                     self.llvm_module, ir.IntType(64), name=field_co_re_name
@@ -182,7 +179,6 @@ class IRGenerator:
                 array_size = field.type_size
                 containing_type = field.containing_type
                 if containing_type.__module__ == "vmlinux":
-                    print(struct)
                     # Unwrap all pointer layers to get the base struct type
                     base_containing_type = containing_type
                     while hasattr(base_containing_type, "_type_"):
@@ -202,7 +198,6 @@ class IRGenerator:
 
                     # Look up the size using the base struct name
                     containing_type_size = self.handler[base_struct_name].current_offset
-                    print(f"GAY: {array_size}, {struct.name}, {field_name}")
                     if array_size == 0:
                         field_co_re_name, returned = self._struct_name_generator(
                             struct, field, field_index, True, 0, containing_type_size
