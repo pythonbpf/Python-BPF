@@ -44,9 +44,9 @@ def unwrap_pointer_type(type_obj: Any) -> Any:
 
 
 def process_vmlinux_class(
-        node,
-        llvm_module,
-        handler: DependencyHandler,
+    node,
+    llvm_module,
+    handler: DependencyHandler,
 ):
     symbols_in_module, imported_module = get_module_symbols("vmlinux")
     if node.name in symbols_in_module:
@@ -57,10 +57,10 @@ def process_vmlinux_class(
 
 
 def process_vmlinux_post_ast(
-        elem_type_class,
-        llvm_handler,
-        handler: DependencyHandler,
-        processing_stack=None,
+    elem_type_class,
+    llvm_handler,
+    handler: DependencyHandler,
+    processing_stack=None,
 ):
     # Initialize processing stack on first call
     if processing_stack is None:
@@ -140,7 +140,7 @@ def process_vmlinux_post_ast(
 
                     # Process pointer to ctype
                     if isinstance(elem_type, type) and issubclass(
-                            elem_type, ctypes._Pointer
+                        elem_type, ctypes._Pointer
                     ):
                         # Get the pointed-to type
                         pointed_type = elem_type._type_
@@ -153,7 +153,7 @@ def process_vmlinux_post_ast(
 
                     # Process function pointers (CFUNCTYPE)
                     elif hasattr(elem_type, "_restype_") and hasattr(
-                            elem_type, "_argtypes_"
+                        elem_type, "_argtypes_"
                     ):
                         # This is a CFUNCTYPE or similar
                         logger.info(

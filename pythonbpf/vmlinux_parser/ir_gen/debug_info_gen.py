@@ -21,7 +21,7 @@ def debug_info_generation(
         generated_debug_info: List of tuples (struct, debug_info) to track generated debug info
 
     Returns:
-        The generated global variable debug info
+        The generated global variable debug info, or None for unsupported types
     """
     # Set up debug info generator
     generator = DebugInfoGenerator(llvm_module)
@@ -31,29 +31,44 @@ def debug_info_generation(
         if existing_struct.name == struct.name:
             return debug_info
 
+    # Check if this is a union (not supported yet)
+    if not struct.name.startswith("struct_"):
+        logger.warning(f"Skipping debug info generation for union: {struct.name}")
+        # Create a minimal forward declaration for unions
+        union_type = generator.create_struct_type(
+            [], struct.__sizeof__() * 8, is_distinct=True
+        )
+        return union_type
+
     # Process all fields and create members for the struct
     members = []
     for field_name, field in struct.fields.items():
-        # Get appropriate debug type for this field
-        field_type = _get_field_debug_type(
-            field_name, field, generator, struct, generated_debug_info
-        )
-        # Create struct member with proper offset
-        member = generator.create_struct_member_vmlinux(
-            field_name, field_type, field.offset * 8
-        )
-        members.append(member)
+        try:
+            # Get appropriate debug type for this field
+            field_type = _get_field_debug_type(
+                field_name, field, generator, struct, generated_debug_info
+            )
 
-    if struct.name.startswith("struct_"):
-        struct_name = struct.name.removeprefix("struct_")
-        # Create struct type with all members
-        struct_type = generator.create_struct_type_with_name(
-            struct_name, members, struct.__sizeof__() * 8, is_distinct=True
-        )
-    else:
-        logger.warning("Blindly handling Unions present in vmlinux dependencies")
-        struct_type = None
-        # raise ValueError("Unions are not supported in the current version")
+            # Ensure field_type is a tuple
+            if not isinstance(field_type, tuple) or len(field_type) != 2:
+                logger.error(f"Invalid field_type for {field_name}: {field_type}")
+                continue
+
+            # Create struct member with proper offset
+            member = generator.create_struct_member_vmlinux(
+                field_name, field_type, field.offset * 8
+            )
+            members.append(member)
+        except Exception as e:
+            logger.error(f"Failed to process field {field_name} in {struct.name}: {e}")
+            continue
+
+    struct_name = struct.name.removeprefix("struct_")
+    # Create struct type with all members
+    struct_type = generator.create_struct_type_with_name(
+        struct_name, members, struct.__sizeof__() * 8, is_distinct=True
+    )
+
     return struct_type
 
 
@@ -63,7 +78,7 @@ def _get_field_debug_type(
     generator: DebugInfoGenerator,
     parent_struct: DependencyNode,
     generated_debug_info: List[Tuple[DependencyNode, Any]],
-) -> tuple[Any, int] | None:
+) -> tuple[Any, int]:
     """
     Determine the appropriate debug type for a field based on its Python/ctypes type.
 
@@ -75,14 +90,16 @@ def _get_field_debug_type(
         generated_debug_info: List of already generated debug info
 
     Returns:
-        The debug info type for this field
+        A tuple of (debug_type, size_in_bits)
     """
-    # Handle complex types (arrays, pointers)
+    # Handle complex types (arrays, pointers, function pointers)
     if field.ctype_complex_type is not None:
-        # TODO: Check if this is a CFUNCTYPE (function pointer), but sadly it just checks callable for now
+        # Handle function pointer types (CFUNCTYPE)
         if callable(field.ctype_complex_type):
-            # Handle function pointer types, create a void pointer as a placeholder
-            return generator.create_pointer_type(None), 64
+            # Function pointers are represented as void pointers
+            logger.info(f"Field {field_name} is a function pointer, using void pointer")
+            void_ptr = generator.create_pointer_type(None, 64)
+            return void_ptr, 64
         elif issubclass(field.ctype_complex_type, ctypes.Array):
             # Handle array types
             element_type, base_type_size = _get_basic_debug_type(
@@ -105,11 +122,13 @@ def _get_field_debug_type(
         for existing_struct, debug_info in generated_debug_info:
             if existing_struct.name == struct_name:
                 # Use existing debug info
-                return debug_info, existing_struct.__sizeof__()
+                return debug_info, existing_struct.__sizeof__() * 8
 
         # If not found, create a forward declaration
         # This will be completed when the actual struct is processed
-        logger.warning("Forward declaration in struct created")
+        logger.warning(
+            f"Forward declaration created for {struct_name} in {parent_struct.name}"
+        )
         forward_type = generator.create_struct_type([], 0, is_distinct=True)
         return forward_type, 0
 
