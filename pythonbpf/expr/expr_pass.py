@@ -14,6 +14,7 @@ from .type_normalization import (
 )
 from pythonbpf.vmlinux_parser.assignment_info import Field
 from .vmlinux_registry import VmlinuxHandlerRegistry
+from ..vmlinux_parser.dependency_node import Field
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -89,8 +90,16 @@ def _handle_attribute_expr(
                     return vmlinux_result
                 else:
                     raise RuntimeError("Vmlinux struct did not process successfully")
-            metadata = structs_sym_tab[var_metadata]
-            if attr_name in metadata.fields:
+
+            elif isinstance(var_metadata, Field):
+                logger.error(
+                    f"Cannot access field '{attr_name}' on already-loaded field value '{var_name}'"
+                )
+                return None
+
+            # Regular user-defined struct
+            metadata = structs_sym_tab.get(var_metadata)
+            if metadata and attr_name in metadata.fields:
                 gep = metadata.gep(builder, var_ptr, attr_name)
                 val = builder.load(gep)
                 field_type = metadata.field_type(attr_name)

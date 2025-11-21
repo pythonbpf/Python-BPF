@@ -337,13 +337,6 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
                 VmlinuxHandlerRegistry.get_field_type(vmlinux_struct_name, field_name)
             )
             field_ir, field = field_type
-            # TODO: For now, we only support integer type allocations.
-            # This always assumes first argument of function to be the context struct
-            # base_ptr = builder.function.args[0]
-            # local_sym_tab[
-            #     struct_var
-            # ].var = base_ptr  # This is repurposing of var to store the pointer of the base type
-            # local_sym_tab[struct_var].ir_type = field_ir
 
             # Determine the actual IR type based on the field's type
             actual_ir_type = None
@@ -398,12 +391,12 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
                 )
                 actual_ir_type = ir.IntType(64)
 
-            # Allocate with the actual IR type, not the GlobalVariable
+            # Allocate with the actual IR type
             var = _allocate_with_type(builder, var_name, actual_ir_type)
-            local_sym_tab[var_name] = LocalSymbol(var, actual_ir_type, field)
+            local_sym_tab[var_name] = LocalSymbol(var, actual_ir_type, field)  # <-- Store Field metadata
 
             logger.info(
-                f"Pre-allocated {var_name} from vmlinux struct {vmlinux_struct_name}.{field_name}"
+                f"Pre-allocated {var_name} as {actual_ir_type} from vmlinux struct {vmlinux_struct_name}.{field_name}"
             )
             return
         else:
