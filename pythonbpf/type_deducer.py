@@ -16,6 +16,7 @@ mapping = {
     "c_long": ir.IntType(64),
     "c_ulong": ir.IntType(64),
     "c_longlong": ir.IntType(64),
+    "c_uint": ir.IntType(32),
     # Not so sure about this one
     "str": ir.PointerType(ir.IntType(8)),
 }
