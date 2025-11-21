@@ -524,20 +524,22 @@ def _handle_boolean_op(
         logger.error(f"Unsupported boolean operator: {type(expr.op).__name__}")
         return None
 
+
 # ============================================================================
 # VMLinux casting
 # ============================================================================
 
+
 def _handle_vmlinux_cast(
-        func,
-        module,
-        builder,
-        expr,
-        local_sym_tab,
-        map_sym_tab,
-        structs_sym_tab=None,
+    func,
+    module,
+    builder,
+    expr,
+    local_sym_tab,
+    map_sym_tab,
+    structs_sym_tab=None,
 ):
-    # handle expressions such as struct_request(ctx.di) where struct_request is a vmlinux 
+    # handle expressions such as struct_request(ctx.di) where struct_request is a vmlinux
     # struct and ctx.di is a pointer to a struct but is actually represented as a c_uint64
     # which needs to be cast to a pointer. This is also a field of another vmlinux struct
     """Handle vmlinux struct cast expressions like struct_request(ctx.di)."""
@@ -572,7 +574,7 @@ def _handle_vmlinux_cast(
     # Cast the integer/value to a pointer to the struct
     # If arg_val is an integer type, we need to inttoptr it
     ptr_type = ir.PointerType()
-    #TODO: add a integer check here later
+    # TODO: add a integer check here later
     if ctypes_to_ir(arg_type.type.__name__):
         # Cast integer to pointer
         casted_ptr = builder.inttoptr(arg_val, ptr_type)
@@ -603,8 +605,10 @@ def eval_expr(
     elif isinstance(expr, ast.Constant):
         return _handle_constant_expr(module, builder, expr)
     elif isinstance(expr, ast.Call):
-        if isinstance(expr.func, ast.Name) and VmlinuxHandlerRegistry.is_vmlinux_struct(expr.func.id):
-           return _handle_vmlinux_cast(
+        if isinstance(expr.func, ast.Name) and VmlinuxHandlerRegistry.is_vmlinux_struct(
+            expr.func.id
+        ):
+            return _handle_vmlinux_cast(
                 func,
                 module,
                 builder,
