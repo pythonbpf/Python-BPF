@@ -1,5 +1,5 @@
 from vmlinux import struct_request, struct_pt_regs
-from pythonbpf import bpf, section, bpfglobal, compile_to_ir
+from pythonbpf import bpf, section, bpfglobal, compile_to_ir, compile
 import logging
 from ctypes import c_int64
 
@@ -7,9 +7,11 @@ from ctypes import c_int64
 @bpf
 @section("kprobe/blk_mq_start_request")
 def example(ctx: struct_pt_regs) -> c_int64:
+    a = ctx.r15
     req = struct_request(ctx.di)
-    c = req.__data_len
-    print(f"data length {c}")
+    d = req.__data_len
+    c = req.timeout
+    print(f"data length {d} and {c} and {a}")
     return c_int64(0)
 
 
@@ -20,3 +22,4 @@ def LICENSE() -> str:
 
 
 compile_to_ir("requests.py", "requests.ll", loglevel=logging.INFO)
+compile()

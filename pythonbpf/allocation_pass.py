@@ -121,11 +121,10 @@ def _allocate_for_call(
         elif VmlinuxHandlerRegistry.is_vmlinux_struct(call_type):
             # When calling struct_name(pointer), we're doing a cast, not construction
             # So we allocate as a pointer (i64) not as the actual struct
-            ir_type = ir.IntType(64)  # Pointer type
-            var = builder.alloca(ir_type, name=var_name)
+            var = builder.alloca(ir.PointerType(), name=var_name)
             var.align = 8
             local_sym_tab[var_name] = LocalSymbol(
-                var, ir_type, VmlinuxHandlerRegistry.get_struct_type(call_type)
+                var, ir.PointerType(), VmlinuxHandlerRegistry.get_struct_type(call_type)
             )
             logger.info(
                 f"Pre-allocated {var_name} for vmlinux struct pointer cast to {call_type}"
@@ -340,11 +339,11 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
             field_ir, field = field_type
             # TODO: For now, we only support integer type allocations.
             # This always assumes first argument of function to be the context struct
-            base_ptr = builder.function.args[0]
-            local_sym_tab[
-                struct_var
-            ].var = base_ptr  # This is repurposing of var to store the pointer of the base type
-            local_sym_tab[struct_var].ir_type = field_ir
+            # base_ptr = builder.function.args[0]
+            # local_sym_tab[
+            #     struct_var
+            # ].var = base_ptr  # This is repurposing of var to store the pointer of the base type
+            # local_sym_tab[struct_var].ir_type = field_ir
 
             # Determine the actual IR type based on the field's type
             actual_ir_type = None

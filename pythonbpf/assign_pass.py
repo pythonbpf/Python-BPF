@@ -1,5 +1,7 @@
 import ast
 import logging
+from inspect import isclass
+
 from llvmlite import ir
 from pythonbpf.expr import eval_expr
 from pythonbpf.helper import emit_probe_read_kernel_str_call
@@ -150,6 +152,9 @@ def handle_variable_assignment(
     val, val_type = val_result
     logger.info(f"Evaluated value for {var_name}: {val} of type {val_type}, {var_type}")
     if val_type != var_type:
+        # if isclass(val_type) and (val_type.__module__ == "vmlinux"):
+        #     logger.info("Handling typecast to vmlinux struct")
+        #     print(val_type, var_type)
         if isinstance(val_type, Field):
             logger.info("Handling assignment to struct field")
             # Special handling for struct_xdp_md i32 fields that are zero-extended to i64
