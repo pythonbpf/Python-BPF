@@ -150,7 +150,9 @@ def handle_variable_assignment(
         return False
 
     val, val_type = val_result
-    logger.info(f"Evaluated value for {var_name}: {val} of type {val_type}, expected {var_type}")
+    logger.info(
+        f"Evaluated value for {var_name}: {val} of type {val_type}, expected {var_type}"
+    )
 
     if val_type != var_type:
         # Handle vmlinux struct pointers - they're represented as Python classes but are i64 pointers
@@ -161,7 +163,9 @@ def handle_variable_assignment(
                 # Convert pointer to i64 using ptrtoint
                 if isinstance(val.type, ir.PointerType):
                     val = builder.ptrtoint(val, ir.IntType(64))
-                    logger.info(f"Converted vmlinux struct pointer to i64 using ptrtoint")
+                    logger.info(
+                        "Converted vmlinux struct pointer to i64 using ptrtoint"
+                    )
                 builder.store(val, var_ptr)
                 logger.info(f"Assigned vmlinux struct pointer to {var_name} (i64)")
                 return True

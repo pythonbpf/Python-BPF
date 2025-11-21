@@ -173,7 +173,9 @@ class VmlinuxHandler:
 
                     if field_size_bits in [8, 16, 32, 64]:
                         int_width = field_size_bits
-                        logger.info(f"Determined field size: {int_width} bits ({field_size_bytes} bytes)")
+                        logger.info(
+                            f"Determined field size: {int_width} bits ({field_size_bytes} bytes)"
+                        )
 
                         # Special handling for struct_xdp_md i32 fields
                         if struct_name == "struct_xdp_md" and int_width == 32:
@@ -212,11 +214,8 @@ class VmlinuxHandler:
         #   %result = call i64 inttoptr (i64 113 to ptr)(ptr %local_storage, i32 %size, ptr %passed)
         from pythonbpf.helper import emit_probe_read_kernel_call
 
-        result = emit_probe_read_kernel_call(
-            builder,
-            local_storage_i8_ptr,
-            field_size_bytes,
-            field_ptr
+        emit_probe_read_kernel_call(
+            builder, local_storage_i8_ptr, field_size_bytes, field_ptr
         )
 
         # Load the value from local storage
