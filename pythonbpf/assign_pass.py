@@ -1,6 +1,5 @@
 import ast
 import logging
-from inspect import isclass
 
 from llvmlite import ir
 from pythonbpf.expr import eval_expr

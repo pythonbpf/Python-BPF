@@ -12,7 +12,6 @@ from .type_normalization import (
     get_base_type_and_depth,
     deref_to_depth,
 )
-from pythonbpf.vmlinux_parser.assignment_info import Field
 from .vmlinux_registry import VmlinuxHandlerRegistry
 from ..vmlinux_parser.dependency_node import Field
 

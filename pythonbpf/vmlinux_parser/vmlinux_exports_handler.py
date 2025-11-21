@@ -103,7 +103,11 @@ class VmlinuxHandler:
                 globvar_ir, field_data = self.get_field_type(struct_name, field_name)
                 builder.function.args[0].type = ir.PointerType(ir.IntType(8))
                 field_ptr = self.load_ctx_field(
-                    builder, builder.function.args[0], globvar_ir, field_data, struct_name
+                    builder,
+                    builder.function.args[0],
+                    globvar_ir,
+                    field_data,
+                    struct_name,
                 )
                 return field_ptr, field_data
             else:
@@ -125,7 +129,9 @@ class VmlinuxHandler:
             raise RuntimeError("Variable accessed not found in symbol table")
 
     @staticmethod
-    def load_struct_field(builder, struct_ptr_int, offset_global, field_data, struct_name=None):
+    def load_struct_field(
+        builder, struct_ptr_int, offset_global, field_data, struct_name=None
+    ):
         """
         Generate LLVM IR to load a field from a regular (non-context) struct using standard GEP.
 
@@ -186,7 +192,7 @@ class VmlinuxHandler:
             elif field_data.type.__module__ == "vmlinux":
                 # For pointers to structs or complex vmlinux types
                 if field_data.ctype_complex_type is not None and issubclass(
-                        field_data.ctype_complex_type, ctypes._Pointer
+                    field_data.ctype_complex_type, ctypes._Pointer
                 ):
                     int_width = 64  # Pointers are always 64-bit
                     logger.info("Field is a pointer type, using 64 bits")

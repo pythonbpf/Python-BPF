@@ -393,7 +393,9 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
 
             # Allocate with the actual IR type
             var = _allocate_with_type(builder, var_name, actual_ir_type)
-            local_sym_tab[var_name] = LocalSymbol(var, actual_ir_type, field)  # <-- Store Field metadata
+            local_sym_tab[var_name] = LocalSymbol(
+                var, actual_ir_type, field
+            )  # <-- Store Field metadata
 
             logger.info(
                 f"Pre-allocated {var_name} as {actual_ir_type} from vmlinux struct {vmlinux_struct_name}.{field_name}"
