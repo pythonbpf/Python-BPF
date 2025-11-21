@@ -115,11 +115,11 @@ class VmlinuxHandler:
                 struct_name = python_type.__name__
                 globvar_ir, field_data = self.get_field_type(struct_name, field_name)
 
-                # Handle cast struct field access (use standard GEP)
+                # Handle cast struct field access (use bpf_probe_read_kernel)
                 # Load the struct pointer from the local variable
                 struct_ptr = builder.load(var_info.var)
 
-                # Use standard GEP for non-context struct field access
+                # Use bpf_probe_read_kernel for non-context struct field access
                 field_value = self.load_struct_field(
                     builder, struct_ptr, globvar_ir, field_data, struct_name
                 )
@@ -133,7 +133,7 @@ class VmlinuxHandler:
         builder, struct_ptr_int, offset_global, field_data, struct_name=None
     ):
         """
-        Generate LLVM IR to load a field from a regular (non-context) struct using standard GEP.
+        Generate LLVM IR to load a field from a regular (non-context) struct using bpf_probe_read_kernel.
 
         Args:
             builder: llvmlite IRBuilder instance
@@ -159,7 +159,8 @@ class VmlinuxHandler:
             inbounds=False,
         )
 
-        # Determine the appropriate IR type based on field information
+        # Determine the appropriate field size based on field information
+        field_size_bytes = 8  # Default to 8 bytes (64-bit)
         int_width = 64  # Default to 64-bit
         needs_zext = False
 
@@ -172,7 +173,7 @@ class VmlinuxHandler:
 
                     if field_size_bits in [8, 16, 32, 64]:
                         int_width = field_size_bits
-                        logger.info(f"Determined field size: {int_width} bits")
+                        logger.info(f"Determined field size: {int_width} bits ({field_size_bytes} bytes)")
 
                         # Special handling for struct_xdp_md i32 fields
                         if struct_name == "struct_xdp_md" and int_width == 32:
@@ -195,16 +196,31 @@ class VmlinuxHandler:
                     field_data.ctype_complex_type, ctypes._Pointer
                 ):
                     int_width = 64  # Pointers are always 64-bit
+                    field_size_bytes = 8
                     logger.info("Field is a pointer type, using 64 bits")
                 else:
                     logger.warning("Complex vmlinux field type, using default 64 bits")
 
-        # Bitcast to appropriate pointer type based on determined width
-        ptr_type = ir.PointerType(ir.IntType(int_width))
-        typed_ptr = builder.bitcast(field_ptr, ptr_type)
+        # Allocate local storage for the field value
+        local_storage = builder.alloca(ir.IntType(int_width))
+        local_storage_i8_ptr = builder.bitcast(local_storage, i8_ptr_type)
 
-        # Load the value
-        value = builder.load(typed_ptr)
+        # Use bpf_probe_read_kernel to safely read the field
+        # This generates:
+        #   %gep = getelementptr i8, ptr %struct_ptr, i64 %offset (already done above as field_ptr)
+        #   %passed = tail call ptr @llvm.bpf.passthrough.p0.p0(i32 2, ptr %gep)
+        #   %result = call i64 inttoptr (i64 113 to ptr)(ptr %local_storage, i32 %size, ptr %passed)
+        from pythonbpf.helper import emit_probe_read_kernel_call
+
+        result = emit_probe_read_kernel_call(
+            builder,
+            local_storage_i8_ptr,
+            field_size_bytes,
+            field_ptr
+        )
+
+        # Load the value from local storage
+        value = builder.load(local_storage)
 
         # Zero-extend i32 to i64 if needed
         if needs_zext:

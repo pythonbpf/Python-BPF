@@ -12,7 +12,8 @@ def example(ctx: struct_pt_regs) -> c_int64:
     d = req.__data_len
     b = ctx.r12
     c = req.timeout
-    print(f"data length {d} and {c} and {a} and {b}")
+    print(f"data length {d} and {c} and {a}")
+    print(f"ctx arg {b}")
     return c_int64(0)
 
 
