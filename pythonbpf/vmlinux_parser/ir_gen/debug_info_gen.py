@@ -126,7 +126,7 @@ def _get_field_debug_type(
 
         # If not found, create a forward declaration
         # This will be completed when the actual struct is processed
-        logger.warning(
+        logger.info(
             f"Forward declaration created for {struct_name} in {parent_struct.name}"
         )
         forward_type = generator.create_struct_type([], 0, is_distinct=True)

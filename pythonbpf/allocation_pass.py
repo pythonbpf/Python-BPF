@@ -118,6 +118,19 @@ def _allocate_for_call(
             local_sym_tab[var_name] = LocalSymbol(var, struct_info.ir_type, call_type)
             logger.info(f"Pre-allocated {var_name} for struct {call_type}")
 
+        elif VmlinuxHandlerRegistry.is_vmlinux_struct(call_type):
+            # When calling struct_name(pointer), we're doing a cast, not construction
+            # So we allocate as a pointer (i64) not as the actual struct
+            ir_type = ir.IntType(64)  # Pointer type
+            var = builder.alloca(ir_type, name=var_name)
+            var.align = 8
+            local_sym_tab[var_name] = LocalSymbol(
+                var, ir_type, VmlinuxHandlerRegistry.get_struct_type(call_type)
+            )
+            logger.info(
+                f"Pre-allocated {var_name} for vmlinux struct pointer cast to {call_type}"
+            )
+
         else:
             logger.warning(f"Unknown call type for allocation: {call_type}")
 
