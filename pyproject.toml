@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pythonbpf"
-version = "0.1.6"
+version = "0.1.7"
 description = "Reduced Python frontend for eBPF"
 authors = [
   { name = "r41k0u", email="pragyanshchaturvedi18@gmail.com" },
@@ -29,7 +29,7 @@ license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 
 dependencies = [
-  "llvmlite",
+  "llvmlite>=0.45",
   "astpretty",
   "pylibbpf"
 ]
