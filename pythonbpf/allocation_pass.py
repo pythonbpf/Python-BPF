@@ -178,7 +178,7 @@ def _allocate_for_map_method(
     # Main variable (pointer to pointer)
     ir_type = ir.PointerType(ir.IntType(64))
     var = builder.alloca(ir_type, name=var_name)
-    local_sym_tab[var_name] = LocalSymbol(var, ir_type)
+    local_sym_tab[var_name] = LocalSymbol(var, ir_type, value_type)
     # Temporary variable for computed values
     tmp_ir_type = value_ir_type
     var_tmp = builder.alloca(tmp_ir_type, name=f"{var_name}_tmp")

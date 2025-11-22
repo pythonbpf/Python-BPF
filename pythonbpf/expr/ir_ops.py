@@ -48,3 +48,10 @@ def deref_to_depth(func, builder, val, target_depth):
         cur_val = phi
         cur_type = pointee_type
     return cur_val
+
+
+def deref_struct_ptr(
+    func, builder, struct_ptr, struct_metadata, field_name, structs_sym_tab
+):
+    """Dereference a pointer to a struct type."""
+    return deref_to_depth(func, builder, struct_ptr, 1)

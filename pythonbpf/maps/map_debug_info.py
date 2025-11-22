@@ -117,6 +117,7 @@ def _get_key_val_dbg_type(name, generator, structs_sym_tab):
 
     type_obj = structs_sym_tab.get(name)
     if type_obj:
+        logger.info(f"Found struct named {name}, generating debug type")
         return _get_struct_debug_type(type_obj, generator, structs_sym_tab)
 
     # Fallback to basic types
@@ -165,6 +166,6 @@ def _get_struct_debug_type(struct_obj, generator, structs_sym_tab):
         )
         elements_arr.append(member)
     struct_type = generator.create_struct_type(
-        elements_arr, struct_obj.size, is_distinct=True
+        elements_arr, struct_obj.size * 8, is_distinct=True
     )
     return struct_type
