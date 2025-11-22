@@ -1,5 +1,7 @@
 import ast
 import logging
+from inspect import isclass
+
 from llvmlite import ir
 from pythonbpf.expr import eval_expr
 from pythonbpf.helper import emit_probe_read_kernel_str_call
@@ -148,8 +150,30 @@ def handle_variable_assignment(
         return False
 
     val, val_type = val_result
-    logger.info(f"Evaluated value for {var_name}: {val} of type {val_type}, {var_type}")
+    logger.info(
+        f"Evaluated value for {var_name}: {val} of type {val_type}, expected {var_type}"
+    )
+
     if val_type != var_type:
+        # Handle vmlinux struct pointers - they're represented as Python classes but are i64 pointers
+        if isclass(val_type) and (val_type.__module__ == "vmlinux"):
+            logger.info("Handling vmlinux struct pointer assignment")
+            # vmlinux struct pointers: val is a pointer, need to convert to i64
+            if isinstance(var_type, ir.IntType) and var_type.width == 64:
+                # Convert pointer to i64 using ptrtoint
+                if isinstance(val.type, ir.PointerType):
+                    val = builder.ptrtoint(val, ir.IntType(64))
+                    logger.info(
+                        "Converted vmlinux struct pointer to i64 using ptrtoint"
+                    )
+                builder.store(val, var_ptr)
+                logger.info(f"Assigned vmlinux struct pointer to {var_name} (i64)")
+                return True
+            else:
+                logger.error(
+                    f"Type mismatch: vmlinux struct pointer requires i64, got {var_type}"
+                )
+                return False
         if isinstance(val_type, Field):
             logger.info("Handling assignment to struct field")
             # Special handling for struct_xdp_md i32 fields that are zero-extended to i64

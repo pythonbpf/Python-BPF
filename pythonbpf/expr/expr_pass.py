@@ -12,8 +12,8 @@ from .type_normalization import (
     get_base_type_and_depth,
     deref_to_depth,
 )
-from pythonbpf.vmlinux_parser.assignment_info import Field
 from .vmlinux_registry import VmlinuxHandlerRegistry
+from ..vmlinux_parser.dependency_node import Field
 
 logger: Logger = logging.getLogger(__name__)
 
@@ -173,8 +173,16 @@ def _handle_attribute_expr(
                     return vmlinux_result
                 else:
                     raise RuntimeError("Vmlinux struct did not process successfully")
-            metadata = structs_sym_tab[var_metadata]
-            if attr_name in metadata.fields:
+
+            elif isinstance(var_metadata, Field):
+                logger.error(
+                    f"Cannot access field '{attr_name}' on already-loaded field value '{var_name}'"
+                )
+                return None
+
+            # Regular user-defined struct
+            metadata = structs_sym_tab.get(var_metadata)
+            if metadata and attr_name in metadata.fields:
                 gep = metadata.gep(builder, var_ptr, attr_name)
                 val = builder.load(gep)
                 field_type = metadata.field_type(attr_name)
@@ -610,6 +618,66 @@ def _handle_boolean_op(
 
 
 # ============================================================================
+# VMLinux casting
+# ============================================================================
+
+
+def _handle_vmlinux_cast(
+    func,
+    module,
+    builder,
+    expr,
+    local_sym_tab,
+    map_sym_tab,
+    structs_sym_tab=None,
+):
+    # handle expressions such as struct_request(ctx.di) where struct_request is a vmlinux
+    # struct and ctx.di is a pointer to a struct but is actually represented as a c_uint64
+    # which needs to be cast to a pointer. This is also a field of another vmlinux struct
+    """Handle vmlinux struct cast expressions like struct_request(ctx.di)."""
+    if len(expr.args) != 1:
+        logger.info("vmlinux struct cast takes exactly one argument")
+        return None
+
+    # Get the struct name
+    struct_name = expr.func.id
+
+    # Evaluate the argument (e.g., ctx.di which is a c_uint64)
+    arg_result = eval_expr(
+        func,
+        module,
+        builder,
+        expr.args[0],
+        local_sym_tab,
+        map_sym_tab,
+        structs_sym_tab,
+    )
+
+    if arg_result is None:
+        logger.info("Failed to evaluate argument to vmlinux struct cast")
+        return None
+
+    arg_val, arg_type = arg_result
+    # Get the vmlinux struct type
+    vmlinux_struct_type = VmlinuxHandlerRegistry.get_struct_type(struct_name)
+    if vmlinux_struct_type is None:
+        logger.error(f"Failed to get vmlinux struct type for {struct_name}")
+        return None
+    # Cast the integer/value to a pointer to the struct
+    # If arg_val is an integer type, we need to inttoptr it
+    ptr_type = ir.PointerType()
+    # TODO: add a integer check here later
+    if ctypes_to_ir(arg_type.type.__name__):
+        # Cast integer to pointer
+        casted_ptr = builder.inttoptr(arg_val, ptr_type)
+    else:
+        logger.error(f"Unsupported type for vmlinux cast: {arg_type}")
+        return None
+
+    return casted_ptr, vmlinux_struct_type
+
+
+# ============================================================================
 # Expression Dispatcher
 # ============================================================================
 
@@ -629,6 +697,18 @@ def eval_expr(
     elif isinstance(expr, ast.Constant):
         return _handle_constant_expr(module, builder, expr)
     elif isinstance(expr, ast.Call):
+        if isinstance(expr.func, ast.Name) and VmlinuxHandlerRegistry.is_vmlinux_struct(
+            expr.func.id
+        ):
+            return _handle_vmlinux_cast(
+                func,
+                module,
+                builder,
+                expr,
+                local_sym_tab,
+                map_sym_tab,
+                structs_sym_tab,
+            )
         if isinstance(expr.func, ast.Name) and expr.func.id == "deref":
             return _handle_deref_call(expr, local_sym_tab, builder)
 

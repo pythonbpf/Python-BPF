@@ -94,16 +94,139 @@ class VmlinuxHandler:
                 f"Attempting to access field {field_name} of possible vmlinux struct {struct_var_name}"
             )
             python_type: type = var_info.metadata
-            struct_name = python_type.__name__
-            globvar_ir, field_data = self.get_field_type(struct_name, field_name)
-            builder.function.args[0].type = ir.PointerType(ir.IntType(8))
-            field_ptr = self.load_ctx_field(
-                builder, builder.function.args[0], globvar_ir, field_data, struct_name
-            )
-            # Return pointer to field and field type
-            return field_ptr, field_data
+            # Check if this is a context field (ctx) or a cast struct
+            is_context_field = var_info.var is None
+
+            if is_context_field:
+                # Handle context field access (original behavior)
+                struct_name = python_type.__name__
+                globvar_ir, field_data = self.get_field_type(struct_name, field_name)
+                builder.function.args[0].type = ir.PointerType(ir.IntType(8))
+                field_ptr = self.load_ctx_field(
+                    builder,
+                    builder.function.args[0],
+                    globvar_ir,
+                    field_data,
+                    struct_name,
+                )
+                return field_ptr, field_data
+            else:
+                # Handle cast struct field access
+                struct_name = python_type.__name__
+                globvar_ir, field_data = self.get_field_type(struct_name, field_name)
+
+                # Handle cast struct field access (use bpf_probe_read_kernel)
+                # Load the struct pointer from the local variable
+                struct_ptr = builder.load(var_info.var)
+
+                # Use bpf_probe_read_kernel for non-context struct field access
+                field_value = self.load_struct_field(
+                    builder, struct_ptr, globvar_ir, field_data, struct_name
+                )
+                # Return field value and field type
+                return field_value, field_data
         else:
             raise RuntimeError("Variable accessed not found in symbol table")
+
+    @staticmethod
+    def load_struct_field(
+        builder, struct_ptr_int, offset_global, field_data, struct_name=None
+    ):
+        """
+        Generate LLVM IR to load a field from a regular (non-context) struct using bpf_probe_read_kernel.
+
+        Args:
+            builder: llvmlite IRBuilder instance
+            struct_ptr_int: The struct pointer as an i64 value (already loaded from alloca)
+            offset_global: Global variable containing the field offset (i64)
+            field_data: contains data about the field
+            struct_name: Name of the struct being accessed (optional)
+        Returns:
+            The loaded value
+        """
+
+        # Load the offset value
+        offset = builder.load(offset_global)
+
+        # Convert i64 to pointer type (BPF stores pointers as i64)
+        i8_ptr_type = ir.PointerType(ir.IntType(8))
+        struct_ptr = builder.inttoptr(struct_ptr_int, i8_ptr_type)
+
+        # GEP with offset to get field pointer
+        field_ptr = builder.gep(
+            struct_ptr,
+            [offset],
+            inbounds=False,
+        )
+
+        # Determine the appropriate field size based on field information
+        field_size_bytes = 8  # Default to 8 bytes (64-bit)
+        int_width = 64  # Default to 64-bit
+        needs_zext = False
+
+        if field_data is not None:
+            # Try to determine the size from field metadata
+            if field_data.type.__module__ == ctypes.__name__:
+                try:
+                    field_size_bytes = ctypes.sizeof(field_data.type)
+                    field_size_bits = field_size_bytes * 8
+
+                    if field_size_bits in [8, 16, 32, 64]:
+                        int_width = field_size_bits
+                        logger.info(
+                            f"Determined field size: {int_width} bits ({field_size_bytes} bytes)"
+                        )
+
+                        # Special handling for struct_xdp_md i32 fields
+                        if struct_name == "struct_xdp_md" and int_width == 32:
+                            needs_zext = True
+                            logger.info(
+                                "struct_xdp_md i32 field detected, will zero-extend to i64"
+                            )
+                    else:
+                        logger.warning(
+                            f"Unusual field size {field_size_bits} bits, using default 64"
+                        )
+                except Exception as e:
+                    logger.warning(
+                        f"Could not determine field size: {e}, using default 64"
+                    )
+
+            elif field_data.type.__module__ == "vmlinux":
+                # For pointers to structs or complex vmlinux types
+                if field_data.ctype_complex_type is not None and issubclass(
+                    field_data.ctype_complex_type, ctypes._Pointer
+                ):
+                    int_width = 64  # Pointers are always 64-bit
+                    field_size_bytes = 8
+                    logger.info("Field is a pointer type, using 64 bits")
+                else:
+                    logger.warning("Complex vmlinux field type, using default 64 bits")
+
+        # Allocate local storage for the field value
+        local_storage = builder.alloca(ir.IntType(int_width))
+        local_storage_i8_ptr = builder.bitcast(local_storage, i8_ptr_type)
+
+        # Use bpf_probe_read_kernel to safely read the field
+        # This generates:
+        #   %gep = getelementptr i8, ptr %struct_ptr, i64 %offset (already done above as field_ptr)
+        #   %passed = tail call ptr @llvm.bpf.passthrough.p0.p0(i32 2, ptr %gep)
+        #   %result = call i64 inttoptr (i64 113 to ptr)(ptr %local_storage, i32 %size, ptr %passed)
+        from pythonbpf.helper import emit_probe_read_kernel_call
+
+        emit_probe_read_kernel_call(
+            builder, local_storage_i8_ptr, field_size_bytes, field_ptr
+        )
+
+        # Load the value from local storage
+        value = builder.load(local_storage)
+
+        # Zero-extend i32 to i64 if needed
+        if needs_zext:
+            value = builder.zext(value, ir.IntType(64))
+            logger.info("Zero-extended i32 value to i64")
+
+        return value
 
     @staticmethod
     def load_ctx_field(builder, ctx_arg, offset_global, field_data, struct_name=None):
