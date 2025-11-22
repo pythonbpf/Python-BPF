@@ -42,7 +42,10 @@ def debug_info_generation(
 
     # Process all fields and create members for the struct
     members = []
-    for field_name, field in struct.fields.items():
+
+    sorted_fields = sorted(struct.fields.items(), key=lambda item: item[1].offset)
+
+    for field_name, field in sorted_fields:
         try:
             # Get appropriate debug type for this field
             field_type = _get_field_debug_type(
@@ -97,7 +100,9 @@ def _get_field_debug_type(
         # Handle function pointer types (CFUNCTYPE)
         if callable(field.ctype_complex_type):
             # Function pointers are represented as void pointers
-            logger.info(f"Field {field_name} is a function pointer, using void pointer")
+            logger.warning(
+                f"Field {field_name} is a function pointer, using void pointer"
+            )
             void_ptr = generator.create_pointer_type(None, 64)
             return void_ptr, 64
         elif issubclass(field.ctype_complex_type, ctypes.Array):
