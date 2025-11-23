@@ -37,22 +37,18 @@ def _null_checked_operation(func, builder, ptr, operation, result_type, name_pre
     not_null_block = func.append_basic_block(name=f"{name_prefix}_not_null")
     merge_block = func.append_basic_block(name=f"{name_prefix}_merge")
 
-    # Null check
     null_ptr = ir.Constant(ptr.type, None)
     is_not_null = builder.icmp_signed("!=", ptr, null_ptr)
     builder.cbranch(is_not_null, not_null_block, merge_block)
 
-    # Not-null path: execute operation
     builder.position_at_end(not_null_block)
     result = operation(builder, ptr)
     not_null_after = builder.block
     builder.branch(merge_block)
 
-    # Merge with PHI
     builder.position_at_end(merge_block)
     phi = builder.phi(result_type, name=f"{name_prefix}_result")
 
-    # Null fallback value
     if isinstance(result_type, ir.IntType):
         null_val = ir.Constant(result_type, 0)
     elif isinstance(result_type, ir.PointerType):
@@ -72,7 +68,6 @@ def access_struct_field(
     """
     Access a struct field - automatically returns value or pointer based on field type.
     """
-    # Get struct metadata
     metadata = (
         structs_sym_tab.get(var_metadata)
         if isinstance(var_metadata, str)
@@ -89,10 +84,8 @@ def access_struct_field(
     # Get struct pointer
     struct_ptr = builder.load(var_ptr) if is_ptr_to_struct else var_ptr
 
-    # Decide: load value or return pointer?
     should_load = not isinstance(field_type, ir.ArrayType)
 
-    # Define the field access operation
     def field_access_op(builder, ptr):
         typed_ptr = builder.bitcast(ptr, metadata.ir_type.as_pointer())
         field_ptr = metadata.gep(builder, typed_ptr, field_name)
@@ -118,7 +111,6 @@ def access_struct_field(
         )
         return result, field_type
 
-    # No null check needed
     field_ptr = metadata.gep(builder, struct_ptr, field_name)
     result = builder.load(field_ptr) if should_load else field_ptr
     return result, field_type
