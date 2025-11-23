@@ -5,6 +5,7 @@ from llvmlite import ir
 from pythonbpf.expr import (
     get_operand_value,
     eval_expr,
+    access_struct_field,
 )
 
 logger = logging.getLogger(__name__)
@@ -135,7 +136,7 @@ def get_or_create_ptr_from_arg(
             and field_type.element.width == 8
         ):
             ptr, sz = get_char_array_ptr_and_size(
-                arg, builder, local_sym_tab, struct_sym_tab
+                arg, builder, local_sym_tab, struct_sym_tab, func
             )
             if not ptr:
                 raise ValueError("Failed to get char array pointer from struct field")
@@ -266,7 +267,9 @@ def get_buffer_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab):
         )
 
 
-def get_char_array_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab):
+def get_char_array_ptr_and_size(
+    buf_arg, builder, local_sym_tab, struct_sym_tab, func=None
+):
     """Get pointer to char array and its size."""
 
     # Struct field: obj.field
@@ -277,11 +280,11 @@ def get_char_array_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab)
         if not (local_sym_tab and var_name in local_sym_tab):
             raise ValueError(f"Variable '{var_name}' not found")
 
-        struct_type = local_sym_tab[var_name].metadata
-        if not (struct_sym_tab and struct_type in struct_sym_tab):
-            raise ValueError(f"Struct type '{struct_type}' not found")
+        struct_ptr, struct_type, struct_metadata = local_sym_tab[var_name]
+        if not (struct_sym_tab and struct_metadata in struct_sym_tab):
+            raise ValueError(f"Struct type '{struct_metadata}' not found")
 
-        struct_info = struct_sym_tab[struct_type]
+        struct_info = struct_sym_tab[struct_metadata]
         if field_name not in struct_info.fields:
             raise ValueError(f"Field '{field_name}' not found")
 
@@ -292,8 +295,25 @@ def get_char_array_ptr_and_size(buf_arg, builder, local_sym_tab, struct_sym_tab)
             )
             return None, 0
 
-        struct_ptr = local_sym_tab[var_name].var
-        field_ptr = struct_info.gep(builder, struct_ptr, field_name)
+        # Check if char array
+        if not (
+            isinstance(field_type, ir.ArrayType)
+            and isinstance(field_type.element, ir.IntType)
+            and field_type.element.width == 8
+        ):
+            logger.warning("Field is not a char array")
+            return None, 0
+
+        # Get field pointer (automatically handles null checks!)
+        field_ptr, _ = access_struct_field(
+            builder,
+            struct_ptr,
+            struct_type,
+            struct_metadata,
+            field_name,
+            struct_sym_tab,
+            func,
+        )
 
         # GEP to first element: [N x i8]* -> i8*
         buf_ptr = builder.gep(

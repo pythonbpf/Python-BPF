@@ -17,41 +17,108 @@ def deref_to_depth(func, builder, val, target_depth):
 
         # dereference with null check
         pointee_type = cur_type.pointee
-        null_check_block = builder.block
-        not_null_block = func.append_basic_block(name=f"deref_not_null_{depth}")
-        merge_block = func.append_basic_block(name=f"deref_merge_{depth}")
 
-        null_ptr = ir.Constant(cur_type, None)
-        is_not_null = builder.icmp_signed("!=", cur_val, null_ptr)
-        logger.debug(f"Inserted null check for pointer at depth {depth}")
+        def load_op(builder, ptr):
+            return builder.load(ptr)
 
-        builder.cbranch(is_not_null, not_null_block, merge_block)
-
-        builder.position_at_end(not_null_block)
-        dereferenced_val = builder.load(cur_val)
-        logger.debug(f"Dereferenced to depth {depth - 1}, type: {pointee_type}")
-        builder.branch(merge_block)
-
-        builder.position_at_end(merge_block)
-        phi = builder.phi(pointee_type, name=f"deref_result_{depth}")
-
-        zero_value = (
-            ir.Constant(pointee_type, 0)
-            if isinstance(pointee_type, ir.IntType)
-            else ir.Constant(pointee_type, None)
+        cur_val = _null_checked_operation(
+            func, builder, cur_val, load_op, pointee_type, f"deref_{depth}"
         )
-        phi.add_incoming(zero_value, null_check_block)
-
-        phi.add_incoming(dereferenced_val, not_null_block)
-
-        # Continue with phi result
-        cur_val = phi
         cur_type = pointee_type
+        logger.debug(f"Dereferenced to depth {depth}, type: {pointee_type}")
     return cur_val
 
 
-def deref_struct_ptr(
-    func, builder, struct_ptr, struct_metadata, field_name, structs_sym_tab
+def _null_checked_operation(func, builder, ptr, operation, result_type, name_prefix):
+    """
+    Generic null-checked operation on a pointer.
+    """
+    curr_block = builder.block
+    not_null_block = func.append_basic_block(name=f"{name_prefix}_not_null")
+    merge_block = func.append_basic_block(name=f"{name_prefix}_merge")
+
+    # Null check
+    null_ptr = ir.Constant(ptr.type, None)
+    is_not_null = builder.icmp_signed("!=", ptr, null_ptr)
+    builder.cbranch(is_not_null, not_null_block, merge_block)
+
+    # Not-null path: execute operation
+    builder.position_at_end(not_null_block)
+    result = operation(builder, ptr)
+    not_null_after = builder.block
+    builder.branch(merge_block)
+
+    # Merge with PHI
+    builder.position_at_end(merge_block)
+    phi = builder.phi(result_type, name=f"{name_prefix}_result")
+
+    # Null fallback value
+    if isinstance(result_type, ir.IntType):
+        null_val = ir.Constant(result_type, 0)
+    elif isinstance(result_type, ir.PointerType):
+        null_val = ir.Constant(result_type, None)
+    else:
+        null_val = ir.Constant(result_type, ir.Undefined)
+
+    phi.add_incoming(null_val, curr_block)
+    phi.add_incoming(result, not_null_after)
+
+    return phi
+
+
+def access_struct_field(
+    builder, var_ptr, var_type, var_metadata, field_name, structs_sym_tab, func=None
 ):
-    """Dereference a pointer to a struct type."""
-    return deref_to_depth(func, builder, struct_ptr, 1)
+    """
+    Access a struct field - automatically returns value or pointer based on field type.
+    """
+    # Get struct metadata
+    metadata = (
+        structs_sym_tab.get(var_metadata)
+        if isinstance(var_metadata, str)
+        else var_metadata
+    )
+    if not metadata or field_name not in metadata.fields:
+        raise ValueError(f"Field '{field_name}' not found in struct")
+
+    field_type = metadata.field_type(field_name)
+    is_ptr_to_struct = isinstance(var_type, ir.PointerType) and isinstance(
+        var_metadata, str
+    )
+
+    # Get struct pointer
+    struct_ptr = builder.load(var_ptr) if is_ptr_to_struct else var_ptr
+
+    # Decide: load value or return pointer?
+    should_load = not isinstance(field_type, ir.ArrayType)
+
+    # Define the field access operation
+    def field_access_op(builder, ptr):
+        typed_ptr = builder.bitcast(ptr, metadata.ir_type.as_pointer())
+        field_ptr = metadata.gep(builder, typed_ptr, field_name)
+        return builder.load(field_ptr) if should_load else field_ptr
+
+    # Handle null check for pointer-to-struct
+    if is_ptr_to_struct:
+        if func is None:
+            raise ValueError("func required for null-safe struct pointer access")
+
+        if should_load:
+            result_type = field_type
+        else:
+            result_type = field_type.as_pointer()
+
+        result = _null_checked_operation(
+            func,
+            builder,
+            struct_ptr,
+            field_access_op,
+            result_type,
+            f"field_{field_name}",
+        )
+        return result, field_type
+
+    # No null check needed
+    field_ptr = metadata.gep(builder, struct_ptr, field_name)
+    result = builder.load(field_ptr) if should_load else field_ptr
+    return result, field_type
