@@ -1,6 +1,6 @@
 from pythonbpf import bpf, section, struct, bpfglobal, compile, map
 from pythonbpf.maps import HashMap
-from pythonbpf.helper import pid
+from pythonbpf.helper import pid, comm
 from ctypes import c_void_p, c_int64
 
 
@@ -9,6 +9,7 @@ from ctypes import c_void_p, c_int64
 class val_type:
     counter: c_int64
     shizzle: c_int64
+    comm: str(16)
 
 
 @bpf
@@ -22,6 +23,7 @@ def last() -> HashMap:
 def hello_world(ctx: c_void_p) -> c_int64:
     obj = val_type()
     obj.counter, obj.shizzle = 42, 96
+    comm(obj.comm)
     t = last.lookup(obj)
     if t:
         print(f"Found existing entry: counter={obj.counter}, pid={t}")
