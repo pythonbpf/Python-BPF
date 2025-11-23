@@ -304,7 +304,6 @@ def get_char_array_ptr_and_size(
             logger.warning("Field is not a char array")
             return None, 0
 
-        # Get field pointer (automatically handles null checks!)
         field_ptr, _ = access_struct_field(
             builder,
             struct_ptr,
