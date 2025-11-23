@@ -6,11 +6,11 @@ from typing import Dict
 
 from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
 from .call_registry import CallHandlerRegistry
+from .ir_ops import deref_to_depth, access_struct_field
 from .type_normalization import (
     convert_to_bool,
     handle_comparator,
     get_base_type_and_depth,
-    deref_to_depth,
 )
 from .vmlinux_registry import VmlinuxHandlerRegistry
 from ..vmlinux_parser.dependency_node import Field
@@ -77,89 +77,6 @@ def _handle_attribute_expr(
             logger.info(
                 f"Variable type: {var_type}, Variable ptr: {var_ptr}, Variable Metadata: {var_metadata}"
             )
-            # Check if this is a pointer to a struct (from map lookup)
-            if (
-                isinstance(var_type, ir.PointerType)
-                and var_metadata
-                and isinstance(var_metadata, str)
-            ):
-                if var_metadata in structs_sym_tab:
-                    logger.info(
-                        f"Handling pointer to struct {var_metadata} from map lookup"
-                    )
-
-                    if func is None:
-                        raise ValueError(
-                            f"func parameter required for null-safe pointer access to {var_name}.{attr_name}"
-                        )
-
-                    # Load the pointer value (ptr<struct>)
-                    struct_ptr = builder.load(var_ptr)
-
-                    # Create blocks for null check
-                    null_check_block = builder.block
-                    not_null_block = func.append_basic_block(
-                        name=f"{var_name}_not_null"
-                    )
-                    merge_block = func.append_basic_block(name=f"{var_name}_merge")
-
-                    # Check if pointer is null
-                    null_ptr = ir.Constant(struct_ptr.type, None)
-                    is_not_null = builder.icmp_signed("!=", struct_ptr, null_ptr)
-                    logger.info(f"Inserted null check for pointer {var_name}")
-
-                    builder.cbranch(is_not_null, not_null_block, merge_block)
-
-                    # Not-null block: Access the field
-                    builder.position_at_end(not_null_block)
-
-                    # Get struct metadata
-                    metadata = structs_sym_tab[var_metadata]
-                    struct_ptr = builder.bitcast(
-                        struct_ptr, metadata.ir_type.as_pointer()
-                    )
-
-                    if attr_name not in metadata.fields:
-                        raise ValueError(
-                            f"Field '{attr_name}' not found in struct '{var_metadata}'"
-                        )
-
-                    # GEP to field
-                    field_gep = metadata.gep(builder, struct_ptr, attr_name)
-
-                    # Load field value
-                    field_val = builder.load(field_gep)
-                    field_type = metadata.field_type(attr_name)
-
-                    logger.info(
-                        f"Loaded field {attr_name} from struct pointer, type: {field_type}"
-                    )
-
-                    # Branch to merge
-                    not_null_after_load = builder.block
-                    builder.branch(merge_block)
-
-                    # Merge block: PHI node for the result
-                    builder.position_at_end(merge_block)
-                    phi = builder.phi(field_type, name=f"{var_name}_{attr_name}")
-
-                    # If null, return zero/default value
-                    if isinstance(field_type, ir.IntType):
-                        zero_value = ir.Constant(field_type, 0)
-                    elif isinstance(field_type, ir.PointerType):
-                        zero_value = ir.Constant(field_type, None)
-                    elif isinstance(field_type, ir.ArrayType):
-                        # For arrays, we can't easily create a zero constant
-                        # This case is tricky - for now, just use undef
-                        zero_value = ir.Constant(field_type, ir.Undefined)
-                    else:
-                        zero_value = ir.Constant(field_type, ir.Undefined)
-
-                    phi.add_incoming(zero_value, null_check_block)
-                    phi.add_incoming(field_val, not_null_after_load)
-
-                    logger.info(f"Created PHI node for {var_name}.{attr_name}")
-                    return phi, field_type
             if (
                 hasattr(var_metadata, "__module__")
                 and var_metadata.__module__ == "vmlinux"
@@ -180,13 +97,23 @@ def _handle_attribute_expr(
                 )
                 return None
 
-            # Regular user-defined struct
-            metadata = structs_sym_tab.get(var_metadata)
-            if metadata and attr_name in metadata.fields:
-                gep = metadata.gep(builder, var_ptr, attr_name)
-                val = builder.load(gep)
-                field_type = metadata.field_type(attr_name)
-                return val, field_type
+            if var_metadata in structs_sym_tab:
+                return access_struct_field(
+                    builder,
+                    var_ptr,
+                    var_type,
+                    var_metadata,
+                    expr.attr,
+                    structs_sym_tab,
+                    func,
+                )
+            else:
+                logger.error(f"Struct metadata for '{var_name}' not found")
+        else:
+            logger.error(f"Undefined variable '{var_name}' for attribute access")
+    else:
+        logger.error("Unsupported attribute base expression type")
+
     return None
 
 

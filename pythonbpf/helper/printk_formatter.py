@@ -222,7 +222,7 @@ def _prepare_expr_args(expr, func, module, builder, local_sym_tab, struct_sym_ta
     # Special case: struct field char array needs pointer to first element
     if isinstance(expr, ast.Attribute):
         char_array_ptr, _ = get_char_array_ptr_and_size(
-            expr, builder, local_sym_tab, struct_sym_tab
+            expr, builder, local_sym_tab, struct_sym_tab, func
         )
         if char_array_ptr:
             return char_array_ptr
