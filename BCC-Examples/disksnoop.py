@@ -3,15 +3,17 @@ from pythonbpf import bpf, section, bpfglobal, compile_to_ir, compile, map
 from pythonbpf.helper import ktime
 from pythonbpf.maps import HashMap
 import logging
-from ctypes import c_int64, c_uint64, c_uint32, c_int32
+from ctypes import c_int64, c_uint64, c_int32
 
 # Constants
 REQ_WRITE = 1  # from include/linux/blk_types.h
+
 
 @bpf
 @map
 def start() -> HashMap:
     return HashMap(key=c_uint64, value=c_uint64, max_entries=10240)
+
 
 @bpf
 @section("kprobe/blk_mq_end_request")
@@ -38,6 +40,7 @@ def trace_completion(ctx: struct_pt_regs) -> c_int64:
 
     return c_int64(0)
 
+
 @bpf
 @section("kprobe/blk_mq_start_request")
 def trace_start(ctx1: struct_pt_regs) -> c_int32:
@@ -45,6 +48,7 @@ def trace_start(ctx1: struct_pt_regs) -> c_int32:
     ts = ktime()
     start.update(req, ts)
     return c_int32(0)
+
 
 @bpf
 @bpfglobal
