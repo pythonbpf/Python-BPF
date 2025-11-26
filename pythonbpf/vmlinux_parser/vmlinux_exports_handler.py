@@ -121,7 +121,12 @@ class VmlinuxHandler:
 
                 # Use bpf_probe_read_kernel for non-context struct field access
                 field_value = self.load_struct_field(
-                    builder, struct_ptr, globvar_ir, field_data, struct_name
+                    builder,
+                    struct_ptr,
+                    globvar_ir,
+                    field_data,
+                    struct_name,
+                    local_sym_tab,
                 )
                 # Return field value and field type
                 return field_value, field_data
@@ -130,7 +135,12 @@ class VmlinuxHandler:
 
     @staticmethod
     def load_struct_field(
-        builder, struct_ptr_int, offset_global, field_data, struct_name=None
+        builder,
+        struct_ptr_int,
+        offset_global,
+        field_data,
+        struct_name=None,
+        local_sym_tab=None,
     ):
         """
         Generate LLVM IR to load a field from a regular (non-context) struct using bpf_probe_read_kernel.
@@ -204,6 +214,7 @@ class VmlinuxHandler:
                     logger.warning("Complex vmlinux field type, using default 64 bits")
 
         # Allocate local storage for the field value
+        # TODO: CRITICAL BUG. alloca cannot be used anywhere other than the basic block
         local_storage = builder.alloca(ir.IntType(int_width))
         local_storage_i8_ptr = builder.bitcast(local_storage, i8_ptr_type)
 

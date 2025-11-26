@@ -666,13 +666,17 @@ def _handle_vmlinux_cast(
     # Cast the integer/value to a pointer to the struct
     # If arg_val is an integer type, we need to inttoptr it
     ptr_type = ir.PointerType()
-    # TODO: add a integer check here later
-    if ctypes_to_ir(arg_type.type.__name__):
-        # Cast integer to pointer
-        casted_ptr = builder.inttoptr(arg_val, ptr_type)
+    # TODO: add a field value type check here
+    print(arg_type)
+    if isinstance(arg_type, Field):
+        if ctypes_to_ir(arg_type.type.__name__):
+            # Cast integer to pointer
+            casted_ptr = builder.inttoptr(arg_val, ptr_type)
+        else:
+            logger.error(f"Unsupported type for vmlinux cast: {arg_type}")
+            return None
     else:
-        logger.error(f"Unsupported type for vmlinux cast: {arg_type}")
-        return None
+        casted_ptr = builder.inttoptr(arg_val, ptr_type)
 
     return casted_ptr, vmlinux_struct_type
 
