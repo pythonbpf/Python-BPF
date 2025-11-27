@@ -18,6 +18,10 @@ mapping = {
     "c_longlong": ir.IntType(64),
     "c_uint": ir.IntType(32),
     "c_int": ir.IntType(32),
+    "c_ushort": ir.IntType(16),
+    "c_short": ir.IntType(16),
+    "c_ubyte": ir.IntType(8),
+    "c_byte": ir.IntType(8),
     # Not so sure about this one
     "str": ir.PointerType(ir.IntType(8)),
 }

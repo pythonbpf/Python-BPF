@@ -77,7 +77,7 @@ class VmlinuxHandler:
         return None
 
     def get_vmlinux_enum_value(self, name):
-        """Handle vmlinux enum constants by returning LLVM IR constants"""
+        """Handle vmlinux.enum constants by returning LLVM IR constants"""
         if self.is_vmlinux_enum(name):
             value = self.vmlinux_symtab[name].value
             logger.info(f"The value of vmlinux enum {name} = {value}")
@@ -119,9 +119,18 @@ class VmlinuxHandler:
                 # Load the struct pointer from the local variable
                 struct_ptr = builder.load(var_info.var)
 
+                # Determine the preallocated tmp name that assignment pass should have created
+                tmp_name = f"{struct_var_name}_{field_name}_tmp"
+
                 # Use bpf_probe_read_kernel for non-context struct field access
                 field_value = self.load_struct_field(
-                    builder, struct_ptr, globvar_ir, field_data, struct_name
+                    builder,
+                    struct_ptr,
+                    globvar_ir,
+                    field_data,
+                    struct_name,
+                    local_sym_tab,
+                    tmp_name,
                 )
                 # Return field value and field type
                 return field_value, field_data
@@ -130,7 +139,13 @@ class VmlinuxHandler:
 
     @staticmethod
     def load_struct_field(
-        builder, struct_ptr_int, offset_global, field_data, struct_name=None
+        builder,
+        struct_ptr_int,
+        offset_global,
+        field_data,
+        struct_name=None,
+        local_sym_tab=None,
+        tmp_name: str | None = None,
     ):
         """
         Generate LLVM IR to load a field from a regular (non-context) struct using bpf_probe_read_kernel.
@@ -141,6 +156,8 @@ class VmlinuxHandler:
             offset_global: Global variable containing the field offset (i64)
             field_data: contains data about the field
             struct_name: Name of the struct being accessed (optional)
+            local_sym_tab: symbol table (optional) - used to locate preallocated tmp storage
+            tmp_name: name of the preallocated temporary storage to use (preferred)
         Returns:
             The loaded value
         """
@@ -203,9 +220,18 @@ class VmlinuxHandler:
                 else:
                     logger.warning("Complex vmlinux field type, using default 64 bits")
 
-        # Allocate local storage for the field value
-        local_storage = builder.alloca(ir.IntType(int_width))
-        local_storage_i8_ptr = builder.bitcast(local_storage, i8_ptr_type)
+        # Use preallocated temporary storage if provided by allocation pass
+
+        local_storage_i8_ptr = None
+        if tmp_name and local_sym_tab and tmp_name in local_sym_tab:
+            # Expect the tmp to be an alloca created during allocation pass
+            tmp_alloca = local_sym_tab[tmp_name].var
+            local_storage_i8_ptr = builder.bitcast(tmp_alloca, i8_ptr_type)
+        else:
+            # Fallback: allocate inline (not ideal, but preserves behavior)
+            local_storage = builder.alloca(ir.IntType(int_width))
+            local_storage_i8_ptr = builder.bitcast(local_storage, i8_ptr_type)
+            logger.warning(f"Temp storage '{tmp_name}' not found. Allocating inline")
 
         # Use bpf_probe_read_kernel to safely read the field
         # This generates:
@@ -219,7 +245,9 @@ class VmlinuxHandler:
         )
 
         # Load the value from local storage
-        value = builder.load(local_storage)
+        value = builder.load(
+            builder.bitcast(local_storage_i8_ptr, ir.PointerType(ir.IntType(int_width)))
+        )
 
         # Zero-extend i32 to i64 if needed
         if needs_zext:

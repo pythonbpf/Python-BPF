@@ -114,9 +114,22 @@ def _allocate_for_call(
         # Struct constructors
         elif call_type in structs_sym_tab:
             struct_info = structs_sym_tab[call_type]
-            var = builder.alloca(struct_info.ir_type, name=var_name)
-            local_sym_tab[var_name] = LocalSymbol(var, struct_info.ir_type, call_type)
-            logger.info(f"Pre-allocated {var_name} for struct {call_type}")
+            if len(rval.args) == 0:
+                # Zero-arg constructor: allocate the struct itself
+                var = builder.alloca(struct_info.ir_type, name=var_name)
+                local_sym_tab[var_name] = LocalSymbol(
+                    var, struct_info.ir_type, call_type
+                )
+                logger.info(f"Pre-allocated {var_name} for struct {call_type}")
+            else:
+                # Pointer cast: allocate as pointer to struct
+                ptr_type = ir.PointerType(struct_info.ir_type)
+                var = builder.alloca(ptr_type, name=var_name)
+                var.align = 8
+                local_sym_tab[var_name] = LocalSymbol(var, ptr_type, call_type)
+                logger.info(
+                    f"Pre-allocated {var_name} for struct pointer cast to {call_type}"
+                )
 
         elif VmlinuxHandlerRegistry.is_vmlinux_struct(call_type):
             # When calling struct_name(pointer), we're doing a cast, not construction
@@ -371,6 +384,7 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
                         f"Could not determine size for ctypes field {field_name}: {e}"
                     )
                     actual_ir_type = ir.IntType(64)
+                    field_size_bits = 64
 
             # Check if it's a nested vmlinux struct or complex type
             elif field.type.__module__ == "vmlinux":
@@ -379,23 +393,34 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
                     field.ctype_complex_type, ctypes._Pointer
                 ):
                     actual_ir_type = ir.IntType(64)  # Pointer is always 64-bit
+                    field_size_bits = 64
                 # For embedded structs, this is more complex - might need different handling
                 else:
                     logger.warning(
                         f"Field {field_name} is a nested vmlinux struct, using i64 for now"
                     )
                     actual_ir_type = ir.IntType(64)
+                    field_size_bits = 64
             else:
                 logger.warning(
                     f"Unknown field type module {field.type.__module__} for {field_name}"
                 )
                 actual_ir_type = ir.IntType(64)
+                field_size_bits = 64
 
-            # Allocate with the actual IR type
+            # Pre-allocate the tmp storage used by load_struct_field (so we don't alloca inside handler)
+            tmp_name = f"{struct_var}_{field_name}_tmp"
+            tmp_ir_type = ir.IntType(field_size_bits)
+            tmp_var = builder.alloca(tmp_ir_type, name=tmp_name)
+            tmp_var.align = tmp_ir_type.width // 8
+            local_sym_tab[tmp_name] = LocalSymbol(tmp_var, tmp_ir_type)
+            logger.info(
+                f"Pre-allocated temp {tmp_name} (i{field_size_bits}) for vmlinux field read {vmlinux_struct_name}.{field_name}"
+            )
+
+            # Allocate with the actual IR type for the destination var
             var = _allocate_with_type(builder, var_name, actual_ir_type)
-            local_sym_tab[var_name] = LocalSymbol(
-                var, actual_ir_type, field
-            )  # <-- Store Field metadata
+            local_sym_tab[var_name] = LocalSymbol(var, actual_ir_type, field)
 
             logger.info(
                 f"Pre-allocated {var_name} as {actual_ir_type} from vmlinux struct {vmlinux_struct_name}.{field_name}"
