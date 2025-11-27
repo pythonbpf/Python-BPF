@@ -26,15 +26,18 @@ class iphdr:
 def ip_detector(ctx: struct_xdp_md) -> c_int64:
     data = ctx.data
     data_end = ctx.data_end
-    eth = struct_ethhdr(ctx.data)
-    nh = ctx.data + 14
+    if data + 14 > data_end:
+        return c_int64(XDP_DROP)
+
+    eth = struct_ethhdr(data)
+    nh = data + 14
     if nh + 20 > data_end:
         return c_int64(XDP_DROP)
+
     iph = iphdr(nh)
-    h_proto = eth.h_proto
-    h_proto_ext = c_int64(h_proto)
-    ipv4 = iph.saddr
-    print(f"ipaddress: {ipv4}")
+
+    print(f"ipaddress: {iph.saddr}")
+
     return c_int64(XDP_PASS)
 
 
