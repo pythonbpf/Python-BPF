@@ -174,6 +174,23 @@ def handle_variable_assignment(
                     f"Type mismatch: vmlinux struct pointer requires i64, got {var_type}"
                 )
                 return False
+        # Handle user-defined struct pointer casts
+        # val_type is a string (struct name), var_type is a pointer to the struct
+        if isinstance(val_type, str) and val_type in structs_sym_tab:
+            struct_info = structs_sym_tab[val_type]
+            expected_ptr_type = ir.PointerType(struct_info.ir_type)
+
+            # Check if var_type matches the expected pointer type
+            if isinstance(var_type, ir.PointerType):
+                # val is already the correct pointer type from inttoptr/bitcast
+                builder.store(val, var_ptr)
+                logger.info(f"Assigned user-defined struct pointer cast to {var_name}")
+                return True
+            else:
+                logger.error(
+                    f"Type mismatch: user-defined struct pointer cast requires pointer type, got {var_type}"
+                )
+                return False
         if isinstance(val_type, Field):
             logger.info("Handling assignment to struct field")
             # Special handling for struct_xdp_md i32 fields that are zero-extended to i64

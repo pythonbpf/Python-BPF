@@ -618,7 +618,7 @@ def _handle_boolean_op(
 
 
 # ============================================================================
-# VMLinux casting
+# Struct casting (including vmlinux struct casting)
 # ============================================================================
 
 
@@ -667,7 +667,7 @@ def _handle_vmlinux_cast(
     # If arg_val is an integer type, we need to inttoptr it
     ptr_type = ir.PointerType()
     # TODO: add a field value type check here
-    print(arg_type)
+    # print(arg_type)
     if isinstance(arg_type, Field):
         if ctypes_to_ir(arg_type.type.__name__):
             # Cast integer to pointer
@@ -680,6 +680,69 @@ def _handle_vmlinux_cast(
 
     return casted_ptr, vmlinux_struct_type
 
+
+def _handle_user_defined_struct_cast(
+        func,
+        module,
+        builder,
+        expr,
+        local_sym_tab,
+        map_sym_tab,
+        structs_sym_tab,
+):
+    """Handle user-defined struct cast expressions like iphdr(nh).
+
+    This casts a pointer/integer value to a pointer to the user-defined struct,
+    similar to how vmlinux struct casts work but for user-defined @struct types.
+    """
+    if len(expr.args) != 1:
+        logger.info("User-defined struct cast takes exactly one argument")
+        return None
+
+    # Get the struct name
+    struct_name = expr.func.id
+
+    if struct_name not in structs_sym_tab:
+        logger.error(f"Struct {struct_name} not found in structs_sym_tab")
+        return None
+
+    struct_info = structs_sym_tab[struct_name]
+
+    # Evaluate the argument (e.g.,
+    # an address/pointer value)
+    arg_result = eval_expr(
+        func,
+        module,
+        builder,
+        expr.args[0],
+        local_sym_tab,
+        map_sym_tab,
+        structs_sym_tab,
+    )
+
+    if arg_result is None:
+        logger.info("Failed to evaluate argument to user-defined struct cast")
+        return None
+
+    arg_val, arg_type = arg_result
+
+    # Cast the integer/pointer value to a pointer to the struct type
+    # The struct pointer type is a pointer to the struct's IR type
+    struct_ptr_type = ir.PointerType(struct_info.ir_type)
+
+    # If arg_val is an integer type (like i64), convert to pointer using inttoptr
+    if isinstance(arg_val.type, ir.IntType):
+        casted_ptr = builder.inttoptr(arg_val, struct_ptr_type)
+        logger.info(f"Cast integer to pointer for struct {struct_name}")
+    elif isinstance(arg_val.type, ir.PointerType):
+        # If already a pointer, bitcast to the struct pointer type
+        casted_ptr = builder.bitcast(arg_val, struct_ptr_type)
+        logger.info(f"Bitcast pointer to struct pointer for {struct_name}")
+    else:
+        logger.error(f"Unsupported type for user-defined struct cast: {arg_val.type}")
+        return None
+
+    return casted_ptr, struct_name
 
 # ============================================================================
 # Expression Dispatcher
@@ -718,6 +781,16 @@ def eval_expr(
 
         if isinstance(expr.func, ast.Name) and is_ctypes(expr.func.id):
             return _handle_ctypes_call(
+                func,
+                module,
+                builder,
+                expr,
+                local_sym_tab,
+                map_sym_tab,
+                structs_sym_tab,
+            )
+        if isinstance(expr.func, ast.Name) and (expr.func.id in structs_sym_tab):
+            return _handle_user_defined_struct_cast(
                 func,
                 module,
                 builder,
