@@ -117,7 +117,9 @@ def _allocate_for_call(
             if len(rval.args) == 0:
                 # Zero-arg constructor: allocate the struct itself
                 var = builder.alloca(struct_info.ir_type, name=var_name)
-                local_sym_tab[var_name] = LocalSymbol(var, struct_info.ir_type, call_type)
+                local_sym_tab[var_name] = LocalSymbol(
+                    var, struct_info.ir_type, call_type
+                )
                 logger.info(f"Pre-allocated {var_name} for struct {call_type}")
             else:
                 # Pointer cast: allocate as pointer to struct
@@ -125,7 +127,9 @@ def _allocate_for_call(
                 var = builder.alloca(ptr_type, name=var_name)
                 var.align = 8
                 local_sym_tab[var_name] = LocalSymbol(var, ptr_type, call_type)
-                logger.info(f"Pre-allocated {var_name} for struct pointer cast to {call_type}")
+                logger.info(
+                    f"Pre-allocated {var_name} for struct pointer cast to {call_type}"
+                )
 
         elif VmlinuxHandlerRegistry.is_vmlinux_struct(call_type):
             # When calling struct_name(pointer), we're doing a cast, not construction

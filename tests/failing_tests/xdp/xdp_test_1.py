@@ -6,6 +6,7 @@ from vmlinux import (
 from pythonbpf import bpf, section, bpfglobal, compile, compile_to_ir, struct
 from ctypes import c_int64, c_ubyte, c_ushort, c_uint32
 
+
 @bpf
 @struct
 class iphdr:
@@ -18,6 +19,7 @@ class iphdr:
     check: c_ushort
     saddr: c_uint32
     daddr: c_uint32
+
 
 @bpf
 @section("xdp")

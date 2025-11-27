@@ -682,13 +682,13 @@ def _handle_vmlinux_cast(
 
 
 def _handle_user_defined_struct_cast(
-        func,
-        module,
-        builder,
-        expr,
-        local_sym_tab,
-        map_sym_tab,
-        structs_sym_tab,
+    func,
+    module,
+    builder,
+    expr,
+    local_sym_tab,
+    map_sym_tab,
+    structs_sym_tab,
 ):
     """Handle user-defined struct cast expressions like iphdr(nh).
 
@@ -743,6 +743,7 @@ def _handle_user_defined_struct_cast(
         return None
 
     return casted_ptr, struct_name
+
 
 # ============================================================================
 # Expression Dispatcher
