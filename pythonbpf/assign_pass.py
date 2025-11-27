@@ -181,7 +181,7 @@ def handle_variable_assignment(
             expected_ptr_type = ir.PointerType(struct_info.ir_type)
 
             # Check if var_type matches the expected pointer type
-            if isinstance(var_type, ir.PointerType):
+            if isinstance(var_type, ir.PointerType) and var_type == expected_ptr_type:
                 # val is already the correct pointer type from inttoptr/bitcast
                 builder.store(val, var_ptr)
                 logger.info(f"Assigned user-defined struct pointer cast to {var_name}")
