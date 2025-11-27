@@ -241,7 +241,11 @@ def get_operand_value(
             var_type = var.type
             base_type, depth = get_base_type_and_depth(var_type)
             logger.info(f"var is {var}, base_type is {base_type}, depth is {depth}")
-            val = deref_to_depth(func, builder, var, depth)
+            if depth == 1:
+                val = builder.load(var)
+                return val
+            else:
+                val = deref_to_depth(func, builder, var, depth)
             return val
         else:
             # Check if it's a vmlinux enum/constant

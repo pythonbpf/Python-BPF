@@ -1,10 +1,9 @@
-from vmlinux import XDP_PASS, XDP_DROP
+from vmlinux import XDP_PASS, XDP_ABORTED
 from vmlinux import (
     struct_xdp_md,
-    struct_ethhdr,
 )
 from pythonbpf import bpf, section, bpfglobal, compile, compile_to_ir, struct
-from ctypes import c_int64, c_ubyte, c_ushort, c_uint32
+from ctypes import c_int64, c_ubyte, c_ushort, c_uint32, c_void_p
 
 
 @bpf
@@ -24,19 +23,15 @@ class iphdr:
 @bpf
 @section("xdp")
 def ip_detector(ctx: struct_xdp_md) -> c_int64:
-    data = ctx.data
-    data_end = ctx.data_end
-    if data + 14 > data_end:
-        return c_int64(XDP_DROP)
-
-    eth = struct_ethhdr(data)
-    nh = data + 14
-    if nh + 20 > data_end:
-        return c_int64(XDP_DROP)
-
-    iph = iphdr(nh)
-
-    print(f"ipaddress: {iph.saddr}")
+    data = c_void_p(ctx.data)
+    data_end = c_void_p(ctx.data_end)
+    if data + 34 < data_end:
+        hdr = data + 14
+        iph = iphdr(hdr)
+        addr = iph.saddr
+        print(f"ipaddress: {addr}")
+    else:
+        return c_int64(XDP_ABORTED)
 
     return c_int64(XDP_PASS)
 

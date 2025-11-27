@@ -1,4 +1,4 @@
-from pythonbpf import bpf, struct, section, bpfglobal
+from pythonbpf import bpf, struct, section, bpfglobal, compile
 from pythonbpf.helper import comm
 
 from ctypes import c_void_p, c_int64
@@ -26,3 +26,6 @@ def hello(ctx: c_void_p) -> c_int64:
 @bpfglobal
 def LICENSE() -> str:
     return "GPL"
+
+
+compile()
