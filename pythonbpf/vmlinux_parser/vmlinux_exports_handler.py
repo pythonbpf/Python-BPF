@@ -145,7 +145,7 @@ class VmlinuxHandler:
         field_data,
         struct_name=None,
         local_sym_tab=None,
-        tmp_name: str = None,
+        tmp_name: str | None = None,
     ):
         """
         Generate LLVM IR to load a field from a regular (non-context) struct using bpf_probe_read_kernel.
@@ -231,9 +231,7 @@ class VmlinuxHandler:
             # Fallback: allocate inline (not ideal, but preserves behavior)
             local_storage = builder.alloca(ir.IntType(int_width))
             local_storage_i8_ptr = builder.bitcast(local_storage, i8_ptr_type)
-            logger.warning(
-                f"Temp storage '{tmp_name}' not found. Allocating inline"
-            )
+            logger.warning(f"Temp storage '{tmp_name}' not found. Allocating inline")
 
         # Use bpf_probe_read_kernel to safely read the field
         # This generates:
@@ -247,7 +245,9 @@ class VmlinuxHandler:
         )
 
         # Load the value from local storage
-        value = builder.load(builder.bitcast(local_storage_i8_ptr, ir.PointerType(ir.IntType(int_width))))
+        value = builder.load(
+            builder.bitcast(local_storage_i8_ptr, ir.PointerType(ir.IntType(int_width)))
+        )
 
         # Zero-extend i32 to i64 if needed
         if needs_zext:
