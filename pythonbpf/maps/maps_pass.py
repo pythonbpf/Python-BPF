@@ -135,7 +135,7 @@ def process_perf_event_map(map_name, rval, module, structs_sym_tab):
     logger.info(f"Map parameters: {map_params}")
     map_global = create_bpf_map(module, map_name, map_params)
     # Generate debug info for BTF
-    create_map_debug_info(module, map_global.sym, map_name, map_params)
+    create_map_debug_info(module, map_global.sym, map_name, map_params, structs_sym_tab)
     return map_global
 
 
