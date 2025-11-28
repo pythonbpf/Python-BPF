@@ -1,19 +1,17 @@
 """Container Monitor - TUI-based cgroup monitoring combining syscall, file I/O, and network tracking."""
 
-import time
-import os
-from pathlib import Path
 from pythonbpf import bpf, map, section, bpfglobal, struct, BPF
 from pythonbpf.maps import HashMap
 from pythonbpf.helper import get_current_cgroup_id
 from ctypes import c_int32, c_uint64, c_void_p
 from vmlinux import struct_pt_regs, struct_sk_buff
 
-from data_collector import ContainerDataCollector
+from data_collection import ContainerDataCollector
 from tui import ContainerMonitorTUI
 
 
 # ==================== BPF Structs ====================
+
 
 @bpf
 @struct
@@ -40,6 +38,7 @@ class net_stats:
 
 # ==================== BPF Maps ====================
 
+
 @bpf
 @map
 def read_map() -> HashMap:
@@ -65,6 +64,7 @@ def syscall_count() -> HashMap:
 
 
 # ==================== File I/O Tracing ====================
+
 
 @bpf
 @section("kprobe/vfs_read")
@@ -108,6 +108,7 @@ def trace_write(ctx1: struct_pt_regs) -> c_int32:
 
 
 # ==================== Network I/O Tracing ====================
+
 
 @bpf
 @section("kprobe/__netif_receive_skb")
@@ -165,6 +166,7 @@ def trace_dev_xmit(ctx3: struct_pt_regs) -> c_int32:
 
 # ==================== Syscall Tracing ====================
 
+
 @bpf
 @section("tracepoint/raw_syscalls/sys_enter")
 def count_syscalls(ctx: c_void_p) -> c_int32:
@@ -190,32 +192,29 @@ def LICENSE() -> str:
 
 if __name__ == "__main__":
     print("🔥 Loading BPF programs...")
-    
+
     # Load and attach BPF program
     b = BPF()
     b.load()
     b.attach_all()
-    
+
     # Get map references and enable struct deserialization
     read_map_ref = b["read_map"]
     write_map_ref = b["write_map"]
     net_stats_map_ref = b["net_stats_map"]
     syscall_count_ref = b["syscall_count"]
-    
+
     read_map_ref.set_value_struct("read_stats")
     write_map_ref.set_value_struct("write_stats")
     net_stats_map_ref.set_value_struct("net_stats")
-    
+
     print("✅ BPF programs loaded and attached")
-    
+
     # Setup data collector
     collector = ContainerDataCollector(
-        read_map_ref,
-        write_map_ref,
-        net_stats_map_ref,
-        syscall_count_ref
+        read_map_ref, write_map_ref, net_stats_map_ref, syscall_count_ref
     )
-    
+
     # Create and run TUI
     tui = ContainerMonitorTUI(collector)
     tui.run()

@@ -3,7 +3,7 @@
 import os
 import time
 from pathlib import Path
-from typing import Dict, List, Set, Optional, Tuple
+from typing import Dict, List, Set, Optional
 from dataclasses import dataclass
 from collections import deque, defaultdict
 
@@ -11,6 +11,7 @@ from collections import deque, defaultdict
 @dataclass
 class CgroupInfo:
     """Information about a cgroup."""
+
     id: int
     name: str
     path: str
@@ -19,6 +20,7 @@ class CgroupInfo:
 @dataclass
 class ContainerStats:
     """Statistics for a container/cgroup."""
+
     cgroup_id: int
     cgroup_name: str
 
@@ -44,7 +46,9 @@ class ContainerStats:
 class ContainerDataCollector:
     """Collects and manages container monitoring data from BPF."""
 
-    def __init__(self, read_map, write_map, net_stats_map, syscall_map, history_size: int = 100):
+    def __init__(
+        self, read_map, write_map, net_stats_map, syscall_map, history_size: int = 100
+    ):
         self.read_map = read_map
         self.write_map = write_map
         self.net_stats_map = net_stats_map
@@ -53,12 +57,14 @@ class ContainerDataCollector:
         # Caching
         self._cgroup_cache: Dict[int, CgroupInfo] = {}
         self._cgroup_cache_time = 0
-        self._cache_ttl = 5.
+        self._cache_ttl = 5.0
         0  # Refresh cache every 5 seconds
 
         # Historical data for graphing
         self._history_size = history_size
-        self._history: Dict[int, deque] = defaultdict(lambda: deque(maxlen=history_size))
+        self._history: Dict[int, deque] = defaultdict(
+            lambda: deque(maxlen=history_size)
+        )
 
     def get_all_cgroups(self) -> List[CgroupInfo]:
         """Get all cgroups with caching."""
@@ -105,11 +111,7 @@ class ContainerDataCollector:
             best_path = self._get_best_cgroup_path(paths)
             name = self._get_cgroup_name(best_path)
 
-            new_cache[cgroup_id] = CgroupInfo(
-                id=cgroup_id,
-                name=name,
-                path=best_path
-            )
+            new_cache[cgroup_id] = CgroupInfo(id=cgroup_id, name=name, path=best_path)
 
         self._cgroup_cache = new_cache
         self._cgroup_cache_time = time.time()
@@ -120,13 +122,13 @@ class ContainerDataCollector:
 
         # Prefer paths with more components (more specific)
         # Prefer paths containing docker, podman, etc.
-        for keyword in ['docker', 'podman', 'kubernetes', 'k8s', 'systemd']:
+        for keyword in ["docker", "podman", "kubernetes", "k8s", "systemd"]:
             for path in path_list:
                 if keyword in path.lower():
                     return path
 
         # Return longest path (most specific)
-        return max(path_list, key=lambda p: (len(p.split('/')), len(p)))
+        return max(path_list, key=lambda p: (len(p.split("/")), len(p)))
 
     def _get_cgroup_name(self, path: str) -> str:
         """Extract a friendly name from cgroup path."""
@@ -165,9 +167,7 @@ class ContainerDataCollector:
         cgroup_name = cgroup_info.name if cgroup_info else f"cgroup-{cgroup_id}"
 
         stats = ContainerStats(
-            cgroup_id=cgroup_id,
-            cgroup_name=cgroup_name,
-            timestamp=time.time()
+            cgroup_id=cgroup_id, cgroup_name=cgroup_name, timestamp=time.time()
         )
 
         # Get file I/O stats

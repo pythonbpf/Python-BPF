@@ -1,10 +1,9 @@
 """Terminal User Interface for container monitoring."""
 
-import sys
 import time
 import curses
 from typing import Optional, List
-from data_collector import ContainerDataCollector, CgroupInfo, ContainerStats
+from data_collection import ContainerDataCollector
 
 
 class ContainerMonitorTUI:
@@ -122,11 +121,11 @@ class ContainerMonitorTUI:
                 # Highlight selected
                 stdscr.attron(curses.color_pair(2) | curses.A_BOLD | curses.A_REVERSE)
                 line = f"► {cgroup.name:<40} ID: {cgroup.id}"
-                stdscr.addstr(y, 2, line[:width - 4])
+                stdscr.addstr(y, 2, line[: width - 4])
                 stdscr.attroff(curses.color_pair(2) | curses.A_BOLD | curses.A_REVERSE)
             else:
                 line = f"  {cgroup.name:<40} ID: {cgroup.id}"
-                stdscr.addstr(y, 2, line[:width - 4])
+                stdscr.addstr(y, 2, line[: width - 4])
 
         # Footer with count
         footer = f"Total cgroups: {len(cgroups)}"
@@ -174,21 +173,37 @@ class ContainerMonitorTUI:
 
         # RX graph
         y += 2
-        rx_label = f"RX: {self._format_bytes(stats.rx_bytes)} ({stats.rx_packets:,} packets)"
+        rx_label = (
+            f"RX: {self._format_bytes(stats.rx_bytes)} ({stats.rx_packets:,} packets)"
+        )
         stdscr.addstr(y, 2, rx_label)
         if len(history) > 1:
-            self._draw_bar_graph(stdscr, y + 1, 2, width - 4, 3,
-                                 [s.rx_bytes for s in history],
-                                 curses.color_pair(2))
+            self._draw_bar_graph(
+                stdscr,
+                y + 1,
+                2,
+                width - 4,
+                3,
+                [s.rx_bytes for s in history],
+                curses.color_pair(2),
+            )
 
         # TX graph
         y += 5
-        tx_label = f"TX: {self._format_bytes(stats.tx_bytes)} ({stats.tx_packets:,} packets)"
+        tx_label = (
+            f"TX: {self._format_bytes(stats.tx_bytes)} ({stats.tx_packets:,} packets)"
+        )
         stdscr.addstr(y, 2, tx_label)
         if len(history) > 1:
-            self._draw_bar_graph(stdscr, y + 1, 2, width - 4, 3,
-                                 [s.tx_bytes for s in history],
-                                 curses.color_pair(3))
+            self._draw_bar_graph(
+                stdscr,
+                y + 1,
+                2,
+                width - 4,
+                3,
+                [s.tx_bytes for s in history],
+                curses.color_pair(3),
+            )
 
         # File I/O graphs
         y += 5
@@ -196,21 +211,37 @@ class ContainerMonitorTUI:
 
         # Read graph
         y += 2
-        read_label = f"READ: {self._format_bytes(stats.read_bytes)} ({stats.read_ops:,} ops)"
+        read_label = (
+            f"READ: {self._format_bytes(stats.read_bytes)} ({stats.read_ops:,} ops)"
+        )
         stdscr.addstr(y, 2, read_label)
         if len(history) > 1:
-            self._draw_bar_graph(stdscr, y + 1, 2, width - 4, 3,
-                                 [s.read_bytes for s in history],
-                                 curses.color_pair(4))
+            self._draw_bar_graph(
+                stdscr,
+                y + 1,
+                2,
+                width - 4,
+                3,
+                [s.read_bytes for s in history],
+                curses.color_pair(4),
+            )
 
         # Write graph
         y += 5
-        write_label = f"WRITE: {self._format_bytes(stats.write_bytes)} ({stats.write_ops:,} ops)"
+        write_label = (
+            f"WRITE: {self._format_bytes(stats.write_bytes)} ({stats.write_ops:,} ops)"
+        )
         stdscr.addstr(y, 2, write_label)
         if len(history) > 1:
-            self._draw_bar_graph(stdscr, y + 1, 2, width - 4, 3,
-                                 [s.write_bytes for s in history],
-                                 curses.color_pair(5))
+            self._draw_bar_graph(
+                stdscr,
+                y + 1,
+                2,
+                width - 4,
+                3,
+                [s.write_bytes for s in history],
+                curses.color_pair(5),
+            )
 
     def _draw_section_header(self, stdscr, y: int, title: str, color_pair: int):
         """Draw a section header."""
@@ -220,8 +251,16 @@ class ContainerMonitorTUI:
         stdscr.addstr(y, len(title) + 3, "─" * (width - len(title) - 5))
         stdscr.attroff(curses.color_pair(color_pair) | curses.A_BOLD)
 
-    def _draw_bar_graph(self, stdscr, y: int, x: int, width: int, height: int,
-                        data: List[float], color_pair: int):
+    def _draw_bar_graph(
+        self,
+        stdscr,
+        y: int,
+        x: int,
+        width: int,
+        height: int,
+        data: List[float],
+        color_pair: int,
+    ):
         """Draw a simple bar graph."""
         if not data or width < 2:
             return
@@ -250,25 +289,21 @@ class ContainerMonitorTUI:
                 else:
                     bar_line += " "
 
-            try:
-                stdscr.attron(color_pair)
-                stdscr.addstr(y + row, x, bar_line[:width])
-                stdscr.attroff(color_pair)
-            except:
-                pass  # Ignore errors at screen edges
+            stdscr.attron(color_pair)
+            stdscr.addstr(y + row, x, bar_line[:width])
+            stdscr.attroff(color_pair)
 
-    def _format_bytes(self, bytes_val: int) -> str:
+    def _format_bytes(self, bytes_val: float) -> str:
         """Format bytes into human-readable string."""
-        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
             if bytes_val < 1024.0:
                 return f"{bytes_val:.2f} {unit}"
-            bytes_val /= 1024.
-            0
+            bytes_val /= 1024.0
         return f"{bytes_val:.2f} PB"
 
     def _handle_input(self, key: int) -> bool:
         """Handle keyboard input.  Returns False to exit."""
-        if key == ord('q') or key == ord('Q'):
+        if key == ord("q") or key == ord("Q"):
             return False  # Exit
 
         if self.current_screen == "selection":
@@ -277,19 +312,19 @@ class ContainerMonitorTUI:
             elif key == curses.KEY_DOWN:
                 cgroups = self.collector.get_all_cgroups()
                 self.selected_index = min(len(cgroups) - 1, self.selected_index + 1)
-            elif key == ord('\n') or key == curses.KEY_ENTER or key == 10:
+            elif key == ord("\n") or key == curses.KEY_ENTER or key == 10:
                 # Select cgroup
                 cgroups = self.collector.get_all_cgroups()
                 if cgroups and 0 <= self.selected_index < len(cgroups):
                     cgroups.sort(key=lambda c: c.name)
                     self.selected_cgroup = cgroups[self.selected_index].id
                     self.current_screen = "monitoring"
-            elif key == ord('r') or key == ord('R'):
+            elif key == ord("r") or key == ord("R"):
                 # Force refresh cache
                 self.collector._cgroup_cache_time = 0
 
         elif self.current_screen == "monitoring":
-            if key == 27 or key == ord('b') or key == ord('B'):  # ESC or 'b'
+            if key == 27 or key == ord("b") or key == ord("B"):  # ESC or 'b'
                 self.current_screen = "selection"
                 self.selected_cgroup = None
 
