@@ -30,6 +30,7 @@ class BPFHelperID(Enum):
     BPF_SKB_STORE_BYTES = 9
     BPF_GET_CURRENT_PID_TGID = 14
     BPF_GET_CURRENT_UID_GID = 15
+    BPF_GET_CURRENT_CGROUP_ID = 80
     BPF_GET_CURRENT_COMM = 16
     BPF_PERF_EVENT_OUTPUT = 25
     BPF_GET_STACK = 67
@@ -61,6 +62,33 @@ def bpf_ktime_get_ns_emitter(
     """
     # func is an arg to just have a uniform signature with other emitters
     helper_id = ir.Constant(ir.IntType(64), BPFHelperID.BPF_KTIME_GET_NS.value)
+    fn_type = ir.FunctionType(ir.IntType(64), [], var_arg=False)
+    fn_ptr_type = ir.PointerType(fn_type)
+    fn_ptr = builder.inttoptr(helper_id, fn_ptr_type)
+    result = builder.call(fn_ptr, [], tail=False)
+    return result, ir.IntType(64)
+
+
+@HelperHandlerRegistry.register(
+    "get_current_cgroup_id",
+    param_types=[],
+    return_type=ir.IntType(64),
+)
+def bpf_get_current_cgroup_id(
+    call,
+    map_ptr,
+    module,
+    builder,
+    func,
+    local_sym_tab=None,
+    struct_sym_tab=None,
+    map_sym_tab=None,
+):
+    """
+    Emit LLVM IR for bpf_get_current_cgroup_id helper function call.
+    """
+    # func is an arg to just have a uniform signature with other emitters
+    helper_id = ir.Constant(ir.IntType(64), BPFHelperID.BPF_GET_CURRENT_CGROUP_ID.value)
     fn_type = ir.FunctionType(ir.IntType(64), [], var_arg=False)
     fn_ptr_type = ir.PointerType(fn_type)
     fn_ptr = builder.inttoptr(helper_id, fn_ptr_type)
