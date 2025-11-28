@@ -68,6 +68,7 @@ def bpf_ktime_get_ns_emitter(
     result = builder.call(fn_ptr, [], tail=False)
     return result, ir.IntType(64)
 
+
 @HelperHandlerRegistry.register(
     "get_current_cgroup_id",
     param_types=[],
