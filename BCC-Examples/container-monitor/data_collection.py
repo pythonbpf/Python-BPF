@@ -149,9 +149,9 @@ class ContainerDataCollector:
                     return f"docker:{container_id}"
 
         # For systemd services
-        if "system. slice" in path:
+        if "system.slice" in path:
             for part in parts:
-                if part.endswith(". service"):
+                if part.endswith(".service"):
                     return part.replace(".service", "")
 
         # For user slices
