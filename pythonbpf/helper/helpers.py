@@ -57,6 +57,11 @@ def get_stack(buf, flags=0):
     return ctypes.c_int64(0)
 
 
+def get_current_cgroup_id():
+    """Get the current cgroup ID"""
+    return ctypes.c_int64(0)
+
+
 XDP_ABORTED = ctypes.c_int64(0)
 XDP_DROP = ctypes.c_int64(1)
 XDP_PASS = ctypes.c_int64(2)
