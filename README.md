@@ -97,7 +97,7 @@ def hello(ctx: c_void_p) -> c_int64:
         return c_int64(0)
     else:
         hist.update(process_id, one)
-    return c_int64(0)
+    return 0
 
 
 @bpf
