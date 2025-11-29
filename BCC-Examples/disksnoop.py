@@ -2,7 +2,6 @@ from vmlinux import struct_request, struct_pt_regs
 from pythonbpf import bpf, section, bpfglobal, compile_to_ir, compile, map
 from pythonbpf.helper import ktime
 from pythonbpf.maps import HashMap
-import logging
 from ctypes import c_int64, c_uint64, c_int32
 
 # Constants
@@ -55,7 +54,4 @@ def trace_start(ctx1: struct_pt_regs) -> c_int32:
 def LICENSE() -> str:
     return "GPL"
 
-
-if __name__ == "__main__":
-    compile_to_ir("disksnoop.py", "disksnoop.ll", loglevel=logging.INFO)
-    compile()
+compile()
