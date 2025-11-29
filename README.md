@@ -50,6 +50,7 @@ curl -s https://raw.githubusercontent.com/pythonbpf/Python-BPF/refs/heads/master
 
 Dependencies:
 
+* `bpftool`
 * `clang`
 * Python ≥ 3.8
 
