@@ -41,10 +41,34 @@ Python-BPF is an LLVM IR generator for eBPF programs written in Python. It uses 
 ---
 
 ## Try It Out!
-Run
+
+#### First, generate the vmlinux.py file for your kernel:
+- Install the required dependencies:
+- On Ubuntu:
+```bash
+sudo apt-get install bpftool clang
+pip install ctypeslib2
+```
+- Generate the `vmlinux.py` using:
+```bash
+sudo tools/vmlinux-gen.py
+```
+- Copy this file to `BCC-Examples/`
+
+#### Next, install requirements for BCC-Examples:
+- These requirements are only required for the python notebooks, vfsreadlat and container-monitor examples.
+```bash
+pip install -r BCC-Examples/requirements.txt
+```
+- Now, follow the instructions in the [BCC-Examples/README.md](https://github.com/pythonbpf/Python-BPF/blob/master/BCC-Examples/README.md) to run the examples.
+
+
+#### To spin up jupyter notebook examples:
+- Run and follow the instructions on screen
 ```bash
 curl -s https://raw.githubusercontent.com/pythonbpf/Python-BPF/refs/heads/master/tools/setup.sh | sudo bash
 ```
+- Check the jupyter server on the web browser and run the notebooks in the `BCC-Examples/` folder.
 
 ## Installation
 

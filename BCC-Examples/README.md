@@ -13,6 +13,7 @@ This folder contains examples of BCC tutorial examples that have been ported to 
   ```bash
   sudo <path_to_virtualenv>/bin/python3 <script_name>.py
   ```
+- For the disksnoop and container-monitor examples, you need to generate the vmlinux.py file first.
 - For vfsreadlat_plotly.py, run the following command to start the Dash server:
   ```bash
   sudo <path_to_virtualenv>/bin/python3 vfsreadlat_plotly/bpf_program.py
