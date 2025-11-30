@@ -40,6 +40,22 @@ Python-BPF is an LLVM IR generator for eBPF programs written in Python. It uses 
 
 ---
 
+## Installation
+
+Dependencies:
+
+* `bpftool`
+* `clang`
+* Python ≥ 3.8
+
+Install via pip:
+
+```bash
+pip install pythonbpf pylibbpf
+```
+
+---
+
 ## Try It Out!
 
 #### First, generate the vmlinux.py file for your kernel:
@@ -69,20 +85,6 @@ pip install -r BCC-Examples/requirements.txt
 curl -s https://raw.githubusercontent.com/pythonbpf/Python-BPF/refs/heads/master/tools/setup.sh | sudo bash
 ```
 - Check the jupyter server on the web browser and run the notebooks in the `BCC-Examples/` folder.
-
-## Installation
-
-Dependencies:
-
-* `bpftool`
-* `clang`
-* Python ≥ 3.8
-
-Install via pip:
-
-```bash
-pip install pythonbpf pylibbpf
-```
 
 ---
 
