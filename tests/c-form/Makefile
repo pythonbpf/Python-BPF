@@ -1,5 +1,5 @@
 BPF_CLANG := clang
-CFLAGS := -emit-llvm -target bpf -c
+CFLAGS := -emit-llvm -target bpf -c -D__TARGET_ARCH_x86
 
 SRC := $(wildcard *.bpf.c)
 LL := $(SRC:.bpf.c=.bpf.ll)
@@ -10,7 +10,7 @@ LL0 := $(SRC:.bpf.c=.bpf.o0.ll)
 all: $(LL) $(OBJ) $(LL0)
 
 %.bpf.o: %.bpf.c
-	$(BPF_CLANG) -O2 -g -target bpf -c $< -o $@
+	$(BPF_CLANG) -O2 -D__TARGET_ARCH_x86 -g -target bpf -c $< -o $@
 
 %.bpf.ll: %.bpf.c
 	$(BPF_CLANG) $(CFLAGS) -O2 -g -S $< -o $@
