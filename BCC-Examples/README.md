@@ -26,5 +26,6 @@ This folder contains examples of BCC tutorial examples that have been ported to 
 - For container-monitor, you need to first copy the vmlinux.py to `container-monitor/` directory.
   Then run the following command to run the example:
   ```bash
+    cp vmlinux.py container-monitor/
     sudo <path_to_virtualenv>/bin/python3 container-monitor/container_monitor.py
   ```
