@@ -63,7 +63,7 @@ pip install pythonbpf pylibbpf
 - On Ubuntu:
 ```bash
 sudo apt-get install bpftool clang
-pip install ctypeslib2
+pip install pythonbpf pylibbpf ctypeslib2
 ```
 - Generate the `vmlinux.py` using:
 ```bash
