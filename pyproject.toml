@@ -34,6 +34,14 @@ dependencies = [
   "pylibbpf"
 ]
 
+[project.optional-dependencies]
+docs = [
+    "sphinx>=7.0",
+    "myst-parser>=2.0",
+    "sphinx-rtd-theme>=2.0",
+    "sphinx-copybutton",
+]
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["pythonbpf*"]
