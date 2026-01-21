@@ -42,11 +42,11 @@ trace_pipe()
 
 ## Features
 
-* Generate eBPF programs directly from Python
+* Generate eBPF programs directly using Python syntax
 * Compile to LLVM object files for kernel execution
 * Built with `llvmlite` for IR generation
 * Supports maps, helpers, and global definitions for BPF
-* Companion project: [pylibbpf](https://github.com/pythonbpf/pylibbpf), which provides bindings for object loading
+* Companion project: [pylibbpf](https://github.com/pythonbpf/pylibbpf), which provides bindings for libbpf
 
 ## Table of Contents
 
@@ -82,8 +82,7 @@ api/index
 
 * **GitHub Repository**: [pythonbpf/Python-BPF](https://github.com/pythonbpf/Python-BPF)
 * **PyPI Package**: [pythonbpf](https://pypi.org/project/pythonbpf/)
-* **Video Demo**: [YouTube](https://youtu.be/eMyLW8iWbks)
-* **Slide Deck**: [Google Slides](https://docs.google.com/presentation/d/1DsWDIVrpJhM4RgOETO9VWqUtEHo3-c7XIWmNpi6sTSo/edit?usp=sharing)
+* **Video Demo**: [YouTube](https://www.youtube.com/watch?v=eFVhLnWFxtE)
 
 ## License
 
