@@ -3,7 +3,7 @@
 Welcome to **PythonBPF** - a Python frontend for writing eBPF programs without embedding C code. PythonBPF uses [llvmlite](https://github.com/numba/llvmlite) to generate LLVM IR and compiles directly to eBPF object files that can be loaded into the Linux kernel.
 
 ```{note}
-This project is under active development and not ready for production use.
+This project is under active development.
 ```
 
 ## What is PythonBPF?
