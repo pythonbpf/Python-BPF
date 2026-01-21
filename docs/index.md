@@ -27,7 +27,7 @@ from ctypes import c_void_p, c_int64
 @section("tracepoint/syscalls/sys_enter_execve")
 def hello_world(ctx: c_void_p) -> c_int64:
     print("Hello, World!")
-    return c_int64(0)
+    return 0
 
 @bpf
 @bpfglobal
