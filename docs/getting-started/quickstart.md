@@ -120,15 +120,14 @@ Let's make a more interesting program that tracks which processes are being crea
 
 ```python
 from pythonbpf import bpf, section, bpfglobal, BPF, trace_pipe
-from pythonbpf.helper import pid, comm
+from pythonbpf.helper import pid
 from ctypes import c_void_p, c_int64
 
 @bpf
 @section("tracepoint/syscalls/sys_enter_execve")
 def track_exec(ctx: c_void_p) -> c_int64:
     process_id = pid()
-    process_name = comm()
-    print(f"Process {process_name} (PID: {process_id}) is starting")
+    print(f"Process with PID: {process_id} is starting")
     return c_int64(0)
 
 @bpf
@@ -145,7 +144,6 @@ trace_pipe()
 This program uses BPF helper functions:
 
 * `pid()` - Gets the current process ID
-* `comm()` - Gets the current process command name
 
 Run it with `sudo python3 track_exec.py` and watch processes being created!
 
@@ -182,12 +180,11 @@ def trace_open(ctx: c_void_p) -> c_int64:
 For network packet processing:
 
 ```python
-from ctypes import c_uint32
+from pythonbpf.helper import XDP_PASS
 
 @section("xdp")
-def xdp_pass(ctx: c_void_p) -> c_uint32:
-    # XDP_PASS = 2
-    return c_uint32(2)
+def xdp_pass(ctx: c_void_p) -> c_int64:
+    return XDP_PASS
 ```
 
 ## Best Practices

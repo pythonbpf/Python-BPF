@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'PythonBPF'
-copyright = '2024, r41k0u, varun-r-mallya'
+copyright = '2024-2026, r41k0u, varun-r-mallya'
 author = 'r41k0u, varun-r-mallya'
 release = '0.1.8'
 version = '0.1.8'
@@ -89,9 +89,6 @@ html_theme_options = {
     'includehidden': True,
     'titles_only': False
 }
-
-# Add any paths that contain custom static files (such as style sheets)
-html_static_path = ['_static']
 
 # -- Options for autodoc -----------------------------------------------------
 

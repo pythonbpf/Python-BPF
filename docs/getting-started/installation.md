@@ -43,8 +43,14 @@ The `llvm` package provides `llc`, the LLVM compiler that is used to compile LLV
 
 ### From PyPI (Recommended)
 
-The easiest way to install PythonBPF is using pip:
+The easiest way to install PythonBPF is using uv or pip:
 
+**Using uv (recommended):**
+```bash
+uv pip install pythonbpf pylibbpf
+```
+
+**Using pip:**
 ```bash
 pip install pythonbpf pylibbpf
 ```
@@ -73,6 +79,13 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 3. Install in development mode:
 
+**Using uv (recommended):**
+```bash
+uv pip install -e .
+uv pip install pylibbpf
+```
+
+**Using pip:**
 ```bash
 pip install -e .
 pip install pylibbpf
@@ -88,6 +101,14 @@ make install
 
 If you want to build the documentation locally:
 
+**Using uv (recommended):**
+```bash
+uv pip install pythonbpf[docs]
+# Or from the repository root:
+uv pip install -e .[docs]
+```
+
+**Using pip:**
 ```bash
 pip install pythonbpf[docs]
 # Or from the repository root:
@@ -100,6 +121,12 @@ Some examples require access to kernel data structures. To use these features, y
 
 1. Install additional dependencies:
 
+**Using uv (recommended):**
+```bash
+uv pip install ctypeslib2
+```
+
+**Using pip:**
 ```bash
 pip install ctypeslib2
 ```
@@ -151,8 +178,8 @@ If you get errors about `llc` or `clang` not being found:
 If Python can't find the `pythonbpf` module:
 
 * Make sure you've activated your virtual environment
-* Verify installation with `pip list | grep pythonbpf`
-* Try reinstalling: `pip install --force-reinstall pythonbpf`
+* Verify installation with `uv pip list | grep pythonbpf` or `pip list | grep pythonbpf`
+* Try reinstalling: `uv pip install --force-reinstall pythonbpf` or `pip install --force-reinstall pythonbpf`
 
 ## Next Steps
 

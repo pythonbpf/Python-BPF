@@ -327,7 +327,7 @@ Ring buffer for efficient event delivery.
 ### Process Information
 
 * `pid()` - Get current process ID
-* `comm()` - Get current process command name
+* `comm(buf)` - Get current process command name (requires buffer parameter)
 * `uid()` - Get current user ID
 
 ### Time
@@ -450,7 +450,8 @@ def track_exec(ctx: c_void_p) -> c_int64:
     event = Event()
     event.timestamp = ktime()
     event.pid = pid()
-    event.comm = comm()
+    # Note: comm() requires a buffer parameter
+    # comm(event.comm)  # Fills event.comm with process name
     
     events.output(event)
     return c_int64(0)

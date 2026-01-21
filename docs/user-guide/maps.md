@@ -215,7 +215,8 @@ def log_exec(ctx: c_void_p) -> c_int64:
     event = ProcessEvent()
     event.timestamp = ktime()
     event.pid = pid()
-    event.comm = comm()
+    # Note: comm() requires a buffer parameter
+    # comm(event.comm)  # Fills event.comm with process name
     events.output(event)
     return c_int64(0)
 

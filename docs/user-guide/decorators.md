@@ -108,12 +108,13 @@ def trace_open_return(ctx):
 For network packet processing at the earliest point:
 
 ```python
-from ctypes import c_uint32
+from pythonbpf.helper import XDP_PASS
+from ctypes import c_void_p, c_int64
 
 @section("xdp")
-def xdp_prog(ctx: c_void_p) -> c_uint32:
-    # XDP_PASS = 2, XDP_DROP = 1, XDP_ABORTED = 0
-    return c_uint32(2)
+def xdp_prog(ctx: c_void_p) -> c_int64:
+    # XDP_PASS, XDP_DROP, XDP_ABORTED constants available from pythonbpf.helper
+    return XDP_PASS
 ```
 
 #### TC (Traffic Control)
@@ -257,7 +258,8 @@ def track_processes(ctx: c_void_p) -> c_int64:
     event = ProcessEvent()
     event.timestamp = ktime()
     event.pid = pid()
-    event.comm = comm()
+    # Note: comm() requires a buffer parameter
+    # comm(event.comm)  # Fills event.comm with process name
     
     events.output(event)
     return c_int64(0)

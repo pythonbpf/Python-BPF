@@ -119,10 +119,11 @@ def capture_event(ctx: c_void_p) -> c_int64:
     # Set fields
     event.timestamp = ktime()
     event.pid = pid()
-    event.comm = comm()
+    # Note: comm() requires a buffer parameter to fill
+    # comm(event.comm)  # Fills event.comm with process name
     
     # Use the struct
-    print(f"Process {event.comm} with PID {event.pid}")
+    print(f"Process with PID {event.pid}")
     
     return c_int64(0)
 ```
@@ -204,7 +205,8 @@ def trace_fork(ctx: c_void_p) -> c_int64:
     event = ProcessEvent()
     event.timestamp = ktime()
     event.pid = pid()
-    event.comm = comm()
+    # Note: comm() requires a buffer parameter
+    # comm(event.comm)  # Fills event.comm with process name
     
     # Send to userspace
     events.output(event)
@@ -265,7 +267,8 @@ Assign values to fields:
 event = Event()
 event.timestamp = ktime()
 event.pid = pid()
-event.comm = comm()
+# Note: comm() requires a buffer parameter
+# comm(event.comm)  # Fills event.comm with process name
 ```
 
 ### String Fields
@@ -285,8 +288,8 @@ def example(ctx: c_void_p) -> c_int64:
     # Assign string value
     msg.text = "Hello from BPF"
     
-    # Use helper to get process name
-    msg.text = comm()
+    # Use helper to get process name (requires buffer)
+    # comm(msg.text)  # Fills msg.text with process name
     
     return c_int64(0)
 ```
@@ -316,6 +319,7 @@ class MyStruct:
 ```python
 from pythonbpf import bpf, struct, map, section
 from pythonbpf.maps import RingBuffer
+from pythonbpf.helper import ktime, XDP_PASS
 from ctypes import c_void_p, c_int64, c_uint8, c_uint16, c_uint32, c_uint64
 
 @bpf
@@ -336,7 +340,7 @@ def packets() -> RingBuffer:
 
 @bpf
 @section("xdp")
-def capture_packets(ctx: c_void_p) -> c_uint32:
+def capture_packets(ctx: c_void_p) -> c_int64:
     pkt = PacketEvent()
     pkt.timestamp = ktime()
     # Parse packet data from ctx...
@@ -344,7 +348,7 @@ def capture_packets(ctx: c_void_p) -> c_uint32:
     packets.output(pkt)
     
     # XDP_PASS
-    return c_uint32(2)
+    return XDP_PASS
 ```
 
 ### Process Lifecycle Tracking
@@ -377,7 +381,8 @@ def track_fork(ctx: c_void_p) -> c_int64:
     info = ProcessLifecycle()
     info.pid = process_id
     info.start_time = ktime()
-    info.comm = comm()
+    # Note: comm() requires a buffer parameter
+    # comm(info.comm)  # Fills info.comm with process name
     
     process_info.update(process_id, info)
     

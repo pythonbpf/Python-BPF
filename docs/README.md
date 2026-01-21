@@ -8,6 +8,14 @@ This directory contains the Sphinx documentation for PythonBPF.
 
 Install the documentation dependencies:
 
+**Using uv (recommended):**
+```bash
+uv pip install -r requirements.txt
+# Or install the optional docs dependencies
+uv pip install pythonbpf[docs]
+```
+
+**Using pip:**
 ```bash
 pip install -r requirements.txt
 # Or install the optional docs dependencies

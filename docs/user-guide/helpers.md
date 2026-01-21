@@ -39,14 +39,19 @@ from pythonbpf.helper import comm
 @bpf
 @section("tracepoint/syscalls/sys_enter_execve")
 def trace_exec(ctx: c_void_p) -> c_int64:
-    process_name = comm()
+    # comm requires a buffer to fill
+    process_name = str(16)
+    comm(process_name)
     print(f"Executing: {process_name}")
     return c_int64(0)
 ```
 
-**Returns:** `str(16)` - The command name of the current task
+**Parameters:**
+* `buf` - Buffer to fill with the process command name
 
-**Note:** The returned string is limited to 16 characters (TASK_COMM_LEN).
+**Returns:** `c_int64` - 0 on success, negative on error
+
+**Note:** The buffer should be at least 16 bytes (TASK_COMM_LEN) to hold the full command name.
 
 #### uid()
 
@@ -406,17 +411,16 @@ trace_pipe()
 
 ```python
 from pythonbpf import bpf, section, bpfglobal, BPF, trace_pipe
-from pythonbpf.helper import pid, comm, uid
+from pythonbpf.helper import pid, uid
 from ctypes import c_void_p, c_int64
 
 @bpf
 @section("tracepoint/syscalls/sys_enter_execve")
 def track_exec(ctx: c_void_p) -> c_int64:
     process_id = pid()
-    process_name = comm()
     user_id = uid()
     
-    print(f"User {user_id} started {process_name} (PID: {process_id})")
+    print(f"User {user_id} started process (PID: {process_id})")
     return c_int64(0)
 
 @bpf
@@ -477,7 +481,7 @@ for cpu, count in map_obj.items():
 
 ```python
 from pythonbpf import bpf, section, bpfglobal, BPF, trace_pipe
-from pythonbpf.helper import random, pid, comm
+from pythonbpf.helper import random, pid
 from ctypes import c_void_p, c_int64
 
 @bpf
@@ -486,8 +490,7 @@ def sample_opens(ctx: c_void_p) -> c_int64:
     # Sample 5% of events
     if (random() % 100) < 5:
         process_id = pid()
-        process_name = comm()
-        print(f"Sampled: {process_name} ({process_id}) opening file")
+        print(f"Sampled: PID {process_id} opening file")
     
     return c_int64(0)
 
