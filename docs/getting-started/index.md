@@ -17,7 +17,6 @@ Before you begin, make sure you have:
 * A Linux system (eBPF requires Linux kernel 4.15+)
 * Python 3.10 or higher
 * Root or sudo access (required for loading BPF programs)
-* Basic understanding of Python programming
 
 ## Quick Navigation
 
@@ -33,8 +32,8 @@ quickstart
 After completing the getting started guide, you can:
 
 * Explore the {doc}`../user-guide/index` for detailed information on features
-* Check out the {doc}`../api/index` for complete API reference
-* Browse the [examples directory](https://github.com/pythonbpf/Python-BPF/tree/master/examples) for more complex programs
+* Check out the {doc}`../api/index`
+* Browse the [examples directory](https://github.com/pythonbpf/Python-BPF/tree/master/examples) and the [BCC examples directory](https://github.com/pythonbpf/Python-BPF/tree/master/BCC-Examples)
 
 ## Need Help?
 
