@@ -78,14 +78,14 @@ from ctypes import c_void_p, c_int64
 @section("tracepoint/syscalls/sys_enter_execve")
 def hello_world(ctx: c_void_p) -> c_int64:
     print("Hello, World!")
-    return c_int64(0)
+    return 0
 ```
 
 * `@bpf` - Marks this function to be compiled to BPF bytecode
 * `@section("tracepoint/syscalls/sys_enter_execve")` - Attaches to the execve syscall tracepoint (called when processes start)
 * `ctx: c_void_p` - Context parameter (required for all BPF functions)
 * `print()` - In BPF context, this outputs to the kernel trace buffer
-* `return c_int64(0)` - BPF functions must return an integer
+* `return 0` - BPF functions must return an integer
 
 ### License Declaration
 
@@ -128,7 +128,7 @@ from ctypes import c_void_p, c_int64
 def track_exec(ctx: c_void_p) -> c_int64:
     process_id = pid()
     print(f"Process with PID: {process_id} is starting")
-    return c_int64(0)
+    return 0
 
 @bpf
 @bpfglobal
