@@ -18,7 +18,7 @@ from ctypes import c_void_p, c_int64
 @section("tracepoint/syscalls/sys_enter_execve")
 def hello_world(ctx: c_void_p) -> c_int64:
     print("Hello, World!")
-    return c_int64(0)
+    return 0
 
 @bpf
 @bpfglobal
@@ -172,7 +172,7 @@ Kprobes allow you to attach to any kernel function:
 @section("kprobe/do_sys_open")
 def trace_open(ctx: c_void_p) -> c_int64:
     print("File is being opened")
-    return c_int64(0)
+    return 0
 ```
 
 ### XDP (eXpress Data Path)
