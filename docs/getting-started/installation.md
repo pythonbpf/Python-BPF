@@ -35,10 +35,6 @@ sudo dnf install -y bpftool clang llvm
 sudo pacman -S bpf clang llvm
 ```
 
-```{note}
-The `llvm` package provides `llc`, the LLVM compiler that is used to compile LLVM IR to BPF bytecode.
-```
-
 ## Installing PythonBPF
 
 ### From PyPI (Recommended)
