@@ -113,7 +113,7 @@ pip install -e .[docs]
 
 ## Generating vmlinux.py
 
-Some examples require access to kernel data structures. To use these features, you need to generate a `vmlinux.py` file:
+`vmlinux.py` contains the running kernel's data structures and is analogous to `vmlinux.h` included in eBPF programs written in C. Some examples require access to it. To use these features, you need to generate a `vmlinux.py` file:
 
 1. Install additional dependencies:
 
