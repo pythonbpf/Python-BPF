@@ -18,15 +18,6 @@ Before you begin, make sure you have:
 * Python 3.10 or higher
 * Root or sudo access (required for loading BPF programs)
 
-## Quick Navigation
-
-```{toctree}
-:maxdepth: 1
-
-installation
-quickstart
-```
-
 ## Next Steps
 
 After completing the getting started guide, you can:
