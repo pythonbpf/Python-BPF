@@ -68,7 +68,7 @@ from ctypes import c_void_p, c_int64
 * `section` - Decorator to specify which kernel event to attach to
 * `bpfglobal` - Decorator for BPF global variables
 * `BPF` - Class to compile, load, and attach BPF programs
-* `trace_pipe` - Utility to read kernel trace output
+* `trace_pipe` - Utility to read kernel trace output (similar to BCC)
 * `c_void_p`, `c_int64` - C types for function signatures
 
 ### The BPF Function
@@ -84,7 +84,7 @@ def hello_world(ctx: c_void_p) -> c_int64:
 * `@bpf` - Marks this function to be compiled to BPF bytecode
 * `@section("tracepoint/syscalls/sys_enter_execve")` - Attaches to the execve syscall tracepoint (called when processes start)
 * `ctx: c_void_p` - Context parameter (required for all BPF functions)
-* `print()` - In BPF context, this outputs to the kernel trace buffer
+* `print()` - the PythonBPF API for `bpf_printk` helper function
 * `return 0` - BPF functions must return an integer
 
 ### License Declaration
@@ -113,6 +113,14 @@ trace_pipe()
 * `b.load()` - Loads the compiled BPF program into the kernel
 * `b.attach_all()` - Attaches all BPF programs to their specified hooks
 * `trace_pipe()` - Reads and displays output from the kernel trace buffer
+
+Alternatively, you can also use the `compile()` function to compile the BPF code to an object file:
+
+```python
+from pythonbpf import compile
+```
+
+This object file can then be loaded using any other userspace library in any language.
 
 ## Next Example: Tracking Process IDs
 
