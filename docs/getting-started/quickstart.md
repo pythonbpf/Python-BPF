@@ -198,7 +198,7 @@ def xdp_pass(ctx: c_void_p) -> c_int64:
 ## Best Practices
 
 1. **Always include a LICENSE** - Required by the kernel
-2. **Use type hints** - Helps PythonBPF generate correct code
+2. **Use type hints** - Required by PythonBPF to generate correct code
 3. **Return the correct type** - Match the expected return type for your program type
 4. **Test incrementally** - Start simple and add complexity gradually
 5. **Check kernel logs** - Use `dmesg` to see BPF verifier messages if loading fails
