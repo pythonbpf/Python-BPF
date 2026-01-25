@@ -229,6 +229,14 @@ If compilation fails:
 * Check that `llc` is installed and in your PATH
 * Verify your Python syntax is correct
 * Ensure all imported types are from `ctypes`
+* In the worst case, compile object files manually using `compile_to_ir()` and `llc` to get detailed errors
+
+### Verification Failure
+
+If verification fails:
+
+* Compile the object files using `compile()` function instead of loading directly
+* Run `sudo check.sh check <bpf>.o` to get detailed verification output
 
 ## Next Steps
 
