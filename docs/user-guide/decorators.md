@@ -117,16 +117,6 @@ def xdp_prog(ctx: c_void_p) -> c_int64:
     return XDP_PASS
 ```
 
-#### TC (Traffic Control)
-
-For network traffic filtering:
-
-```python
-@section("classifier")
-def tc_filter(ctx):
-    pass
-```
-
 ### Finding Tracepoints
 
 To find available tracepoints on your system:
@@ -260,7 +250,7 @@ def track_processes(ctx: c_void_p) -> c_int64:
     event.pid = pid()
     # Note: comm() requires a buffer parameter
     # comm(event.comm)  # Fills event.comm with process name
-    
+
     events.output(event)
     return c_int64(0)
 ```
