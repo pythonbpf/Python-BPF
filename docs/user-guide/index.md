@@ -22,33 +22,17 @@ PythonBPF uses decorators to mark code for BPF compilation:
 
 Your Python code goes through several stages:
 
-1. **AST Parsing** - Python code is parsed into an Abstract Syntax Tree
-2. **IR Generation** - The AST is transformed into LLVM IR using llvmlite
-3. **BPF Compilation** - LLVM IR is compiled to BPF bytecode using `llc`
-4. **Loading** - The BPF object is loaded into the kernel using libbpf
-5. **Attachment** - Programs are attached to kernel hooks (tracepoints, kprobes, etc.)
-
-## Guide Contents
-
-```{toctree}
-:maxdepth: 2
-
-decorators
-maps
-structs
-compilation
-helpers
-```
+1. **IR Generation** - The Python AST is transformed into LLVM IR using llvmlite
+2. **BPF Compilation** - LLVM IR is compiled to BPF bytecode using `llc`
+3. **Loading** - The BPF object is loaded into the kernel using libbpf
+4. **Attachment** - Programs are attached to kernel hooks (tracepoints, kprobes, etc.)
 
 ## Code Organization
 
 When writing BPF programs with PythonBPF, we recommend:
 
-1. **Keep BPF code in separate files** - Easier to manage and test
-2. **Use type hints** - Required for proper code generation
-3. **Follow naming conventions** - Use descriptive names for maps and functions
-4. **Document your code** - Add comments explaining BPF-specific logic
-5. **Test incrementally** - Verify each component works before adding complexity
+1. **Use type hints** - Required for proper code generation
+2. **Test incrementally** - Verify each component works before adding complexity
 
 ## Type System
 
@@ -65,7 +49,7 @@ PythonBPF uses Python's `ctypes` module for type definitions:
 A typical PythonBPF program follows this structure:
 
 ```python
-from pythonbpf import bpf, map, section, bpfglobal, BPF
+from pythonbpf import bpf, map, section, bpfglobal, BPF, compile
 from pythonbpf.maps import HashMap
 from ctypes import c_void_p, c_int64, c_uint32
 
@@ -80,7 +64,7 @@ def my_map() -> HashMap:
 @section("tracepoint/...")
 def my_function(ctx: c_void_p) -> c_int64:
     # BPF logic here
-    return c_int64(0)
+    return 0
 
 # License (required)
 @bpf
@@ -93,6 +77,9 @@ if __name__ == "__main__":
     b = BPF()
     b.load_and_attach()
     # Use the program...
+
+# Or, compile to an object file
+compile()
 ```
 
 ## Next Steps
