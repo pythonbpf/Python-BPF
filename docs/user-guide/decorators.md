@@ -181,7 +181,7 @@ def count_clones(ctx: c_void_p) -> c_int64:
         process_count.update(process_id, count + 1)
     else:
         process_count.update(process_id, c_uint64(1))
-    return c_int64(0)
+    return 0
 ```
 
 See {doc}`maps` for more details on available map types.
@@ -208,7 +208,7 @@ class Event:
 
 Structs allow you to define custom data types for use in BPF programs. They can be used:
 
-* As map values
+* As map keys and values
 * For perf event output
 * In ring buffer submissions
 * As local variables
@@ -248,11 +248,10 @@ def track_processes(ctx: c_void_p) -> c_int64:
     event = ProcessEvent()
     event.timestamp = ktime()
     event.pid = pid()
-    # Note: comm() requires a buffer parameter
-    # comm(event.comm)  # Fills event.comm with process name
+    comm(event.comm)  # Fills event.comm with process name
 
     events.output(event)
-    return c_int64(0)
+    return 0
 ```
 
 See {doc}`structs` for more details on working with structs.
@@ -392,9 +391,7 @@ def LICENSE() -> str:
 
 1. **Always use @bpf first** - It must be the outermost decorator
 2. **Provide type hints** - Required for proper code generation
-3. **Use descriptive names** - Makes code easier to understand and debug
-4. **Keep functions simple** - BPF has restrictions on complexity
-5. **Test incrementally** - Verify each component works before combining
+3. **Test incrementally** - Verify each component works before combining
 
 ## Common Errors
 
