@@ -37,7 +37,7 @@ class Numbers:
     short_int: c_int16     # -32768 to 32767
     int_val: c_int32       # -2^31 to 2^31-1
     long_int: c_int64      # -2^63 to 2^63-1
-    
+
     byte: c_uint8          # 0 to 255
     word: c_uint16         # 0 to 65535
     dword: c_uint32        # 0 to 2^32-1
@@ -115,22 +115,21 @@ class Event:
 def capture_event(ctx: c_void_p) -> c_int64:
     # Create an instance
     event = Event()
-    
+
     # Set fields
     event.timestamp = ktime()
     event.pid = pid()
-    # Note: comm() requires a buffer parameter to fill
-    # comm(event.comm)  # Fills event.comm with process name
-    
+    comm(event.comm)  # Fills event.comm with process name
+
     # Use the struct
     print(f"Process with PID {event.pid}")
-    
-    return c_int64(0)
+
+    return 0
 ```
 
-### As Map Values
+### As Map Keys and Values
 
-Use structs as values in maps for complex state storage:
+Use structs as keys and values in maps for complex state storage:
 
 ```python
 from pythonbpf import bpf, struct, map, section
@@ -157,10 +156,10 @@ def stats() -> HashMap:
 @section("tracepoint/syscalls/sys_enter_read")
 def track_syscalls(ctx: c_void_p) -> c_int64:
     process_id = pid()
-    
+
     # Lookup existing stats
     s = stats.lookup(process_id)
-    
+
     if s:
         # Update existing stats
         s.syscall_count = s.syscall_count + 1
@@ -168,12 +167,12 @@ def track_syscalls(ctx: c_void_p) -> c_int64:
     else:
         # Create new stats
         new_stats = ProcessStats()
-        new_stats.syscall_count = c_uint64(1)
-        new_stats.total_time = c_uint64(0)
-        new_stats.max_latency = c_uint64(0)
+        new_stats.syscall_count = 1
+        new_stats.total_time = 0
+        new_stats.max_latency = 0
         stats.update(process_id, new_stats)
-    
-    return c_int64(0)
+
+    return 0
 ```
 
 ### With Perf Events
@@ -205,18 +204,15 @@ def trace_fork(ctx: c_void_p) -> c_int64:
     event = ProcessEvent()
     event.timestamp = ktime()
     event.pid = pid()
-    # Note: comm() requires a buffer parameter
-    # comm(event.comm)  # Fills event.comm with process name
-    
+    comm(event.comm)  # Fills event.comm with process name
+
     # Send to userspace
     events.output(event)
-    
-    return c_int64(0)
+
+    return 0
 ```
 
 ### With Ring Buffers
-
-Ring buffers provide efficient event delivery:
 
 ```python
 from pythonbpf import bpf, struct, map, section
@@ -240,11 +236,10 @@ def trace_open(ctx: c_void_p) -> c_int64:
     event = FileEvent()
     event.timestamp = ktime()
     event.pid = pid()
-    # event.filename would be populated from ctx
-    
+
     events.output(event)
-    
-    return c_int64(0)
+
+    return 0
 ```
 
 ## Field Access and Modification
@@ -267,31 +262,7 @@ Assign values to fields:
 event = Event()
 event.timestamp = ktime()
 event.pid = pid()
-# Note: comm() requires a buffer parameter
-# comm(event.comm)  # Fills event.comm with process name
-```
-
-### String Fields
-
-String fields have special handling:
-
-```python
-@bpf
-@struct
-class Message:
-    text: str(64)
-
-@bpf
-def example(ctx: c_void_p) -> c_int64:
-    msg = Message()
-    
-    # Assign string value
-    msg.text = "Hello from BPF"
-    
-    # Use helper to get process name (requires buffer)
-    # comm(msg.text)  # Fills msg.text with process name
-    
-    return c_int64(0)
+comm(event.comm)
 ```
 
 ## StructType Class
@@ -344,10 +315,9 @@ def capture_packets(ctx: c_void_p) -> c_int64:
     pkt = PacketEvent()
     pkt.timestamp = ktime()
     # Parse packet data from ctx...
-    
+
     packets.output(pkt)
-    
-    # XDP_PASS
+
     return XDP_PASS
 ```
 
@@ -377,121 +347,26 @@ def process_info() -> HashMap:
 @section("tracepoint/sched/sched_process_fork")
 def track_fork(ctx: c_void_p) -> c_int64:
     process_id = pid()
-    
+
     info = ProcessLifecycle()
     info.pid = process_id
     info.start_time = ktime()
-    # Note: comm() requires a buffer parameter
-    # comm(info.comm)  # Fills info.comm with process name
-    
+
     process_info.update(process_id, info)
-    
-    return c_int64(0)
+
+    return 0
 
 @bpf
 @section("tracepoint/sched/sched_process_exit")
 def track_exit(ctx: c_void_p) -> c_int64:
     process_id = pid()
-    
+
     info = process_info.lookup(process_id)
     if info:
         info.exit_time = ktime()
         process_info.update(process_id, info)
-    
-    return c_int64(0)
-```
 
-### Aggregated Statistics
-
-```python
-@bpf
-@struct
-class FileStats:
-    read_count: c_uint64
-    write_count: c_uint64
-    total_bytes_read: c_uint64
-    total_bytes_written: c_uint64
-    last_access: c_uint64
-
-@bpf
-@map
-def file_stats() -> HashMap:
-    return HashMap(
-        key=str(256),  # Filename as key
-        value=FileStats,
-        max_entries=1024
-    )
-```
-
-## Memory Layout
-
-Structs in BPF follow C struct layout rules:
-
-* Fields are laid out in order
-* Padding may be added for alignment
-* Size is rounded up to alignment
-
-Example:
-
-```python
-@bpf
-@struct
-class Aligned:
-    a: c_uint8   # 1 byte
-                 # 3 bytes padding
-    b: c_uint32  # 4 bytes
-    c: c_uint64  # 8 bytes
-    # Total: 16 bytes
-```
-
-```{tip}
-For optimal memory usage, order fields from largest to smallest to minimize padding.
-```
-
-## Best Practices
-
-1. **Use descriptive field names** - Makes code self-documenting
-2. **Order fields by size** - Reduces padding and memory usage
-3. **Use appropriate sizes** - Don't use `c_uint64` when `c_uint32` suffices
-4. **Document complex structs** - Add comments explaining field purposes
-5. **Keep structs focused** - Each struct should represent one logical entity
-6. **Use fixed-size strings** - Always specify string lengths explicitly
-
-## Common Patterns
-
-### Timestamp + Data Pattern
-
-```python
-@bpf
-@struct
-class TimestampedEvent:
-    timestamp: c_uint64  # Always first for sorting
-    # ... other fields
-```
-
-### Identification Pattern
-
-```python
-@bpf
-@struct
-class Identifiable:
-    pid: c_uint32
-    tid: c_uint32
-    cpu: c_uint32
-    # ... additional fields
-```
-
-### Stats Aggregation Pattern
-
-```python
-@bpf
-@struct
-class Statistics:
-    count: c_uint64
-    sum: c_uint64
-    min: c_uint64
-    max: c_uint64
-    avg: c_uint64  # Computed in userspace
+    return 0
 ```
 
 ## Troubleshooting
@@ -522,16 +397,7 @@ If you get type errors:
 After capturing struct data, read it in Python:
 
 ```python
-import ctypes
 from pylibbpf import BpfMap
-
-# Define matching Python class
-class Event(ctypes.Structure):
-    _fields_ = [
-        ("timestamp", ctypes.c_uint64),
-        ("pid", ctypes.c_uint32),
-        ("comm", ctypes.c_char * 16),
-    ]
 
 # Read from map
 map_obj = BpfMap(b, stats)
