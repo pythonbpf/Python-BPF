@@ -33,7 +33,7 @@ def my_map() -> HashMap:
 
 #### Parameters
 
-* `key` - The type of the key (must be a ctypes type)
+* `key` - The type of the key (must be a ctypes type or struct)
 * `value` - The type of the value (must be a ctypes type or struct)
 * `max_entries` - Maximum number of entries the map can hold
 
@@ -47,11 +47,10 @@ Look up a value by key. Returns the value if found, `None` otherwise.
 @bpf
 @section("tracepoint/syscalls/sys_enter_open")
 def trace_open(ctx: c_void_p) -> c_int64:
-    key = c_uint32(1)
-    value = my_map.lookup(key)
+    value = my_map.lookup(1)
     if value:
         print(f"Found value: {value}")
-    return c_int64(0)
+    return 0
 ```
 
 ##### update(key, value, flags=None)
@@ -67,8 +66,8 @@ def track_opens(ctx: c_void_p) -> c_int64:
     if count:
         my_map.update(key, count + 1)
     else:
-        my_map.update(key, c_uint64(1))
-    return c_int64(0)
+        my_map.update(key, 1)
+    return 0
 ```
 
 ##### delete(key)
@@ -78,9 +77,8 @@ Remove an entry from the map.
 ```python
 @bpf
 def cleanup(ctx: c_void_p) -> c_int64:
-    key = c_uint32(1)
-    my_map.delete(key)
-    return c_int64(0)
+    my_map.delete(1)
+    return 0
 ```
 
 #### Use Cases
@@ -108,14 +106,14 @@ def process_count() -> HashMap:
 def count_processes(ctx: c_void_p) -> c_int64:
     process_id = pid()
     count = process_count.lookup(process_id)
-    
+
     if count:
         new_count = count + 1
         process_count.update(process_id, new_count)
     else:
-        process_count.update(process_id, c_uint64(1))
-    
-    return c_int64(0)
+        process_count.update(process_id, 1)
+
+    return 0
 
 @bpf
 @bpfglobal
@@ -179,7 +177,7 @@ def send_event(ctx: c_void_p) -> c_int64:
     event.pid = pid()
     event.timestamp = ktime()
     events.output(event)
-    return c_int64(0)
+    return 0
 ```
 
 #### Use Cases
@@ -215,10 +213,9 @@ def log_exec(ctx: c_void_p) -> c_int64:
     event = ProcessEvent()
     event.timestamp = ktime()
     event.pid = pid()
-    # Note: comm() requires a buffer parameter
-    # comm(event.comm)  # Fills event.comm with process name
+    comm(event.comm)  # Fills event.comm with process name
     events.output(event)
-    return c_int64(0)
+    return 0
 
 @bpf
 @bpfglobal
@@ -258,7 +255,7 @@ def log_event(ctx: c_void_p) -> c_int64:
     event = Event()
     event.pid = pid()
     events.output(event)
-    return c_int64(0)
+    return 0
 ```
 
 ##### reserve(size)
@@ -272,7 +269,7 @@ def reserve_space(ctx: c_void_p) -> c_int64:
     if ptr:
         # Use the reserved space
         events.submit(ptr)
-    return c_int64(0)
+    return 0
 ```
 
 ##### submit(data, flags=0)
@@ -343,18 +340,18 @@ def process_stats() -> HashMap:
 def track_stats(ctx: c_void_p) -> c_int64:
     process_id = pid()
     stats = process_stats.lookup(process_id)
-    
+
     if stats:
         stats.count = stats.count + 1
         process_stats.update(process_id, stats)
     else:
         new_stats = Stats()
-        new_stats.count = c_uint64(1)
-        new_stats.total_time = c_uint64(0)
-        new_stats.max_time = c_uint64(0)
+        new_stats.count = 1
+        new_stats.total_time = 0
+        new_stats.max_time = 0
         process_stats.update(process_id, new_stats)
-    
-    return c_int64(0)
+
+    return 0
 ```
 
 ## Accessing Maps from Userspace
@@ -392,32 +389,6 @@ map_obj[key] = new_value
 del map_obj[key]
 ```
 
-## Best Practices
-
-1. **Choose the right map type**
-   * Use `HashMap` for key-value storage
-   * Use `RingBuffer` for event streaming (kernel 5.8+)
-   * Use `PerfEventArray` for older kernels
-
-2. **Size maps appropriately**
-   * Consider maximum expected entries
-   * Balance memory usage vs. capacity
-   * Use LRU maps for automatic eviction
-
-3. **Handle lookup failures**
-   * Always check if `lookup()` returns `None`
-   * Initialize new entries properly
-
-4. **Minimize map operations**
-   * BPF has instruction limits
-   * Reduce unnecessary lookups
-   * Batch operations when possible
-
-5. **Use structs for complex data**
-   * More efficient than multiple lookups
-   * Atomic updates of related fields
-   * Better cache locality
-
 ## Common Patterns
 
 ### Counter Pattern
@@ -427,7 +398,7 @@ count = my_map.lookup(key)
 if count:
     my_map.update(key, count + 1)
 else:
-    my_map.update(key, c_uint64(1))
+    my_map.update(key, 1)
 ```
 
 ### Latency Tracking
@@ -452,7 +423,7 @@ if start_time:
 count = counter.lookup(key)
 if count and (count % 100) == 0:
     events.output(data)
-counter.update(key, count + 1 if count else c_uint64(1))
+counter.update(key, count + 1 if count else 1)
 ```
 
 ## Troubleshooting
@@ -476,7 +447,6 @@ If updates fail due to map being full:
 If you get type-related errors:
 * Verify key and value types match the definition
 * Check that structs are properly defined
-* Ensure ctypes are used correctly
 
 ## Next Steps
 
