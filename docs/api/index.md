@@ -24,12 +24,12 @@ from pythonbpf import (
     section,
     bpfglobal,
     struct,
-    
+
     # Compilation
     compile_to_ir,
     compile,
     BPF,
-    
+
     # Utilities
     trace_pipe,
     trace_fields,
@@ -128,7 +128,7 @@ Decorator to mark a class as a BPF struct definition.
 def compile_to_ir(
     filename: str,
     output: str,
-    loglevel=logging.INFO
+    loglevel=logging.WARNING
 ) -> None
 ```
 
@@ -137,7 +137,7 @@ Compile Python source to LLVM Intermediate Representation.
 **Parameters:**
 * `filename` (str) - Path to the Python source file
 * `output` (str) - Path for the output LLVM IR file (.ll)
-* `loglevel` - Logging level (default: logging.INFO)
+* `loglevel` - Logging level (default: logging.WARNING)
 
 **See also:** {doc}`../user-guide/compilation`
 
@@ -147,7 +147,7 @@ Compile Python source to LLVM Intermediate Representation.
 def compile(
     filename: str = None,
     output: str = None,
-    loglevel=logging.INFO
+    loglevel=logging.WARNING
 ) -> None
 ```
 
@@ -156,7 +156,7 @@ Compile Python source to BPF object file.
 **Parameters:**
 * `filename` (str, optional) - Path to the Python source file (default: calling file)
 * `output` (str, optional) - Path for the output object file (default: same name with .o extension)
-* `loglevel` - Logging level (default: logging.INFO)
+* `loglevel` - Logging level (default: logging.WARNING)
 
 **See also:** {doc}`../user-guide/compilation`
 
@@ -167,9 +167,9 @@ class BPF:
     def __init__(
         self,
         filename: str = None,
-        loglevel=logging.INFO
+        loglevel=logging.WARNING
     )
-    
+
     def load(self) -> BpfObject
     def attach_all(self) -> None
     def load_and_attach(self) -> BpfObject
@@ -179,7 +179,7 @@ High-level interface to compile, load, and attach BPF programs.
 
 **Parameters:**
 * `filename` (str, optional) - Path to Python source file (default: calling file)
-* `loglevel` - Logging level (default: logging.INFO)
+* `loglevel` - Logging level (default: logging.WARNING)
 
 **Methods:**
 * `load()` - Load the compiled BPF program into the kernel
@@ -246,7 +246,7 @@ class HashMap:
         value,
         max_entries: int
     )
-    
+
     def lookup(self, key)
     def update(self, key, value, flags=None)
     def delete(self, key)
@@ -255,7 +255,7 @@ class HashMap:
 Hash map for efficient key-value storage.
 
 **Parameters:**
-* `key` - The type of the key (ctypes type)
+* `key` - The type of the key (ctypes type or struct)
 * `value` - The type of the value (ctypes type or struct)
 * `max_entries` (int) - Maximum number of entries
 
@@ -275,7 +275,7 @@ class PerfEventArray:
         key_size,
         value_size
     )
-    
+
     def output(self, data)
 ```
 
@@ -295,7 +295,7 @@ Perf event array for sending data to userspace.
 ```python
 class RingBuffer:
     def __init__(self, max_entries: int)
-    
+
     def output(self, data, flags=0)
     def reserve(self, size: int)
     def submit(self, data, flags=0)
@@ -377,7 +377,7 @@ from ctypes import c_void_p, c_int64
 @section("tracepoint/syscalls/sys_enter_execve")
 def hello(ctx: c_void_p) -> c_int64:
     print("Hello, World!")
-    return c_int64(0)
+    return 0
 
 @bpf
 @bpfglobal
@@ -407,13 +407,13 @@ def counters() -> HashMap:
 def count_clones(ctx: c_void_p) -> c_int64:
     process_id = pid()
     count = counters.lookup(process_id)
-    
+
     if count:
         counters.update(process_id, count + 1)
     else:
-        counters.update(process_id, c_uint64(1))
-    
-    return c_int64(0)
+        counters.update(process_id, 1)
+
+    return 0
 
 @bpf
 @bpfglobal
@@ -450,11 +450,10 @@ def track_exec(ctx: c_void_p) -> c_int64:
     event = Event()
     event.timestamp = ktime()
     event.pid = pid()
-    # Note: comm() requires a buffer parameter
-    # comm(event.comm)  # Fills event.comm with process name
-    
+    comm(event.comm)
+
     events.output(event)
-    return c_int64(0)
+    return 0
 
 @bpf
 @bpfglobal
