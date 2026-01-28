@@ -2,6 +2,11 @@
 
 PythonBPF provides helper functions and utilities for BPF programs and userspace code.
 
+```{note}
+**Work in Progress:** PythonBPF is under active development. We are constantly adding support for more helpers, kfuncs, and map types. Check back for updates!
+```
+For comprehensive documentation on BPF helpers, see the [eBPF Helper Functions documentation on ebpf.io](https://ebpf.io/what-is-ebpf/#helper-calls).
+
 ## BPF Helper Functions
 
 BPF helper functions are kernel-provided functions that BPF programs can call to interact with the system. PythonBPF exposes these through the `pythonbpf.helper` module.
@@ -16,6 +21,8 @@ from pythonbpf.helper import pid, ktime, comm
 
 Get the current process ID.
 
+> **Linux Kernel Helper:** `bpf_get_current_pid_tgid()`
+
 ```python
 from pythonbpf.helper import pid
 
@@ -24,38 +31,27 @@ from pythonbpf.helper import pid
 def trace_open(ctx: c_void_p) -> c_int64:
     process_id = pid()
     print(f"Process {process_id} opened a file")
-    return c_int64(0)
+    return 0
 ```
 
 **Returns:** `c_int32` - The process ID of the current task
 
 #### comm()
 
-Get the current process command name (up to 16 characters).
+Get the current process command name.
 
-```python
-from pythonbpf.helper import comm
-
-@bpf
-@section("tracepoint/syscalls/sys_enter_execve")
-def trace_exec(ctx: c_void_p) -> c_int64:
-    # comm requires a buffer to fill
-    process_name = str(16)
-    comm(process_name)
-    print(f"Executing: {process_name}")
-    return c_int64(0)
-```
+> **Linux Kernel Helper:** `bpf_get_current_comm()`
 
 **Parameters:**
 * `buf` - Buffer to fill with the process command name
 
 **Returns:** `c_int64` - 0 on success, negative on error
 
-**Note:** The buffer should be at least 16 bytes (TASK_COMM_LEN) to hold the full command name.
-
 #### uid()
 
 Get the current user ID.
+
+> **Linux Kernel Helper:** `bpf_get_current_uid_gid()`
 
 ```python
 from pythonbpf.helper import uid
@@ -66,7 +62,7 @@ def trace_open(ctx: c_void_p) -> c_int64:
     user_id = uid()
     if user_id == 0:
         print("Root user opened a file")
-    return c_int64(0)
+    return 0
 ```
 
 **Returns:** `c_int32` - The user ID of the current task
@@ -77,6 +73,8 @@ def trace_open(ctx: c_void_p) -> c_int64:
 
 Get the current kernel time in nanoseconds since system boot.
 
+> **Linux Kernel Helper:** `bpf_ktime_get_ns()`
+
 ```python
 from pythonbpf.helper import ktime
 
@@ -85,7 +83,7 @@ from pythonbpf.helper import ktime
 def measure_latency(ctx: c_void_p) -> c_int64:
     start_time = ktime()
     # Store for later comparison
-    return c_int64(0)
+    return 0
 ```
 
 **Returns:** `c_int64` - Current time in nanoseconds
@@ -102,6 +100,8 @@ def measure_latency(ctx: c_void_p) -> c_int64:
 
 Get the ID of the CPU on which the BPF program is running.
 
+> **Linux Kernel Helper:** `bpf_get_smp_processor_id()`
+
 ```python
 from pythonbpf.helper import smp_processor_id
 
@@ -110,7 +110,7 @@ from pythonbpf.helper import smp_processor_id
 def track_cpu(ctx: c_void_p) -> c_int64:
     cpu = smp_processor_id()
     print(f"Running on CPU {cpu}")
-    return c_int64(0)
+    return 0
 ```
 
 **Returns:** `c_int32` - The current CPU ID
@@ -126,19 +126,21 @@ def track_cpu(ctx: c_void_p) -> c_int64:
 
 Safely read data from kernel memory.
 
+> **Linux Kernel Helper:** `bpf_probe_read()`
+
 ```python
 from pythonbpf.helper import probe_read
 
 @bpf
 def read_kernel_data(ctx: c_void_p) -> c_int64:
-    dst = c_uint64(0)
+    dst = 0
     size = 8
-    src = c_void_p(...)  # kernel address
-    
+    src = ctx  # kernel address
+
     result = probe_read(dst, size, src)
     if result == 0:
         print(f"Read value: {dst}")
-    return c_int64(0)
+    return 0
 ```
 
 **Parameters:**
@@ -154,19 +156,7 @@ def read_kernel_data(ctx: c_void_p) -> c_int64:
 
 Safely read a null-terminated string from kernel memory.
 
-```python
-from pythonbpf.helper import probe_read_str
-
-@bpf
-def read_filename(ctx: c_void_p) -> c_int64:
-    filename = str(256)
-    src = c_void_p(...)  # pointer to filename in kernel
-    
-    result = probe_read_str(filename, src)
-    if result > 0:
-        print(f"Filename: {filename}")
-    return c_int64(0)
-```
+> **Linux Kernel Helper:** `bpf_probe_read_str()`
 
 **Parameters:**
 * `dst` - Destination buffer (string)
@@ -174,31 +164,13 @@ def read_filename(ctx: c_void_p) -> c_int64:
 
 **Returns:** `c_int64` - Length of string on success, negative on error
 
-#### deref()
-
-Dereference a pointer safely.
-
-```python
-from pythonbpf.helper import deref
-
-@bpf
-def access_pointer(ctx: c_void_p) -> c_int64:
-    ptr = c_void_p(...)
-    value = deref(ptr)
-    print(f"Value at pointer: {value}")
-    return c_int64(0)
-```
-
-**Parameters:**
-* `ptr` - Pointer to dereference
-
-**Returns:** The dereferenced value or 0 if null
-
 ### Random Numbers
 
 #### random()
 
 Generate a pseudo-random 32-bit number.
+
+> **Linux Kernel Helper:** `bpf_get_prandom_u32()`
 
 ```python
 from pythonbpf.helper import random
@@ -209,22 +181,18 @@ def sample_events(ctx: c_void_p) -> c_int64:
     # Sample 1% of events
     if (random() % 100) == 0:
         print("Sampled event")
-    return c_int64(0)
+    return 0
 ```
 
 **Returns:** `c_int32` - A pseudo-random number
-
-**Use cases:**
-* Event sampling
-* Load shedding
-* A/B testing
-* Randomized algorithms
 
 ### Network Helpers
 
 #### skb_store_bytes()
 
 Store bytes into a socket buffer (for network programs).
+
+> **Linux Kernel Helper:** `bpf_skb_store_bytes()`
 
 ```python
 from pythonbpf.helper import skb_store_bytes
@@ -235,9 +203,9 @@ def modify_packet(ctx: c_void_p) -> c_int32:
     offset = 14  # Skip Ethernet header
     data = b"\x00\x01\x02\x03"
     size = len(data)
-    
+
     result = skb_store_bytes(offset, data, size)
-    return c_int32(0)
+    return 0
 ```
 
 **Parameters:**
@@ -277,7 +245,7 @@ from ctypes import c_void_p, c_int64
 @section("tracepoint/syscalls/sys_enter_execve")
 def trace_exec(ctx: c_void_p) -> c_int64:
     print("Process started")  # This goes to trace_pipe
-    return c_int64(0)
+    return 0
 
 @bpf
 @bpfglobal
@@ -336,7 +304,7 @@ from ctypes import c_void_p, c_int64
 @section("tracepoint/syscalls/sys_enter_execve")
 def trace_exec(ctx: c_void_p) -> c_int64:
     print(f"PID:{pid()}")
-    return c_int64(0)
+    return 0
 
 @bpf
 @bpfglobal
@@ -382,20 +350,20 @@ def read_start(ctx: c_void_p) -> c_int64:
     process_id = pid()
     start = ktime()
     start_times.update(process_id, start)
-    return c_int64(0)
+    return 0
 
 @bpf
 @section("tracepoint/syscalls/sys_exit_read")
 def read_end(ctx: c_void_p) -> c_int64:
     process_id = pid()
     start = start_times.lookup(process_id)
-    
+
     if start:
         latency = ktime() - start
         print(f"Read latency: {latency} ns")
         start_times.delete(process_id)
-    
-    return c_int64(0)
+
+    return 0
 
 @bpf
 @bpfglobal
@@ -419,9 +387,9 @@ from ctypes import c_void_p, c_int64
 def track_exec(ctx: c_void_p) -> c_int64:
     process_id = pid()
     user_id = uid()
-    
+
     print(f"User {user_id} started process (PID: {process_id})")
-    return c_int64(0)
+    return 0
 
 @bpf
 @bpfglobal
@@ -451,13 +419,13 @@ def cpu_counts() -> HashMap:
 def count_switches(ctx: c_void_p) -> c_int64:
     cpu = smp_processor_id()
     count = cpu_counts.lookup(cpu)
-    
+
     if count:
         cpu_counts.update(cpu, count + 1)
     else:
-        cpu_counts.update(cpu, c_uint64(1))
-    
-    return c_int64(0)
+        cpu_counts.update(cpu, 1)
+
+    return 0
 
 @bpf
 @bpfglobal
@@ -491,8 +459,8 @@ def sample_opens(ctx: c_void_p) -> c_int64:
     if (random() % 100) < 5:
         process_id = pid()
         print(f"Sampled: PID {process_id} opening file")
-    
-    return c_int64(0)
+
+    return 0
 
 @bpf
 @bpfglobal
@@ -504,56 +472,12 @@ b.load_and_attach()
 trace_pipe()
 ```
 
-## Best Practices
-
-1. **Use appropriate helpers** - Choose the right helper for your use case
-2. **Handle errors** - Check return values from helpers like `probe_read()`
-3. **Minimize overhead** - Helper calls have cost; use judiciously
-4. **Sample when appropriate** - Use `random()` for high-frequency events
-5. **Clean up resources** - Delete map entries when done
-
-## Common Patterns
-
-### Store-and-Compare Pattern
-
-```python
-# Store a value
-key = pid()
-value = ktime()
-my_map.update(key, value)
-
-# Later: compare
-stored = my_map.lookup(key)
-if stored:
-    difference = ktime() - stored
-```
-
-### Filtering Pattern
-
-```python
-# Filter by user
-user_id = uid()
-if user_id == 0:  # Only root
-    # Process event
-    pass
-```
-
-### Sampling Pattern
-
-```python
-# Sample 1 in N events
-if (random() % N) == 0:
-    # Process sampled event
-    pass
-```
-
 ## Troubleshooting
 
 ### Helper Not Available
 
 If a helper function doesn't work:
 * Check your kernel version (some helpers are newer)
-* Verify the helper is available with `bpftool feature`
 * Ensure your LICENSE is GPL-compatible
 
 ### Trace Pipe Access Denied
@@ -562,13 +486,6 @@ If `trace_pipe()` fails:
 * Run with sudo/root
 * Check `/sys/kernel/tracing/` is accessible
 * Verify tracing is enabled in kernel config
-
-### probe_read Failures
-
-If `probe_read()` returns errors:
-* Ensure the source address is valid kernel memory
-* Check that the size is reasonable
-* Verify you're not reading from restricted areas
 
 ## Next Steps
 

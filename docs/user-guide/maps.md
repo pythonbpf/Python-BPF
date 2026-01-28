@@ -6,6 +6,11 @@ Maps are BPF data structures that provide storage and communication mechanisms. 
 * Share data between multiple BPF programs
 * Communicate with userspace applications
 
+```{note}
+**Work in Progress:** PythonBPF is under active development. We are constantly adding support for more map types, helpers, and kfuncs. Check back for updates!
+```
+For comprehensive documentation on BPF maps, see the [eBPF Maps documentation on ebpf.io](https://ebpf.io/what-is-ebpf/#maps).
+
 ## Map Types
 
 PythonBPF supports several map types, each optimized for different use cases.
@@ -13,6 +18,8 @@ PythonBPF supports several map types, each optimized for different use cases.
 ### HashMap
 
 Hash maps provide efficient key-value storage with O(1) lookup time.
+
+> **Linux Kernel Map Type:** `BPF_MAP_TYPE_HASH`
 
 #### Definition
 
@@ -133,6 +140,8 @@ if __name__ == "__main__":
 
 Perf event arrays are used to send data from BPF programs to userspace with high throughput.
 
+> **Linux Kernel Map Type:** `BPF_MAP_TYPE_PERF_EVENT_ARRAY`
+
 #### Definition
 
 ```python
@@ -226,6 +235,8 @@ def LICENSE() -> str:
 ### RingBuffer
 
 Ring buffers provide efficient, ordered event delivery with lower overhead than perf event arrays.
+
+> **Linux Kernel Map Type:** `BPF_MAP_TYPE_RINGBUF`
 
 #### Definition
 
