@@ -19,6 +19,8 @@
   <a href="https://pepy.tech/project/pythonbpf"><img src="https://pepy.tech/badge/pythonbpf" alt="Downloads"></a>
   <!-- Build & CI -->
   <a href="https://github.com/pythonbpf/python-bpf/actions"><img src="https://github.com/pythonbpf/python-bpf/actions/workflows/python-publish.yml/badge.svg" alt="Build Status"></a>
+  <!-- Documentation -->
+  <a href="https://python-bpf.readthedocs.io/en/latest/?badge=latest"><img src="https://readthedocs.org/projects/python-bpf/badge/?version=latest" alt="Documentation Status"></a>
   <!-- Meta -->
   <a href="https://github.com/pythonbpf/python-bpf/blob/main/LICENSE"><img src="https://img.shields.io/github/license/pythonbpf/python-bpf" alt="License"></a>
 </p>
