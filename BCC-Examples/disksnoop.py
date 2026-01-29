@@ -27,7 +27,7 @@ def trace_completion(ctx: struct_pt_regs) -> c_int64:
         print(f"{data_len} {cmd_flags:x} {delta_us}\n")
         start.delete(req_ptr)
 
-    return c_int64(0)
+    return 0  # type: ignore [return-value]
 
 
 @bpf
@@ -36,7 +36,7 @@ def trace_start(ctx1: struct_pt_regs) -> c_int32:
     req = ctx1.di
     ts = ktime()
     start.update(req, ts)
-    return c_int32(0)
+    return 0  # type: ignore [return-value]
 
 
 @bpf
