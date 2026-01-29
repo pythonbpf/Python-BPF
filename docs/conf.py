@@ -101,3 +101,5 @@ autodoc_default_options = {
 }
 
 autodoc_typehints = "description"
+
+exclude_patterns = ["README.md"]
