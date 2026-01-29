@@ -487,6 +487,15 @@ If `trace_pipe()` fails:
 * Check `/sys/kernel/tracing/` is accessible
 * Verify tracing is enabled in kernel config
 
+## Examples
+
+Check out these examples in the `BCC-Examples/` directory that demonstrate helper functions:
+
+* [hello_world.py](https://github.com/pythonbpf/Python-BPF/blob/main/BCC-Examples/hello_world.py) - Basic tracing with `print()`
+* [sync_timing.py](https://github.com/pythonbpf/Python-BPF/blob/main/BCC-Examples/sync_timing.py) - Using `ktime()` for timing measurements
+* [hello_perf_output.py](https://github.com/pythonbpf/Python-BPF/blob/main/BCC-Examples/hello_perf_output.py) - Using `pid()`, `ktime()`, and `comm()` with perf events
+* [vfsreadlat.py](https://github.com/pythonbpf/Python-BPF/blob/main/BCC-Examples/vfsreadlat.py) - Latency measurement with `ktime()` in kprobes
+
 ## Next Steps
 
 * Explore {doc}`maps` for data storage with helpers

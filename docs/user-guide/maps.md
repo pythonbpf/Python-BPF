@@ -459,6 +459,16 @@ If you get type-related errors:
 * Verify key and value types match the definition
 * Check that structs are properly defined
 
+## Examples
+
+Check out these examples in the `BCC-Examples/` directory that demonstrate map usage:
+
+* [sync_timing.py](https://github.com/pythonbpf/Python-BPF/blob/main/BCC-Examples/sync_timing.py) - HashMap for storing timestamps
+* [sync_count.py](https://github.com/pythonbpf/Python-BPF/blob/main/BCC-Examples/sync_count.py) - HashMap for counting events
+* [hello_perf_output.py](https://github.com/pythonbpf/Python-BPF/blob/main/BCC-Examples/hello_perf_output.py) - PerfEventArray for sending structs to userspace
+* [sync_perf_output.py](https://github.com/pythonbpf/Python-BPF/blob/main/BCC-Examples/sync_perf_output.py) - PerfEventArray with timing data
+* [disksnoop.py](https://github.com/pythonbpf/Python-BPF/blob/main/BCC-Examples/disksnoop.py) - HashMap for tracking disk I/O
+
 ## Next Steps
 
 * Learn about {doc}`structs` for defining custom value types
