@@ -14,14 +14,17 @@ logger = logging.getLogger(__name__)
 # Shall we just int64, int32 and uint32 similarly?
 
 
-def structs_proc(tree, module, chunks):
+def structs_proc(tree, compilation_context, chunks):
     """Process all class definitions to find BPF structs"""
-    structs_sym_tab = {}
+    # Use the context's symbol table
+    structs_sym_tab = compilation_context.structs_sym_tab
+
     for cls_node in chunks:
         if is_bpf_struct(cls_node):
             logger.info(f"Found BPF struct: {cls_node.name}")
-            struct_info = process_bpf_struct(cls_node, module)
+            struct_info = process_bpf_struct(cls_node, compilation_context)
             structs_sym_tab[cls_node.name] = struct_info
+
     return structs_sym_tab
 
 
@@ -32,7 +35,7 @@ def is_bpf_struct(cls_node):
     )
 
 
-def process_bpf_struct(cls_node, module):
+def process_bpf_struct(cls_node, compilation_context):
     """Process a single BPF struct definition"""
 
     fields = parse_struct_fields(cls_node)

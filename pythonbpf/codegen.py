@@ -1,5 +1,6 @@
 import ast
 from llvmlite import ir
+from .context import CompilationContext
 from .license_pass import license_processing
 from .functions import func_proc
 from .maps import maps_proc
@@ -67,9 +68,10 @@ def find_bpf_chunks(tree):
     return bpf_functions
 
 
-def processor(source_code, filename, module):
+def processor(source_code, filename, compilation_context):
     tree = ast.parse(source_code, filename)
     logger.debug(ast.dump(tree, indent=4))
+    module = compilation_context.module
 
     bpf_chunks = find_bpf_chunks(tree)
     for func_node in bpf_chunks:
@@ -81,15 +83,18 @@ def processor(source_code, filename, module):
     if vmlinux_symtab:
         handler = VmlinuxHandler.initialize(vmlinux_symtab)
         VmlinuxHandlerRegistry.set_handler(handler)
+        compilation_context.vmlinux_handler = handler
 
-    populate_global_symbol_table(tree, module)
-    license_processing(tree, module)
-    globals_processing(tree, module)
-    structs_sym_tab = structs_proc(tree, module, bpf_chunks)
-    map_sym_tab = maps_proc(tree, module, bpf_chunks, structs_sym_tab)
-    func_proc(tree, module, bpf_chunks, map_sym_tab, structs_sym_tab)
+    populate_global_symbol_table(tree, compilation_context)
+    license_processing(tree, compilation_context)
+    globals_processing(tree, compilation_context)
+    structs_sym_tab = structs_proc(tree, compilation_context, bpf_chunks)
 
-    globals_list_creation(tree, module)
+    map_sym_tab = maps_proc(tree, compilation_context, bpf_chunks)
+
+    func_proc(tree, compilation_context, bpf_chunks)
+
+    globals_list_creation(tree, compilation_context)
     return structs_sym_tab, map_sym_tab
 
 
@@ -104,6 +109,8 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
     module.data_layout = "e-m:e-p:64:64-i64:64-i128:128-n32:64-S128"
     module.triple = "bpf"
 
+    compilation_context = CompilationContext(module)
+
     if not hasattr(module, "_debug_compile_unit"):
         debug_generator = DebugInfoGenerator(module)
         debug_generator.generate_file_metadata(filename, os.path.dirname(filename))
@@ -116,7 +123,7 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
             True,
         )
 
-    structs_sym_tab, maps_sym_tab = processor(source, filename, module)
+    structs_sym_tab, maps_sym_tab = processor(source, filename, compilation_context)
 
     wchar_size = module.add_metadata(
         [

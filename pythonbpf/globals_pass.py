@@ -7,11 +7,11 @@ from .type_deducer import ctypes_to_ir
 
 logger: Logger = logging.getLogger(__name__)
 
-# TODO: this is going to be a huge fuck of a headache in the future.
-global_sym_tab = []
 
-
-def populate_global_symbol_table(tree, module: ir.Module):
+def populate_global_symbol_table(tree, compilation_context):
+    """
+    compilation_context: CompilationContext
+    """
     for node in tree.body:
         if isinstance(node, ast.FunctionDef):
             for dec in node.decorator_list:
@@ -23,12 +23,12 @@ def populate_global_symbol_table(tree, module: ir.Module):
                     and isinstance(dec.args[0], ast.Constant)
                     and isinstance(dec.args[0].value, str)
                 ):
-                    global_sym_tab.append(node)
+                    compilation_context.global_sym_tab.append(node)
                 elif isinstance(dec, ast.Name) and dec.id == "bpfglobal":
-                    global_sym_tab.append(node)
+                    compilation_context.global_sym_tab.append(node)
 
                 elif isinstance(dec, ast.Name) and dec.id == "map":
-                    global_sym_tab.append(node)
+                    compilation_context.global_sym_tab.append(node)
     return False
 
 
@@ -74,9 +74,12 @@ def emit_global(module: ir.Module, node, name):
     return gvar
 
 
-def globals_processing(tree, module):
+def globals_processing(tree, compilation_context):
     """Process stuff decorated with @bpf and @bpfglobal except license and return the section name"""
-    globals_sym_tab = []
+    # Local tracking for duplicate checking if needed, or we can iterate context
+    # But for now, we process specific nodes
+
+    current_globals = []
 
     for node in tree.body:
         # Skip non-assignment and non-function nodes
@@ -90,10 +93,10 @@ def globals_processing(tree, module):
             continue
 
         # Check for duplicate names
-        if name in globals_sym_tab:
+        if name in current_globals:
             raise SyntaxError(f"ERROR: Global name '{name}' previously defined")
         else:
-            globals_sym_tab.append(name)
+            current_globals.append(name)
 
         if isinstance(node, ast.FunctionDef) and node.name != "LICENSE":
             decorators = [
@@ -108,7 +111,7 @@ def globals_processing(tree, module):
                         node.body[0].value, (ast.Constant, ast.Name, ast.Call)
                     )
                 ):
-                    emit_global(module, node, name)
+                    emit_global(compilation_context.module, node, name)
                 else:
                     raise SyntaxError(f"ERROR: Invalid syntax for {name} global")
 
@@ -137,8 +140,9 @@ def emit_llvm_compiler_used(module: ir.Module, names: list[str]):
     gv.section = "llvm.metadata"
 
 
-def globals_list_creation(tree, module: ir.Module):
+def globals_list_creation(tree, compilation_context):
     collected = ["LICENSE"]
+    module = compilation_context.module
 
     for node in tree.body:
         if isinstance(node, ast.FunctionDef):

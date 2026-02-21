@@ -26,9 +26,7 @@ def create_targets_and_rvals(stmt):
     return stmt.targets, [stmt.value]
 
 
-def handle_assign_allocation(
-    builder, stmt, local_sym_tab, map_sym_tab, structs_sym_tab
-):
+def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
     """Handle memory allocation for assignment statements."""
 
     logger.info(f"Handling assignment for allocation: {ast.dump(stmt)}")
@@ -59,7 +57,7 @@ def handle_assign_allocation(
         # Determine type and allocate based on rval
         if isinstance(rval, ast.Call):
             _allocate_for_call(
-                builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+                builder, var_name, rval, local_sym_tab, compilation_context
             )
         elif isinstance(rval, ast.Constant):
             _allocate_for_constant(builder, var_name, rval, local_sym_tab)
@@ -71,7 +69,7 @@ def handle_assign_allocation(
         elif isinstance(rval, ast.Attribute):
             # Struct field-to-variable assignment (a = dat.fld)
             _allocate_for_attribute(
-                builder, var_name, rval, local_sym_tab, structs_sym_tab
+                builder, var_name, rval, local_sym_tab, compilation_context
             )
         else:
             logger.warning(
@@ -79,10 +77,9 @@ def handle_assign_allocation(
             )
 
 
-def _allocate_for_call(
-    builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
-):
+def _allocate_for_call(builder, var_name, rval, local_sym_tab, compilation_context):
     """Allocate memory for variable assigned from a call."""
+    structs_sym_tab = compilation_context.structs_sym_tab
 
     if isinstance(rval.func, ast.Name):
         call_type = rval.func.id
@@ -149,7 +146,7 @@ def _allocate_for_call(
     elif isinstance(rval.func, ast.Attribute):
         # Map method calls - need double allocation for ptr handling
         _allocate_for_map_method(
-            builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+            builder, var_name, rval, local_sym_tab, compilation_context
         )
 
     else:
@@ -157,9 +154,11 @@ def _allocate_for_call(
 
 
 def _allocate_for_map_method(
-    builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+    builder, var_name, rval, local_sym_tab, compilation_context
 ):
     """Allocate memory for variable assigned from map method (double alloc)."""
+    map_sym_tab = compilation_context.map_sym_tab
+    structs_sym_tab = compilation_context.structs_sym_tab
 
     map_name = rval.func.value.id
     method_name = rval.func.attr
@@ -299,6 +298,15 @@ def allocate_temp_pool(builder, max_temps, local_sym_tab):
             logger.debug(f"Allocated temp variable: {temp_name}")
 
 
+def _get_alignment(tmp_type):
+    """Return alignment for a given type."""
+    if isinstance(tmp_type, ir.PointerType):
+        return 8
+    elif isinstance(tmp_type, ir.IntType):
+        return tmp_type.width // 8
+    return 8
+
+
 def _allocate_for_name(builder, var_name, rval, local_sym_tab):
     """Allocate memory for variable-to-variable assignment (b = a)."""
     source_var = rval.id
@@ -321,8 +329,22 @@ def _allocate_for_name(builder, var_name, rval, local_sym_tab):
     )
 
 
-def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_tab):
+def _allocate_with_type(builder, var_name, ir_type):
+    """Allocate memory for a variable with a specific type."""
+    var = builder.alloca(ir_type, name=var_name)
+    if isinstance(ir_type, ir.IntType):
+        var.align = ir_type.width // 8
+    elif isinstance(ir_type, ir.PointerType):
+        var.align = 8
+    return var
+
+
+def _allocate_for_attribute(
+    builder, var_name, rval, local_sym_tab, compilation_context
+):
     """Allocate memory for struct field-to-variable assignment (a = dat.fld)."""
+    structs_sym_tab = compilation_context.structs_sym_tab
+
     if not isinstance(rval.value, ast.Name):
         logger.warning(f"Complex attribute access not supported for {var_name}")
         return
@@ -455,20 +477,3 @@ def _allocate_for_attribute(builder, var_name, rval, local_sym_tab, structs_sym_
     logger.info(
         f"Pre-allocated {var_name} from {struct_var}.{field_name} with type {alloc_type}"
     )
-
-
-def _allocate_with_type(builder, var_name, ir_type):
-    """Allocate variable with appropriate alignment for type."""
-    var = builder.alloca(ir_type, name=var_name)
-    var.align = _get_alignment(ir_type)
-    return var
-
-
-def _get_alignment(ir_type):
-    """Get appropriate alignment for IR type."""
-    if isinstance(ir_type, ir.IntType):
-        return ir_type.width // 8
-    elif isinstance(ir_type, ir.ArrayType) and isinstance(ir_type.element, ir.IntType):
-        return ir_type.element.width // 8
-    else:
-        return 8  # Default: pointer size
