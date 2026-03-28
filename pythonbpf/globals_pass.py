@@ -32,7 +32,7 @@ def populate_global_symbol_table(tree, compilation_context):
     return False
 
 
-def emit_global(module: ir.Module, node, name):
+def _emit_global(module: ir.Module, node, name):
     logger.info(f"global identifier {name} processing")
     # deduce LLVM type from the annotated return
     if not isinstance(node.returns, ast.Name):
@@ -111,14 +111,14 @@ def globals_processing(tree, compilation_context):
                         node.body[0].value, (ast.Constant, ast.Name, ast.Call)
                     )
                 ):
-                    emit_global(compilation_context.module, node, name)
+                    _emit_global(compilation_context.module, node, name)
                 else:
                     raise SyntaxError(f"ERROR: Invalid syntax for {name} global")
 
     return None
 
 
-def emit_llvm_compiler_used(module: ir.Module, names: list[str]):
+def _emit_llvm_compiler_used(module: ir.Module, names: list[str]):
     """
     Emit the @llvm.compiler.used global given a list of function/global names.
     """
@@ -164,4 +164,4 @@ def globals_list_creation(tree, compilation_context):
                 elif isinstance(dec, ast.Name) and dec.id == "map":
                     collected.append(node.name)
 
-    emit_llvm_compiler_used(module, collected)
+    _emit_llvm_compiler_used(module, collected)
