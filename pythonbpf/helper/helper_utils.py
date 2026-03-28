@@ -29,15 +29,7 @@ def get_ptr_from_arg(arg, compilation_context, builder, local_sym_tab):
             return builder.load(sym.var)
 
     # Use eval_expr for general case
-    val = eval_expr(
-        None,
-        compilation_context.module,
-        builder,
-        arg,
-        local_sym_tab,
-        compilation_context.map_sym_tab,
-        compilation_context.structs_sym_tab,
-    )
+    val = eval_expr(None, compilation_context, builder, arg, local_sym_tab)
     if val and isinstance(val[0].type, ir.PointerType):
         return val[0]
 

@@ -157,17 +157,16 @@ def bpf_printk_emitter(
     if isinstance(call.args[0], ast.JoinedStr):
         args = handle_fstring_print(
             call.args[0],
-            compilation_context.module,
+            compilation_context,
             builder,
             func,
             local_sym_tab,
-            compilation_context.structs_sym_tab,
         )
     elif isinstance(call.args[0], ast.Constant) and isinstance(call.args[0].value, str):
         # TODO: We are only supporting single arguments for now.
         # In case of multiple args, the first one will be taken.
         args = simple_string_print(
-            call.args[0].value, compilation_context.module, builder, func
+            call.args[0].value, compilation_context, builder, func
         )
     else:
         raise NotImplementedError(
@@ -397,7 +396,7 @@ def bpf_perf_event_output_handler(
     ctx_ptr = func.args[0]  # First argument to the function is ctx
 
     data_ptr, size_val = get_data_ptr_and_size(
-        data_arg, local_sym_tab, compilation_context.structs_sym_tab
+        data_arg, local_sym_tab, compilation_context
     )
 
     # BPF_F_CURRENT_CPU is -1 in 32 bit
@@ -446,7 +445,7 @@ def bpf_ringbuf_output_emitter(
         )
     data_arg = call.args[0]
     data_ptr, size_val = get_data_ptr_and_size(
-        data_arg, local_sym_tab, compilation_context.structs_sym_tab
+        data_arg, local_sym_tab, compilation_context
     )
     flags_val = ir.Constant(ir.IntType(64), 0)
 

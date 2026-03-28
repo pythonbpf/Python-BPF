@@ -9,8 +9,9 @@ from pythonbpf.helper.helper_utils import get_char_array_ptr_and_size
 logger = logging.getLogger(__name__)
 
 
-def simple_string_print(string_value, module, builder, func):
+def simple_string_print(string_value, compilation_context, builder, func):
     """Prepare arguments for bpf_printk from a simple string value"""
+    module = compilation_context.module
     fmt_str = string_value + "\n\0"
     fmt_ptr = _create_format_string_global(fmt_str, func, module, builder)
 
@@ -20,11 +21,10 @@ def simple_string_print(string_value, module, builder, func):
 
 def handle_fstring_print(
     joined_str,
-    module,
+    compilation_context,
     builder,
     func,
     local_sym_tab=None,
-    struct_sym_tab=None,
 ):
     """Handle f-string formatting for bpf_printk emitter."""
     fmt_parts = []
@@ -41,13 +41,13 @@ def handle_fstring_print(
                 fmt_parts,
                 exprs,
                 local_sym_tab,
-                struct_sym_tab,
+                compilation_context.struct_sym_tab,
             )
         else:
             raise NotImplementedError(f"Unsupported f-string value type: {type(value)}")
 
     fmt_str = "".join(fmt_parts)
-    args = simple_string_print(fmt_str, module, builder, func)
+    args = simple_string_print(fmt_str, compilation_context, builder, func)
 
     # NOTE: Process expressions (limited to 3 due to BPF constraints)
     if len(exprs) > 3:
@@ -57,10 +57,10 @@ def handle_fstring_print(
         arg_value = _prepare_expr_args(
             expr,
             func,
-            module,
+            compilation_context.module,
             builder,
             local_sym_tab,
-            struct_sym_tab,
+            compilation_context.struct_sym_tab,
         )
         args.append(arg_value)
 
