@@ -31,7 +31,7 @@ def is_map(func_node):
     )
 
 
-def create_bpf_map(module, map_name, map_params):
+def create_bpf_map(compilation_context, map_name, map_params):
     """Create a BPF map in the module with given parameters and debug info"""
 
     # Create the anonymous struct type for BPF map
@@ -40,7 +40,9 @@ def create_bpf_map(module, map_name, map_params):
     )
 
     # Create the global variable
-    map_global = ir.GlobalVariable(module, map_struct_type, name=map_name)
+    map_global = ir.GlobalVariable(
+        compilation_context.module, map_struct_type, name=map_name
+    )
     map_global.linkage = "dso_local"
     map_global.global_constant = False
     map_global.initializer = ir.Constant(map_struct_type, None)
@@ -51,11 +53,13 @@ def create_bpf_map(module, map_name, map_params):
     return MapSymbol(type=map_params["type"], sym=map_global, params=map_params)
 
 
-def _parse_map_params(rval, compilation_context, expected_args=None):
+def _parse_map_params(rval, expected_args=None):
     """Parse map parameters from call arguments and keywords."""
 
     params = {}
-    handler = compilation_context.vmlinux_handler
+
+    # TODO: Replace it with compilation_context.vmlinux_handler someday?
+    handler = VmlinuxHandlerRegistry.get_handler()
     # Parse positional arguments
     if expected_args:
         for i, arg_name in enumerate(expected_args):
@@ -82,14 +86,6 @@ def _parse_map_params(rval, compilation_context, expected_args=None):
 def _get_vmlinux_enum(handler, name):
     if handler and handler.is_vmlinux_enum(name):
         return handler.get_vmlinux_enum_value(name)
-
-    # Fallback to VmlinuxHandlerRegistry if handler invalid
-    # This is for backward compatibility or if refactoring isn't complete
-    if (
-        VmlinuxHandlerRegistry.get_handler()
-        and VmlinuxHandlerRegistry.get_handler().is_vmlinux_enum(name)
-    ):
-        return VmlinuxHandlerRegistry.get_handler().get_vmlinux_enum_value(name)
     return None
 
 
@@ -97,9 +93,7 @@ def _get_vmlinux_enum(handler, name):
 def process_ringbuf_map(map_name, rval, compilation_context):
     """Process a BPF_RINGBUF map declaration"""
     logger.info(f"Processing Ringbuf: {map_name}")
-    map_params = _parse_map_params(
-        rval, compilation_context, expected_args=["max_entries"]
-    )
+    map_params = _parse_map_params(rval, expected_args=["max_entries"])
     map_params["type"] = BPFMapType.RINGBUF
 
     # NOTE: constraints borrowed from https://docs.ebpf.io/linux/map-type/BPF_MAP_TYPE_RINGBUF/
@@ -115,13 +109,12 @@ def process_ringbuf_map(map_name, rval, compilation_context):
 
     logger.info(f"Ringbuf map parameters: {map_params}")
 
-    map_global = create_bpf_map(compilation_context.module, map_name, map_params)
+    map_global = create_bpf_map(compilation_context, map_name, map_params)
     create_ringbuf_debug_info(
-        compilation_context.module,
+        compilation_context,
         map_global.sym,
         map_name,
         map_params,
-        compilation_context.structs_sym_tab,
     )
     return map_global
 
@@ -130,20 +123,17 @@ def process_ringbuf_map(map_name, rval, compilation_context):
 def process_hash_map(map_name, rval, compilation_context):
     """Process a BPF_HASH map declaration"""
     logger.info(f"Processing HashMap: {map_name}")
-    map_params = _parse_map_params(
-        rval, compilation_context, expected_args=["key", "value", "max_entries"]
-    )
+    map_params = _parse_map_params(rval, expected_args=["key", "value", "max_entries"])
     map_params["type"] = BPFMapType.HASH
 
     logger.info(f"Map parameters: {map_params}")
-    map_global = create_bpf_map(compilation_context.module, map_name, map_params)
+    map_global = create_bpf_map(compilation_context, map_name, map_params)
     # Generate debug info for BTF
     create_map_debug_info(
-        compilation_context.module,
+        compilation_context,
         map_global.sym,
         map_name,
         map_params,
-        compilation_context.structs_sym_tab,
     )
     return map_global
 
@@ -152,20 +142,17 @@ def process_hash_map(map_name, rval, compilation_context):
 def process_perf_event_map(map_name, rval, compilation_context):
     """Process a BPF_PERF_EVENT_ARRAY map declaration"""
     logger.info(f"Processing PerfEventArray: {map_name}")
-    map_params = _parse_map_params(
-        rval, compilation_context, expected_args=["key_size", "value_size"]
-    )
+    map_params = _parse_map_params(rval, expected_args=["key_size", "value_size"])
     map_params["type"] = BPFMapType.PERF_EVENT_ARRAY
 
     logger.info(f"Map parameters: {map_params}")
-    map_global = create_bpf_map(compilation_context.module, map_name, map_params)
+    map_global = create_bpf_map(compilation_context, map_name, map_params)
     # Generate debug info for BTF
     create_map_debug_info(
-        compilation_context.module,
+        compilation_context,
         map_global.sym,
         map_name,
         map_params,
-        compilation_context.structs_sym_tab,
     )
     return map_global
 
