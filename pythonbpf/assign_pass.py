@@ -45,7 +45,6 @@ def handle_struct_field_assignment(
     if _is_char_array(field_type) and _is_i8_ptr(val_type):
         _copy_string_to_char_array(
             func,
-            compilation_context,
             builder,
             val,
             field_ptr,
@@ -62,7 +61,6 @@ def handle_struct_field_assignment(
 
 def _copy_string_to_char_array(
     func,
-    compilation_context,
     builder,
     src_ptr,
     dst_ptr,
