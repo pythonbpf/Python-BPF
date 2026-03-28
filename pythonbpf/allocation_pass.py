@@ -298,15 +298,6 @@ def allocate_temp_pool(builder, max_temps, local_sym_tab):
             logger.debug(f"Allocated temp variable: {temp_name}")
 
 
-def _get_alignment(tmp_type):
-    """Return alignment for a given type."""
-    if isinstance(tmp_type, ir.PointerType):
-        return 8
-    elif isinstance(tmp_type, ir.IntType):
-        return tmp_type.width // 8
-    return 8
-
-
 def _allocate_for_name(builder, var_name, rval, local_sym_tab):
     """Allocate memory for variable-to-variable assignment (b = a)."""
     source_var = rval.id
@@ -327,16 +318,6 @@ def _allocate_for_name(builder, var_name, rval, local_sym_tab):
     logger.info(
         f"Pre-allocated {var_name} from {source_var} with type {source_symbol.ir_type}"
     )
-
-
-def _allocate_with_type(builder, var_name, ir_type):
-    """Allocate memory for a variable with a specific type."""
-    var = builder.alloca(ir_type, name=var_name)
-    if isinstance(ir_type, ir.IntType):
-        var.align = ir_type.width // 8
-    elif isinstance(ir_type, ir.PointerType):
-        var.align = 8
-    return var
 
 
 def _allocate_for_attribute(
@@ -477,3 +458,20 @@ def _allocate_for_attribute(
     logger.info(
         f"Pre-allocated {var_name} from {struct_var}.{field_name} with type {alloc_type}"
     )
+
+
+def _allocate_with_type(builder, var_name, ir_type):
+    """Allocate variable with appropriate alignment for type."""
+    var = builder.alloca(ir_type, name=var_name)
+    var.align = _get_alignment(ir_type)
+    return var
+
+
+def _get_alignment(ir_type):
+    """Get appropriate alignment for IR type."""
+    if isinstance(ir_type, ir.IntType):
+        return ir_type.width // 8
+    elif isinstance(ir_type, ir.ArrayType) and isinstance(ir_type.element, ir.IntType):
+        return ir_type.element.width // 8
+    else:
+        return 8  # Default: pointer size
