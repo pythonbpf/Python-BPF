@@ -10,32 +10,6 @@ from pythonbpf.expr import (
 logger = logging.getLogger(__name__)
 
 
-# NOTE: ScratchPoolManager is now in context.py
-
-
-def get_ptr_from_arg(arg, compilation_context, builder, local_sym_tab):
-    """Helper to get a pointer value from an argument."""
-    # This is a bit duplicative of logic in eval_expr but simplified for helpers
-    # We might need to handle more cases here or defer to eval_expr
-
-    # Simple check for name
-    if isinstance(arg, ast.Name):
-        if arg.id in local_sym_tab:
-            sym = local_sym_tab[arg.id]
-            if isinstance(sym.ir_type, ir.PointerType):
-                return builder.load(sym.var)
-            # If it's an array/struct we might need GEP depending on how it was allocated
-            # For now assume load returns the pointer/value
-            return builder.load(sym.var)
-
-    # Use eval_expr for general case
-    val = eval_expr(None, compilation_context, builder, arg, local_sym_tab)
-    if val and isinstance(val[0].type, ir.PointerType):
-        return val[0]
-
-    return None
-
-
 # ============================================================================
 # Argument Preparation
 # ============================================================================
@@ -77,10 +51,7 @@ def get_or_create_ptr_from_arg(
     sz = None
     if isinstance(arg, ast.Name):
         # Stack space is already allocated
-        if arg.id in local_sym_tab:
-            ptr = local_sym_tab[arg.id].var
-        else:
-            raise ValueError(f"Variable '{arg.id}' not found")
+        ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
     elif isinstance(arg, ast.Constant) and isinstance(arg.value, int):
         int_width = 64  # Default to i64
         if expected_type and isinstance(expected_type, ir.IntType):
@@ -335,6 +306,22 @@ def _is_char_array(ir_type):
         and isinstance(ir_type.element, ir.IntType)
         and ir_type.element.width == 8
     )
+
+
+def get_ptr_from_arg(arg, func, compilation_context, builder, local_sym_tab):
+    """Evaluate argument and return pointer value"""
+
+    result = eval_expr(func, compilation_context, builder, arg, local_sym_tab)
+
+    if not result:
+        raise ValueError("Failed to evaluate argument")
+
+    val, val_type = result
+
+    if not isinstance(val_type, ir.PointerType):
+        raise ValueError(f"Expected pointer type, got {val_type}")
+
+    return val, val_type
 
 
 def get_int_value_from_arg(arg, func, compilation_context, builder, local_sym_tab):
