@@ -325,8 +325,6 @@ def process_func_body(
                     f"Unsupported annotation type: {ast.dump(context_arg.annotation)}"
                 )
 
-            # Use context's handler if available, else usage of VmlinuxHandlerRegistry
-            # For now relying on VmlinuxHandlerRegistry which relies on codegen setting it
             if VmlinuxHandlerRegistry.is_vmlinux_struct(context_type_name):
                 resolved_type = VmlinuxHandlerRegistry.get_struct_type(
                     context_type_name
