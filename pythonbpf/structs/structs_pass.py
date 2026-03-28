@@ -22,7 +22,7 @@ def structs_proc(tree, compilation_context, chunks):
     for cls_node in chunks:
         if is_bpf_struct(cls_node):
             logger.info(f"Found BPF struct: {cls_node.name}")
-            struct_info = process_bpf_struct(cls_node, compilation_context)
+            struct_info = process_bpf_struct(cls_node)
             structs_sym_tab[cls_node.name] = struct_info
 
     return structs_sym_tab
@@ -35,7 +35,7 @@ def is_bpf_struct(cls_node):
     )
 
 
-def process_bpf_struct(cls_node, compilation_context):
+def process_bpf_struct(cls_node):
     """Process a single BPF struct definition"""
 
     fields = parse_struct_fields(cls_node)
