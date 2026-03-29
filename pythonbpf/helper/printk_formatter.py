@@ -9,8 +9,9 @@ from pythonbpf.helper.helper_utils import get_char_array_ptr_and_size
 logger = logging.getLogger(__name__)
 
 
-def simple_string_print(string_value, module, builder, func):
+def simple_string_print(string_value, compilation_context, builder, func):
     """Prepare arguments for bpf_printk from a simple string value"""
+    module = compilation_context.module
     fmt_str = string_value + "\n\0"
     fmt_ptr = _create_format_string_global(fmt_str, func, module, builder)
 
@@ -20,11 +21,10 @@ def simple_string_print(string_value, module, builder, func):
 
 def handle_fstring_print(
     joined_str,
-    module,
+    compilation_context,
     builder,
     func,
     local_sym_tab=None,
-    struct_sym_tab=None,
 ):
     """Handle f-string formatting for bpf_printk emitter."""
     fmt_parts = []
@@ -41,13 +41,13 @@ def handle_fstring_print(
                 fmt_parts,
                 exprs,
                 local_sym_tab,
-                struct_sym_tab,
+                compilation_context.structs_sym_tab,
             )
         else:
             raise NotImplementedError(f"Unsupported f-string value type: {type(value)}")
 
     fmt_str = "".join(fmt_parts)
-    args = simple_string_print(fmt_str, module, builder, func)
+    args = simple_string_print(fmt_str, compilation_context, builder, func)
 
     # NOTE: Process expressions (limited to 3 due to BPF constraints)
     if len(exprs) > 3:
@@ -55,12 +55,7 @@ def handle_fstring_print(
 
     for expr in exprs[:3]:
         arg_value = _prepare_expr_args(
-            expr,
-            func,
-            module,
-            builder,
-            local_sym_tab,
-            struct_sym_tab,
+            expr, func, compilation_context, builder, local_sym_tab
         )
         args.append(arg_value)
 
@@ -216,19 +211,19 @@ def _create_format_string_global(fmt_str, func, module, builder):
     return builder.bitcast(fmt_gvar, ir.PointerType())
 
 
-def _prepare_expr_args(expr, func, module, builder, local_sym_tab, struct_sym_tab):
+def _prepare_expr_args(expr, func, compilation_context, builder, local_sym_tab):
     """Evaluate and prepare an expression to use as an arg for bpf_printk."""
 
     # Special case: struct field char array needs pointer to first element
     if isinstance(expr, ast.Attribute):
         char_array_ptr, _ = get_char_array_ptr_and_size(
-            expr, builder, local_sym_tab, struct_sym_tab, func
+            expr, builder, local_sym_tab, compilation_context, func
         )
         if char_array_ptr:
             return char_array_ptr
 
     # Regular expression evaluation
-    val, _ = eval_expr(func, module, builder, expr, local_sym_tab, None, struct_sym_tab)
+    val, _ = eval_expr(func, compilation_context, builder, expr, local_sym_tab)
 
     if not val:
         logger.warning("Failed to evaluate expression for bpf_printk, defaulting to 0")

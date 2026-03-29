@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def handle_struct_field_assignment(
-    func, module, builder, target, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+    func, compilation_context, builder, target, rval, local_sym_tab
 ):
     """Handle struct field assignment (obj.field = value)."""
 
@@ -24,7 +24,7 @@ def handle_struct_field_assignment(
         return
 
     struct_type = local_sym_tab[var_name].metadata
-    struct_info = structs_sym_tab[struct_type]
+    struct_info = compilation_context.structs_sym_tab[struct_type]
 
     if field_name not in struct_info.fields:
         logger.error(f"Field '{field_name}' not found in struct '{struct_type}'")
@@ -33,9 +33,7 @@ def handle_struct_field_assignment(
     # Get field pointer and evaluate value
     field_ptr = struct_info.gep(builder, local_sym_tab[var_name].var, field_name)
     field_type = struct_info.field_type(field_name)
-    val_result = eval_expr(
-        func, module, builder, rval, local_sym_tab, map_sym_tab, structs_sym_tab
-    )
+    val_result = eval_expr(func, compilation_context, builder, rval, local_sym_tab)
 
     if val_result is None:
         logger.error(f"Failed to evaluate value for {var_name}.{field_name}")
@@ -47,14 +45,11 @@ def handle_struct_field_assignment(
     if _is_char_array(field_type) and _is_i8_ptr(val_type):
         _copy_string_to_char_array(
             func,
-            module,
             builder,
             val,
             field_ptr,
             field_type,
             local_sym_tab,
-            map_sym_tab,
-            structs_sym_tab,
         )
         logger.info(f"Copied string to char array {var_name}.{field_name}")
         return
@@ -66,14 +61,11 @@ def handle_struct_field_assignment(
 
 def _copy_string_to_char_array(
     func,
-    module,
     builder,
     src_ptr,
     dst_ptr,
     array_type,
     local_sym_tab,
-    map_sym_tab,
-    struct_sym_tab,
 ):
     """Copy string (i8*) to char array ([N x i8]) using bpf_probe_read_kernel_str"""
 
@@ -109,7 +101,7 @@ def _is_i8_ptr(ir_type):
 
 
 def handle_variable_assignment(
-    func, module, builder, var_name, rval, local_sym_tab, map_sym_tab, structs_sym_tab
+    func, compilation_context, builder, var_name, rval, local_sym_tab
 ):
     """Handle single named variable assignment."""
 
@@ -119,6 +111,8 @@ def handle_variable_assignment(
 
     var_ptr = local_sym_tab[var_name].var
     var_type = local_sym_tab[var_name].ir_type
+
+    structs_sym_tab = compilation_context.structs_sym_tab
 
     # NOTE: Special case for struct initialization
     if isinstance(rval, ast.Call) and isinstance(rval.func, ast.Name):
@@ -142,9 +136,7 @@ def handle_variable_assignment(
             logger.info(f"Assigned char array pointer to {var_name}")
             return True
 
-    val_result = eval_expr(
-        func, module, builder, rval, local_sym_tab, map_sym_tab, structs_sym_tab
-    )
+    val_result = eval_expr(func, compilation_context, builder, rval, local_sym_tab)
     if val_result is None:
         logger.error(f"Failed to evaluate value for {var_name}")
         return False

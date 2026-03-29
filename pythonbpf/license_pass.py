@@ -23,7 +23,7 @@ def emit_license(module: ir.Module, license_str: str):
     return gvar
 
 
-def license_processing(tree, module):
+def license_processing(tree, compilation_context):
     """Process the LICENSE function decorated with @bpf and @bpfglobal and return the section name"""
     count = 0
     for node in tree.body:
@@ -42,12 +42,14 @@ def license_processing(tree, module):
                         and isinstance(node.body[0].value, ast.Constant)
                         and isinstance(node.body[0].value.value, str)
                     ):
-                        emit_license(module, node.body[0].value.value)
+                        emit_license(
+                            compilation_context.module, node.body[0].value.value
+                        )
                         return "LICENSE"
                     else:
-                        logger.info("ERROR: LICENSE() must return a string literal")
-                        return None
+                        raise SyntaxError(
+                            "ERROR: LICENSE() must return a string literal"
+                        )
                 else:
-                    logger.info("ERROR: LICENSE already defined")
-                    return None
+                    raise SyntaxError("ERROR: Multiple LICENSE globals defined")
     return None

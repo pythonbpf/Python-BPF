@@ -6,9 +6,10 @@ from .map_types import BPFMapType
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-def create_map_debug_info(module, map_global, map_name, map_params, structs_sym_tab):
+def create_map_debug_info(compilation_context, map_global, map_name, map_params):
     """Generate debug info metadata for BPF maps HASH and PERF_EVENT_ARRAY"""
-    generator = DebugInfoGenerator(module)
+    generator = DebugInfoGenerator(compilation_context.module)
+    structs_sym_tab = compilation_context.structs_sym_tab
     logger.info(f"Creating debug info for map {map_name} with params {map_params}")
     uint_type = generator.get_uint32_type()
     array_type = generator.create_array_type(
@@ -77,11 +78,9 @@ def create_map_debug_info(module, map_global, map_name, map_params, structs_sym_
 # Ideally we should expose a single create_map_debug_info function that handles all map types.
 # We can probably use a registry pattern to register different map types and their debug info generators.
 # map_params["type"] will be used to determine which generator to use.
-def create_ringbuf_debug_info(
-    module, map_global, map_name, map_params, structs_sym_tab
-):
+def create_ringbuf_debug_info(compilation_context, map_global, map_name, map_params):
     """Generate debug information metadata for BPF RINGBUF map"""
-    generator = DebugInfoGenerator(module)
+    generator = DebugInfoGenerator(compilation_context.module)
 
     int_type = generator.get_int32_type()
 

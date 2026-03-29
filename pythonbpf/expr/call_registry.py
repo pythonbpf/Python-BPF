@@ -9,12 +9,8 @@ class CallHandlerRegistry:
         cls._handler = handler
 
     @classmethod
-    def handle_call(
-        cls, call, module, builder, func, local_sym_tab, map_sym_tab, structs_sym_tab
-    ):
+    def handle_call(cls, call, compilation_context, builder, func, local_sym_tab):
         """Handle a call using the registered handler"""
         if cls._handler is None:
             return None
-        return cls._handler(
-            call, module, builder, func, local_sym_tab, map_sym_tab, structs_sym_tab
-        )
+        return cls._handler(call, compilation_context, builder, func, local_sym_tab)
