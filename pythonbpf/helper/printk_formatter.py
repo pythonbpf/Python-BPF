@@ -41,7 +41,7 @@ def handle_fstring_print(
                 fmt_parts,
                 exprs,
                 local_sym_tab,
-                compilation_context.struct_sym_tab,
+                compilation_context.structs_sym_tab,
             )
         else:
             raise NotImplementedError(f"Unsupported f-string value type: {type(value)}")
@@ -60,7 +60,7 @@ def handle_fstring_print(
             compilation_context.module,
             builder,
             local_sym_tab,
-            compilation_context.struct_sym_tab,
+            compilation_context.structs_sym_tab,
         )
         args.append(arg_value)
 
