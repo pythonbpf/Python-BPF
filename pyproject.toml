@@ -53,9 +53,8 @@ include = ["pythonbpf*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
 markers = [
     "verifier: requires sudo/root for kernel verifier tests (not run by default)",
     "vmlinux: requires vmlinux.py for current kernel",
