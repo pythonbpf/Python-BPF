@@ -41,7 +41,29 @@ docs = [
     "sphinx-rtd-theme>=2.0",
     "sphinx-copybutton",
 ]
+test = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["pythonbpf*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["test_*.py"]
+markers = [
+    "verifier: requires sudo/root for kernel verifier tests (not run by default)",
+    "vmlinux: requires vmlinux.py for current kernel",
+]
+log_cli = false
+
+[tool.coverage.run]
+source = ["pythonbpf"]
+omit = ["*/vmlinux*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

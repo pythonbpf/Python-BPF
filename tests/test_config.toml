@@ -1,0 +1,22 @@
+# test_config.toml
+#
+# [xfail]  — tests expected to fail.
+#   key   = path relative to tests/
+#   value = {reason = "...", level = "ir" | "llc"}
+#     level "ir"  = fails during pythonbpf IR generation (exception or ERROR log)
+#     level "llc" = IR generates but llc rejects it
+#
+
+[xfail]
+
+"failing_tests/conditionals/struct_ptr.py" = {reason = "Struct pointer used directly as boolean condition not supported", level = "ir"}
+
+"failing_tests/license.py" = {reason = "Missing LICENSE global produces IR that llc rejects — should be caught earlier with a clear error message", level = "llc"}
+
+"failing_tests/undeclared_values.py" = {reason = "Undeclared variable used in f-string — should raise SyntaxError (correct behaviour, test documents it)", level = "ir"}
+
+"failing_tests/vmlinux/args_test.py" = {reason = "struct_trace_event_raw_sys_enter args field access not supported", level = "ir"}
+
+"failing_tests/vmlinux/assignment_handling.py" = {reason = "Assigning vmlinux enum value (XDP_PASS) to a local variable not yet supported", level = "ir"}
+
+"failing_tests/xdp_pass.py" = {reason = "XDP program using vmlinux structs (struct_xdp_md) and complex map/struct interaction not yet supported", level = "ir"}
