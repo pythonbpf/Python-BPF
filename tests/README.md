@@ -98,19 +98,3 @@ tests/
 ├── passing_tests/             ← programs that should compile and verify cleanly
 └── failing_tests/             ← programs with known issues (declared in test_config.toml)
 ```
-
-## Known regressions (as of compilation-context PR merge)
-
-Three tests in `passing_tests/` currently fail — these are bugs to fix, not xfails:
-
-| Test | Error |
-|---|---|
-| `passing_tests/assign/comprehensive.py` | `TypeError: cannot store i64* to i64*` |
-| `passing_tests/helpers/bpf_probe_read.py` | `ValueError: 'ctx' not in local symbol table` |
-| `passing_tests/vmlinux/register_state_dump.py` | `KeyError: 'cs'` |
-
-Nine tests in `failing_tests/` were fixed by the compilation-context PR (they show as XPASS). They can be moved to `passing_tests/` when convenient:
-
-`assign/retype.py`, `conditionals/helper_cond.py`, `conditionals/oneline.py`,
-`direct_assign.py`, `globals.py`, `if.py`, `license.py` (IR only), `named_arg.py`,
-`xdp/xdp_test_1.py`
