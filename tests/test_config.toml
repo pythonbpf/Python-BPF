@@ -6,17 +6,6 @@
 #     level "ir"  = fails during pythonbpf IR generation (exception or ERROR log)
 #     level "llc" = IR generates but llc rejects it
 #
-# Tests removed from this list because they now pass (fixed by compilation-context PR):
-#   failing_tests/assign/retype.py
-#   failing_tests/conditionals/helper_cond.py
-#   failing_tests/conditionals/oneline.py
-#   failing_tests/direct_assign.py
-#   failing_tests/globals.py
-#   failing_tests/if.py
-#   failing_tests/license.py
-#   failing_tests/named_arg.py
-#   failing_tests/xdp/xdp_test_1.py
-# These files can be moved to passing_tests/ when convenient.
 
 [xfail]
 
