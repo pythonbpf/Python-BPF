@@ -7,15 +7,15 @@ from tests.framework.bpf_test_case import BpfTestCase
 TESTS_DIR = Path(__file__).parent.parent
 CONFIG_FILE = TESTS_DIR / "test_config.toml"
 
-VMLINUX_TEST_DIRS = {"passing_tests/vmlinux"}
-VMLINUX_TEST_PREFIXES = {
+VMLINUX_TEST_DIRS_PASSING = {"passing_tests/vmlinux"}
+VMLINUX_TEST_DIRS_FAILING = {
     "failing_tests/vmlinux",
     "failing_tests/xdp",
 }
 
 
 def _is_vmlinux_test(rel_path: str) -> bool:
-    for prefix in VMLINUX_TEST_DIRS | VMLINUX_TEST_PREFIXES:
+    for prefix in VMLINUX_TEST_DIRS_PASSING | VMLINUX_TEST_DIRS_FAILING:
         if rel_path.startswith(prefix):
             return True
     return False
