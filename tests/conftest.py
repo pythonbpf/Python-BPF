@@ -31,19 +31,12 @@ except ImportError:
     VMLINUX_AVAILABLE = False
 
 
-# ── shared fixture: collected test cases ───────────────────────────────────
-
-
-def _all_cases():
-    return collect_all_test_files()
-
-
 # ── pytest_generate_tests: parametrize on bpf_test_file ───────────────────
 
 
 def pytest_generate_tests(metafunc):
     if "bpf_test_file" in metafunc.fixturenames:
-        cases = _all_cases()
+        cases = collect_all_test_files()
         metafunc.parametrize(
             "bpf_test_file",
             [c.path for c in cases],
@@ -55,7 +48,7 @@ def pytest_generate_tests(metafunc):
 
 
 def pytest_collection_modifyitems(items):
-    case_map = {c.rel_path: c for c in _all_cases()}
+    case_map = {c.rel_path: c for c in collect_all_test_files()}
 
     for item in items:
         # Resolve the test case from the parametrize ID embedded in the node id.
