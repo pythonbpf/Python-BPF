@@ -25,19 +25,11 @@ from tests.framework.verifier import verify_object
 
 
 def _passing_test_files():
-    return [
-        c.path
-        for c in collect_all_test_files()
-        if not c.is_expected_fail and not c.needs_vmlinux
-    ]
+    return [c.path for c in collect_all_test_files() if not c.is_expected_fail]
 
 
 def _passing_test_ids():
-    return [
-        c.rel_path
-        for c in collect_all_test_files()
-        if not c.is_expected_fail and not c.needs_vmlinux
-    ]
+    return [c.rel_path for c in collect_all_test_files() if not c.is_expected_fail]
 
 
 def _get_rejection_reason(verifier_test_file: Path, output) -> str:
