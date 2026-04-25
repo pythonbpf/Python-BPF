@@ -2,7 +2,7 @@ from pathlib import Path
 
 import tomllib
 
-from .bpf_test_case import BpfTestCase
+from tests.framework.bpf_test_case import BpfTestCase
 
 TESTS_DIR = Path(__file__).parent.parent
 CONFIG_FILE = TESTS_DIR / "test_config.toml"
