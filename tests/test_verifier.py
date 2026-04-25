@@ -40,6 +40,17 @@ def _passing_test_ids():
     ]
 
 
+def _get_rejection_reason(verifier_test_file: Path, output) -> str:
+    # Extract the reason for rejection from the verifier output
+    errstr = f"Verifier rejected {verifier_test_file.name}:\n"
+    errstr += "=" * 80 + "\n"
+    errstr += f"stdout:\n{output.stdout}\n"
+    errstr += "=" * 80 + "\n"
+    errstr += f"stderr:\n{output.stderr}\n"
+    errstr += "=" * 80 + "\n"
+    return errstr
+
+
 @pytest.mark.verifier
 @pytest.mark.parametrize(
     "verifier_test_file",
@@ -62,4 +73,4 @@ def test_kernel_verifier(verifier_test_file: Path, tmp_path, caplog):
     assert obj_path.exists() and obj_path.stat().st_size > 0
 
     ok, output = verify_object(obj_path)
-    assert ok, f"Kernel verifier rejected {verifier_test_file.name}:\n{output}"
+    assert ok, _get_rejection_reason(verifier_test_file, output)

@@ -1,5 +1,6 @@
 import subprocess
 import uuid
+from collections import namedtuple
 from pathlib import Path
 
 
@@ -17,7 +18,8 @@ def verify_object(obj_path: Path) -> tuple[bool, str]:
             text=True,
             timeout=30,
         )
-        output = result.stdout + result.stderr
+        Output = namedtuple("Output", ["stdout", "stderr"])
+        output = Output(stdout=result.stdout, stderr=result.stderr)
         return result.returncode == 0, output
     except subprocess.TimeoutExpired:
         return False, "bpftool timed out after 30s"
