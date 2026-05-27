@@ -7,7 +7,7 @@ clean:
 	rm -rf htmlcov .coverage
 
 test:
-	pytest tests/ -v --tb=short -m "not verifier"
+	pytest tests/ -W ignore::DeprecationWarning -v --tb=short -m "not verifier"
 
 test-cov:
 	pytest tests/ -v --tb=short -m "not verifier" \
