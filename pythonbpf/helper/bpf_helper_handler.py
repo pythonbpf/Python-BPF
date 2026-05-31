@@ -113,7 +113,12 @@ def bpf_map_lookup_elem_emitter(
             f"Map lookup expects exactly one argument (key), got {len(call.args)}"
         )
     key_ptr = get_or_create_ptr_from_arg(
-        func, compilation_context, call.args[0], builder, local_sym_tab
+        func,
+        compilation_context,
+        call.args[0],
+        builder,
+        local_sym_tab,
+        expected_type=ir.IntType(64),
     )
     map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
 
@@ -215,10 +220,20 @@ def bpf_map_update_elem_emitter(
     flags_arg = call.args[2] if len(call.args) > 2 else None
 
     key_ptr = get_or_create_ptr_from_arg(
-        func, compilation_context, key_arg, builder, local_sym_tab
+        func,
+        compilation_context,
+        key_arg,
+        builder,
+        local_sym_tab,
+        expected_type=ir.IntType(64),
     )
     value_ptr = get_or_create_ptr_from_arg(
-        func, compilation_context, value_arg, builder, local_sym_tab
+        func,
+        compilation_context,
+        value_arg,
+        builder,
+        local_sym_tab,
+        expected_type=ir.IntType(64),
     )
     flags_val = get_flags_val(flags_arg, builder, local_sym_tab)
 
