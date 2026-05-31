@@ -111,6 +111,8 @@ def get_or_create_ptr_from_arg(
             _, expected_depth = get_base_type_and_depth(expected_type)
             if val_depth > expected_depth:
                 val = deref_to_depth(func, builder, val, val_depth - expected_depth)
+                if val is None:
+                    raise ValueError("Failed to dereference pointer to expected depth")
 
         ptr, temp_name = compilation_context.scratch_pool.get_next_temp(
             local_sym_tab, expected_type
