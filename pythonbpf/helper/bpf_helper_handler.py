@@ -282,7 +282,12 @@ def bpf_map_delete_elem_emitter(
             f"Map delete expects exactly one argument (key), got {len(call.args)}"
         )
     key_ptr = get_or_create_ptr_from_arg(
-        func, compilation_context, call.args[0], builder, local_sym_tab
+        func,
+        compilation_context,
+        call.args[0],
+        builder,
+        local_sym_tab,
+        expected_type=ir.IntType(64),
     )
     map_void_ptr = builder.bitcast(map_ptr, ir.PointerType())
 
