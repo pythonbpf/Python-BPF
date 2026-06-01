@@ -114,7 +114,9 @@ def get_or_create_ptr_from_arg(
                 if val is None:
                     raise ValueError("Failed to dereference pointer to expected depth")
         else:
-            logger.debug("Expected Type not known / Not a pointer, skipping dereference")
+            logger.debug(
+                "Expected Type not known / Not a pointer, skipping dereference"
+            )
 
         ptr, temp_name = compilation_context.scratch_pool.get_next_temp(
             local_sym_tab, expected_type
