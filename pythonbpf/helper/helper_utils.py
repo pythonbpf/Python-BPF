@@ -6,6 +6,8 @@ from pythonbpf.expr import (
     eval_expr,
     access_struct_field,
 )
+from pythonbpf.expr.ir_ops import deref_to_depth
+from pythonbpf.expr.type_normalization import get_base_type_and_depth
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +105,18 @@ def get_or_create_ptr_from_arg(
             val = val[0]
         if val is None:
             raise ValueError("Failed to evaluate expression for helper arg.")
+
+        if expected_type and isinstance(val.type, ir.PointerType):
+            _, val_depth = get_base_type_and_depth(val.type)
+            _, expected_depth = get_base_type_and_depth(expected_type)
+            if val_depth > expected_depth:
+                val = deref_to_depth(func, builder, val, val_depth - expected_depth)
+                if val is None:
+                    raise ValueError("Failed to dereference pointer to expected depth")
+        else:
+            logger.debug(
+                "Expected Type not known / Not a pointer, skipping dereference"
+            )
 
         ptr, temp_name = compilation_context.scratch_pool.get_next_temp(
             local_sym_tab, expected_type
