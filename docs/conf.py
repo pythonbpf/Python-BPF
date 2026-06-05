@@ -15,8 +15,8 @@ sys.path.insert(0, os.path.abspath(".."))
 project = "PythonBPF"
 copyright = "2026, Pragyansh Chaturvedi, Varun Mallya"
 author = "Pragyansh Chaturvedi, Varun Mallya"
-release = "0.1.8"
-version = "0.1.8"
+release = "0.1.9"
+version = "0.1.9"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
