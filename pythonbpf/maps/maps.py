@@ -26,6 +26,26 @@ class HashMap:
             raise KeyError(f"Key {key} not found in map")
 
 
+class ArrayMap:
+    def __init__(self, key, value, max_entries):
+        self.key = key
+        self.value = value
+        self.max_entries = max_entries
+        self.entries = {}
+
+    def lookup(self, key):
+        return self.entries.get(key)
+
+    def update(self, key, value, flags=None):
+        self.entries[key] = value
+
+    def delete(self, key):
+        if key in self.entries:
+            del self.entries[key]
+        else:
+            raise KeyError(f"Key {key} not found in map")
+
+
 class PerfEventArray:
     def __init__(self, key_size, value_size):
         self.key_type = key_size

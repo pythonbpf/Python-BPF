@@ -88,6 +88,14 @@ All xfails use `strict = True`: if a test starts **passing** it shows up as **XP
 2. Run `make test` — the file is discovered and tested automatically at all levels.
 3. If the test is expected to fail, add it to `tests/test_config.toml` instead of `passing_tests/`.
 
+## Kernel selftest equivalents
+
+`tests/kernel_selftest_equivalent/` contains PythonBPF versions of important
+kernel BPF selftests from `bpf-next/tools/testing/selftests/bpf`. These tests
+describe features PythonBPF should grow next. They are collected by default and
+must be listed as strict expected failures in `tests/test_config.toml` until the
+corresponding feature lands.
+
 ## Directory structure
 
 ```
@@ -104,5 +112,6 @@ tests/
 │   ├── compiler.py            ← wrappers around compile_to_ir() + _run_llc()
 │   └── verifier.py            ← bpftool subprocess wrapper
 ├── passing_tests/             ← programs that should compile and verify cleanly
-└── failing_tests/             ← programs with known issues (declared in test_config.toml)
+├── failing_tests/             ← programs with known issues (declared in test_config.toml)
+└── kernel_selftest_equivalent/ ← kernel-selftest-inspired feature roadmap tests
 ```
