@@ -138,6 +138,14 @@ def process_hash_map(map_name, rval, compilation_context):
     return map_global
 
 
+@MapProcessorRegistry.register("ArrayMap")
+def process_array_map(map_name, rval, compilation_context):
+    """Document the planned BPF_ARRAY map support with an explicit failure."""
+    raise NotImplementedError(
+        "ArrayMap is not implemented yet; add BPF_MAP_TYPE_ARRAY metadata support"
+    )
+
+
 @MapProcessorRegistry.register("PerfEventArray")
 def process_perf_event_map(map_name, rval, compilation_context):
     """Process a BPF_PERF_EVENT_ARRAY map declaration"""

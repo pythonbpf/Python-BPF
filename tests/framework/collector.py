@@ -33,7 +33,7 @@ def collect_all_test_files() -> list[BpfTestCase]:
     xfail_map: dict = config.get("xfail", {})
 
     cases = []
-    for subdir in ("passing_tests", "failing_tests"):
+    for subdir in ("passing_tests", "failing_tests", "kernel_selftest_equivalent"):
         for py_file in sorted((TESTS_DIR / subdir).rglob("*.py")):
             rel = str(py_file.relative_to(TESTS_DIR))
             needs_vmlinux = _is_vmlinux_test(rel)

@@ -20,3 +20,7 @@
 "failing_tests/vmlinux/assignment_handling.py" = {reason = "Assigning vmlinux enum value (XDP_PASS) to a local variable not yet supported", level = "ir"}
 
 "failing_tests/xdp_pass.py" = {reason = "XDP program using vmlinux structs (struct_xdp_md) and complex map/struct interaction not yet supported", level = "ir"}
+
+"kernel_selftest_equivalent/maps/array_map_lookup_update.py" = {reason = "ArrayMap / BPF_MAP_TYPE_ARRAY support is planned but not implemented yet", level = "ir"}
+
+"kernel_selftest_equivalent/ringbuf/reserve_submit_discard.py" = {reason = "RingBuffer reserve/typed record/discard workflow is planned but not implemented yet", level = "ir"}
