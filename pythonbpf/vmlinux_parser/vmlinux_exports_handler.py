@@ -370,37 +370,62 @@ class VmlinuxHandler:
 
         return value
 
+    def _parsed_members(self, vmlinux_struct_name):
+        """
+        Return the dict of fields the vmlinux parser actually produced for a struct.
+
+        This is the single source of truth for "does the compiler know about this
+        field", as opposed to `hasattr(python_type, ...)` which merely reports what
+        ctypes exposes on the class (including members the parser never registered).
+        """
+        if not self.is_vmlinux_struct(vmlinux_struct_name):
+            raise ValueError(f"{vmlinux_struct_name} is not a vmlinux struct")
+        return self.vmlinux_symtab[vmlinux_struct_name].members
+
+    def _unsupported_field_error(self, vmlinux_struct_name, field_name):
+        """Build an actionable error for a field lookup that failed."""
+        python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
+        if hasattr(python_type, field_name):
+            return ValueError(
+                f"Field {field_name} of vmlinux struct {vmlinux_struct_name} exists in "
+                "vmlinux.py but was not registered by the vmlinux parser, so it cannot "
+                "be accessed yet (unsupported field kind)"
+            )
+        return ValueError(
+            f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
+        )
+
     def has_field(self, struct_name, field_name):
-        """Check if a vmlinux struct has a specific field"""
+        """Check if a vmlinux struct has a specific field the parser understands"""
         if self.is_vmlinux_struct(struct_name):
-            python_type = self.vmlinux_symtab[struct_name].python_type
-            return hasattr(python_type, field_name)
+            return field_name in self.vmlinux_symtab[struct_name].members
         return False
 
     def get_field_type(self, vmlinux_struct_name, field_name):
         """Get the type of a field in a vmlinux struct"""
-        if self.is_vmlinux_struct(vmlinux_struct_name):
-            python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
-            if hasattr(python_type, field_name):
-                return self.vmlinux_symtab[vmlinux_struct_name].members[field_name]
-            else:
-                raise ValueError(
-                    f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
-                )
-        else:
-            raise ValueError(f"{vmlinux_struct_name} is not a vmlinux struct")
+        members = self._parsed_members(vmlinux_struct_name)
+        if field_name in members:
+            return members[field_name]
+        raise self._unsupported_field_error(vmlinux_struct_name, field_name)
 
     def get_field_index(self, vmlinux_struct_name, field_name):
-        """Get the type of a field in a vmlinux struct"""
-        if self.is_vmlinux_struct(vmlinux_struct_name):
-            python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
-            if hasattr(python_type, field_name):
-                return list(
-                    self.vmlinux_symtab[vmlinux_struct_name].members.keys()
-                ).index(field_name)
-            else:
-                raise ValueError(
-                    f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
-                )
-        else:
-            raise ValueError(f"{vmlinux_struct_name} is not a vmlinux struct")
+        """
+        Get the declaration index of a field in a vmlinux struct.
+
+        The index is derived from the ctypes `_fields_` list, i.e. from the C
+        declaration order, rather than from the insertion order of the parsed
+        members dict.
+        """
+        members = self._parsed_members(vmlinux_struct_name)
+        if field_name not in members:
+            raise self._unsupported_field_error(vmlinux_struct_name, field_name)
+
+        python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
+        declared_fields = getattr(python_type, "_fields_", None)
+        if declared_fields is not None:
+            for index, declared in enumerate(declared_fields):
+                if declared[0] == field_name:
+                    return index
+        # No `_fields_` (or the field is not declared at the top level, e.g. it was
+        # flattened out of an anonymous member): fall back to the parsed ordering.
+        return list(members.keys()).index(field_name)
