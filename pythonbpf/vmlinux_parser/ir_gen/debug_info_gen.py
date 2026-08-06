@@ -51,8 +51,25 @@ def debug_info_generation(
         key=lambda item: item[1].offset,
     )
 
+    anonymous_names = set(getattr(struct.ctype_struct, "_anonymous_", None) or ())
+
     for field_name, field in sorted_fields:
         try:
+            if field_name in anonymous_names:
+                # An anonymous member has to reach BTF unnamed and with its own
+                # members, or a `$...:<n>:<m>` access string cannot be resolved
+                # against it at load time.
+                anonymous_member = _anonymous_member_debug_info(
+                    field, generator, generated_debug_info
+                )
+                if anonymous_member is not None:
+                    members.append(anonymous_member)
+                    continue
+                logger.warning(
+                    f"Could not describe anonymous member {struct.name}.{field_name}, "
+                    "falling back to an opaque member"
+                )
+
             # Get appropriate debug type for this field
             field_type = _get_field_debug_type(
                 field_name, field, generator, struct, generated_debug_info
@@ -79,6 +96,89 @@ def debug_info_generation(
     )
 
     return struct_type
+
+
+def _lookup_generated_debug_info(
+    type_name: str, generated_debug_info: List[Tuple[DependencyNode, Any]]
+):
+    """Find already generated debug info for a vmlinux type by name."""
+    for existing_struct, debug_info in generated_debug_info:
+        if existing_struct.name == type_name:
+            return debug_info, existing_struct.__sizeof__() * 8
+    return None
+
+
+def _anonymous_member_debug_info(
+    field,
+    generator: DebugInfoGenerator,
+    generated_debug_info: List[Tuple[DependencyNode, Any]],
+):
+    """
+    Describe an anonymous struct/union member the way a C compiler would.
+
+    The member itself is emitted WITHOUT a name, so it lands in BTF as `(anon)`,
+    and its type is a real composite carrying its own members in declaration
+    order. Both matter: libbpf walks a CO-RE access string by member index into
+    the local type and then matches by name in the target type, so an opaque or
+    named stand-in makes any access through the anonymous member unresolvable.
+
+    Returns None if the member cannot be described faithfully, in which case the
+    caller keeps the previous behaviour.
+    """
+    anonymous_type = field.type
+    declared = getattr(anonymous_type, "_fields_", None)
+    if not declared or not isinstance(anonymous_type, type):
+        return None
+
+    inner_members = []
+    for declared_member in declared:
+        if len(declared_member) != 2:
+            # Bitfield members need BTF bitfield encoding we do not emit yet.
+            return None
+        member_name, member_type = declared_member
+        try:
+            member_offset_bits = getattr(anonymous_type, member_name).offset * 8
+        except AttributeError:
+            return None
+
+        if getattr(member_type, "__module__", None) == "vmlinux":
+            member_type_name = getattr(member_type, "__name__", None)
+            member_debug_type = (
+                _lookup_generated_debug_info(member_type_name, generated_debug_info)
+                if member_type_name
+                else None
+            )
+            if member_debug_type is None:
+                # Keep the member so the indices stay right, but leave its type
+                # opaque, exactly as nested structs are handled elsewhere.
+                member_debug_type = (
+                    generator.create_struct_type([], 0, is_distinct=True),
+                    0,
+                )
+        else:
+            member_debug_type = _get_basic_debug_type(member_type, generator)
+        if not isinstance(member_debug_type, tuple) or len(member_debug_type) != 2:
+            return None
+
+        inner_members.append(
+            generator.create_struct_member_vmlinux(
+                member_name, member_debug_type, member_offset_bits
+            )
+        )
+
+    size_bits = ctypes.sizeof(anonymous_type) * 8
+    if issubclass(anonymous_type, ctypes.Union):
+        composite = generator.create_union_type(
+            inner_members, size_bits, is_distinct=True
+        )
+    else:
+        composite = generator.create_struct_type(
+            inner_members, size_bits, is_distinct=True
+        )
+
+    return generator.create_struct_member_vmlinux(
+        "", (composite, size_bits), field.offset * 8
+    )
 
 
 def _get_field_debug_type(
