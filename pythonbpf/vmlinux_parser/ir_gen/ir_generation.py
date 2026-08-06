@@ -85,10 +85,6 @@ class IRGenerator:
                 # Create a members dictionary for AssignmentInfo
                 members_dict = {}
                 for field_name, field in struct.fields.items():
-                    if field.access_path is not None:
-                        # Member lifted out of an anonymous member. gen_ir does
-                        # not emit a global for it yet, so it stays unexported.
-                        continue
                     # Get the generated field name from our dictionary, or use field_name if not found
                     if (
                         struct.name in self.generated_field_names
@@ -137,8 +133,18 @@ class IRGenerator:
 
         for field_name, field in struct.fields.items():
             if field.access_path is not None:
-                # Member lifted out of an anonymous member. It is not a
-                # top-level field, so it must not consume a field index.
+                # Member lifted out of an anonymous member. Its access string
+                # comes from the recorded path, and it must not consume a
+                # top-level field index.
+                field_co_re_name, returned = self._struct_name_generator(
+                    struct, field, field.access_path[0]
+                )
+                globvar = ir.GlobalVariable(
+                    self.llvm_module, ir.IntType(64), name=field_co_re_name
+                )
+                globvar.linkage = "external"
+                globvar.set_metadata("llvm.preserve.access.index", debug_info)
+                self.generated_field_names[struct.name][field_name] = globvar
                 continue
             # does not take arrays and similar types into consideration yet.
             if callable(field.ctype_complex_type):
@@ -271,12 +277,19 @@ class IRGenerator:
             )
             return name, True
         elif struct.name.startswith("struct_"):
+            if field.access_path is not None:
+                # Field lifted out of an anonymous member: the access string has
+                # to walk into the anonymous member, e.g. `0:17:0` for
+                # `struct pt_regs.cs`, which is member 0 of anonymous member 17.
+                access_string = ":".join(str(index) for index in field.access_path)
+            else:
+                access_string = str(field_index)
             name = (
                 "llvm."
                 + struct.name.removeprefix("struct_")
                 + f":0:{field.offset}"
                 + "$"
-                + f"0:{field_index}"
+                + f"0:{access_string}"
             )
             return name, True
         else:
