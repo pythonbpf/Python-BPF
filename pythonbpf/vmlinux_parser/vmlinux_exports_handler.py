@@ -315,7 +315,7 @@ class VmlinuxHandler:
 
         # Determine the appropriate IR type based on field information
         int_width = 64  # Default to 64-bit
-        needs_zext = False  # Track if we need zero-extension for xdp_md
+        needs_zext = False  # Track if we need zero-extension to a full register
 
         if field_data is not None:
             # Try to determine the size from field metadata
@@ -328,12 +328,14 @@ class VmlinuxHandler:
                         int_width = field_size_bits
                         logger.info(f"Determined field size: {int_width} bits")
 
-                        # Special handling for struct_xdp_md i32 fields
-                        # Load as i32 but extend to i64 before storing
-                        if struct_name == "struct_xdp_md" and int_width == 32:
+                        # Context fields are loaded at their natural width and
+                        # widened to a full 64-bit register, so that everything
+                        # downstream sees one uniform integer type.
+                        if int_width < 64:
                             needs_zext = True
                             logger.info(
-                                "struct_xdp_md i32 field detected, will zero-extend to i64"
+                                f"i{int_width} field {struct_name} detected, "
+                                "will zero-extend to i64"
                             )
                     else:
                         logger.warning(
@@ -363,10 +365,10 @@ class VmlinuxHandler:
         # Load and return the value
         value = builder.load(typed_ptr)
 
-        # Zero-extend i32 to i64 for struct_xdp_md fields
+        # Widen sub-register-width context fields to i64
         if needs_zext:
             value = builder.zext(value, ir.IntType(64))
-            logger.info("Zero-extended i32 value to i64 for struct_xdp_md field")
+            logger.info(f"Zero-extended i{int_width} context field value to i64")
 
         return value
 

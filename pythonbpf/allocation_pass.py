@@ -343,6 +343,9 @@ def _allocate_for_attribute(
         if VmlinuxHandlerRegistry.is_vmlinux_struct(struct_type.__name__):
             # Handle vmlinux struct field access
             vmlinux_struct_name = struct_type.__name__
+            # Same discriminator handle_vmlinux_struct_field uses: a context
+            # argument has no alloca of its own.
+            is_context_field = local_sym_tab[struct_var].var is None
             if not VmlinuxHandlerRegistry.has_field(vmlinux_struct_name, field_name):
                 logger.error(
                     f"Field '{field_name}' not found in vmlinux struct '{vmlinux_struct_name}'"
@@ -364,16 +367,15 @@ def _allocate_for_attribute(
                     field_size_bits = field_size_bytes * 8
 
                     if field_size_bits in [8, 16, 32, 64]:
-                        # Special case: struct_xdp_md i32 fields should allocate as i64
-                        # because load_ctx_field will zero-extend them to i64
-                        if (
-                            vmlinux_struct_name == "struct_xdp_md"
-                            and field_size_bits == 32
-                        ):
+                        # Sub-register-width context fields allocate as i64,
+                        # because load_ctx_field zero-extends them to i64.
+                        # Non-context fields go through load_struct_field, which
+                        # keeps them at their natural width.
+                        if is_context_field and field_size_bits < 64:
                             actual_ir_type = ir.IntType(64)
                             logger.info(
-                                f"Allocating {var_name} as i64 for i32 field from struct_xdp_md.{field_name} "
-                                "(will be zero-extended during load)"
+                                f"Allocating {var_name} as i64 for i{field_size_bits} field from "
+                                f"{vmlinux_struct_name}.{field_name} (will be zero-extended during load)"
                             )
                         else:
                             actual_ir_type = ir.IntType(field_size_bits)
