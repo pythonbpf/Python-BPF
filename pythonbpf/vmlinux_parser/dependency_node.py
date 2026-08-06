@@ -17,6 +17,13 @@ class Field:
     offset: int
     value: Any = None
     ready: bool = False
+    # CO-RE access path from the enclosing struct down to this field, as a tuple
+    # of member indices. `None` means the field is a plain top-level member and
+    # its access path is just its own index in the struct. It is only populated
+    # for fields that live inside an anonymous member and were flattened into
+    # the parent, e.g. `struct pt_regs.cs` is member 0 of anonymous member 17,
+    # so its access_path is (17, 0).
+    access_path: Optional[tuple[int, ...]] = None
 
     def __hash__(self):
         """
@@ -154,6 +161,7 @@ class DependencyNode:
         bitfield_size: Optional[int] = None,
         ready: bool = False,
         offset: int = 0,
+        access_path: Optional[tuple[int, ...]] = None,
     ) -> None:
         """Add a field to the node with an optional initial value and readiness state."""
         if self.depends_on is None:
@@ -168,6 +176,7 @@ class DependencyNode:
             ctype_complex_type=ctype_complex_type,
             bitfield_size=bitfield_size,
             offset=offset,
+            access_path=access_path,
         )
         # Invalidate readiness cache
         self._ready_cache = None
