@@ -43,6 +43,119 @@ def unwrap_pointer_type(type_obj: Any) -> Any:
     return current_type
 
 
+def _is_flattenable_scalar(member_type: Any) -> bool:
+    """
+    Report whether an anonymous member's member can be lifted into the parent.
+
+    Only plain ctypes scalars qualify. Pointers, arrays, function pointers and
+    nested vmlinux structs are deliberately excluded: they need the containing
+    type / array length bookkeeping that the top-level field walk does, and
+    half-registering them would produce silently wrong relocations.
+    """
+    if getattr(member_type, "__module__", None) != ctypes.__name__:
+        return False
+    if not isinstance(member_type, type):
+        return False
+    if issubclass(member_type, (ctypes._Pointer, ctypes.Array)):
+        return False
+    if hasattr(member_type, "_restype_") and hasattr(member_type, "_argtypes_"):
+        return False
+    return True
+
+
+def flatten_anonymous_members(class_obj, dep_node) -> None:
+    """
+    Register the members of a struct's anonymous members as fields of the struct.
+
+    C lets an anonymous struct/union member's members be named directly on the
+    parent (`regs->cs` where `cs` lives inside an anonymous union), and ctypes
+    mirrors that by exposing them on the parent class. The top-level `_fields_`
+    walk only sees the anonymous member itself (`_0`), so those names would
+    otherwise be unknown to the compiler.
+
+    Each flattened member keeps the anonymous member registered as before, is
+    given the ABSOLUTE offset ctypes reports for it on the parent, and records
+    its CO-RE access path as (index of the anonymous member in the parent,
+    index of the member within the anonymous member).
+
+    Members that overlap are expected and correct: in `struct pt_regs`, `cs`
+    and `csx` are both at offset 136. Each keeps its own field.
+
+    This is a no-op for any struct without `_anonymous_`.
+    """
+    anonymous_names = getattr(class_obj, "_anonymous_", None)
+    if not anonymous_names:
+        return
+    declared_fields = getattr(class_obj, "_fields_", None)
+    if not declared_fields:
+        return
+
+    anonymous_names = set(anonymous_names)
+    for parent_index, declared_field in enumerate(declared_fields):
+        parent_name = declared_field[0]
+        if parent_name not in anonymous_names:
+            continue
+        parent_type = declared_field[1]
+        member_fields = getattr(parent_type, "_fields_", None)
+        if not member_fields:
+            logger.warning(
+                f"Anonymous member {dep_node.name}.{parent_name} has no _fields_, "
+                "its members will not be accessible"
+            )
+            continue
+
+        for member_index, member in enumerate(member_fields):
+            member_name = member[0]
+            member_type = member[1]
+            member_bitfield_size = member[2] if len(member) == 3 else None
+
+            if member_name in dep_node.fields:
+                # Never let a flattened member shadow a field we already have.
+                logger.warning(
+                    f"Anonymous member {dep_node.name}.{parent_name}.{member_name} "
+                    f"collides with an existing field of {dep_node.name}, keeping "
+                    "the existing field"
+                )
+                continue
+            if member_bitfield_size is not None:
+                logger.warning(
+                    f"Skipping bitfield {dep_node.name}.{parent_name}.{member_name}: "
+                    "bitfields inside anonymous members are not supported yet"
+                )
+                continue
+            if not _is_flattenable_scalar(member_type):
+                logger.warning(
+                    f"Skipping {dep_node.name}.{parent_name}.{member_name} of type "
+                    f"{member_type}: only scalar ctypes members of anonymous members "
+                    "are supported"
+                )
+                continue
+            if not hasattr(class_obj, member_name):
+                # ctypes did not lift the name onto the parent, so we have no
+                # authoritative absolute offset for it.
+                logger.warning(
+                    f"Skipping {dep_node.name}.{parent_name}.{member_name}: ctypes "
+                    "does not expose it on the parent struct"
+                )
+                continue
+
+            dep_node.add_field(
+                member_name,
+                member_type,
+                ready=False,
+                access_path=(parent_index, member_index),
+            )
+            dep_node.set_field_bitfield_size(member_name, None)
+            # set_field_ready reads the offset straight off the ctypes struct,
+            # which reports the ABSOLUTE offset for a lifted anonymous member.
+            dep_node.set_field_ready(member_name, is_ready=True)
+            logger.debug(
+                f"Flattened {dep_node.name}.{parent_name}.{member_name} at offset "
+                f"{dep_node.fields[member_name].offset} with access path "
+                f"{(parent_index, member_index)}"
+            )
+
+
 def process_vmlinux_class(
     node,
     llvm_module,
@@ -312,6 +425,11 @@ def process_vmlinux_post_ast(
                     raise ValueError(
                         f"{elem_name} with type {elem_type} from module {module_name} not supported in recursive resolver"
                     )
+
+            # Anonymous struct/union members expose their members on the parent
+            # in C and in ctypes, but they are invisible to the top-level
+            # _fields_ walk above. Register them too. No-op without _anonymous_.
+            flatten_anonymous_members(class_obj, new_dep_node)
     elif module_name == ctypes.__name__ or module_name is None:
         # Handle ctypes types - these don't need processing, just return
         logger.debug(f"Skipping ctypes type {current_symbol_name}")

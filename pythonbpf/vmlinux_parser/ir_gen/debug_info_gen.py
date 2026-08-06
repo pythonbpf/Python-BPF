@@ -43,7 +43,13 @@ def debug_info_generation(
     # Process all fields and create members for the struct
     members = []
 
-    sorted_fields = sorted(struct.fields.items(), key=lambda item: item[1].offset)
+    # Members lifted out of an anonymous member are not members of this struct in
+    # DWARF terms; they belong to the anonymous member's own type. Emitting them
+    # here would both duplicate offsets and shift every later member's index.
+    sorted_fields = sorted(
+        (item for item in struct.fields.items() if item[1].access_path is None),
+        key=lambda item: item[1].offset,
+    )
 
     for field_name, field in sorted_fields:
         try:

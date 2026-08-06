@@ -85,6 +85,10 @@ class IRGenerator:
                 # Create a members dictionary for AssignmentInfo
                 members_dict = {}
                 for field_name, field in struct.fields.items():
+                    if field.access_path is not None:
+                        # Member lifted out of an anonymous member. gen_ir does
+                        # not emit a global for it yet, so it stays unexported.
+                        continue
                     # Get the generated field name from our dictionary, or use field_name if not found
                     if (
                         struct.name in self.generated_field_names
@@ -132,6 +136,10 @@ class IRGenerator:
             self.generated_field_names[struct.name] = {}
 
         for field_name, field in struct.fields.items():
+            if field.access_path is not None:
+                # Member lifted out of an anonymous member. It is not a
+                # top-level field, so it must not consume a field index.
+                continue
             # does not take arrays and similar types into consideration yet.
             if callable(field.ctype_complex_type):
                 # Function pointer case - generate a simple field accessor
