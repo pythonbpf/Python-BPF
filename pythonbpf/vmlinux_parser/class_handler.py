@@ -58,9 +58,10 @@ def _is_flattenable_scalar(member_type: Any) -> bool:
         return False
     if issubclass(member_type, (ctypes._Pointer, ctypes.Array)):
         return False
-    if hasattr(member_type, "_restype_") and hasattr(member_type, "_argtypes_"):
-        return False
-    return True
+    is_function_pointer = hasattr(member_type, "_restype_") and hasattr(
+        member_type, "_argtypes_"
+    )
+    return not is_function_pointer
 
 
 def flatten_anonymous_members(class_obj, dep_node) -> None:
