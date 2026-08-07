@@ -3,7 +3,7 @@ from ctypes import c_void_p, c_int64
 
 
 @bpf
-@section("sometag1")
+@section("tracepoint/syscalls/sys_enter_execve")
 def sometag(ctx: c_void_p) -> c_int64:
     if 3 + 2 == 5:
         return c_int64(5)
