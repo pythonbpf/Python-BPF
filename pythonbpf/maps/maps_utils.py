@@ -37,4 +37,4 @@ class MapProcessorRegistry:
     @classmethod
     def known_types(cls):
         """Names of every registered map type, for error messages"""
-        return list(cls._processors)
+        return list(cls._processors.keys())
