@@ -176,10 +176,9 @@ def process_bpf_map(func_node, compilation_context):
     if isinstance(rval, ast.Call) and isinstance(rval.func, ast.Name):
         handler = MapProcessorRegistry.get_processor(rval.func.id)
         if handler is None:
-            # Falling back to a hash map here used to produce an object that
-            # compiled cleanly and was then rejected by the kernel, because the
-            # map carried the wrong type and none of the real map type's
-            # validation ran. A misspelled map type is a program error.
+            # Raise an exception and fail the build because the
+            # map carried the wrong type. A misspelled map type
+            # is a program error.
             known = ", ".join(sorted(MapProcessorRegistry.known_types()))
             raise ValueError(
                 f"Unknown map type '{rval.func.id}' returned by '{map_name}'. "
