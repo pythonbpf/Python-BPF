@@ -2,14 +2,26 @@
 #
 # [xfail]  — tests expected to fail.
 #   key   = path relative to tests/
-#   value = {reason = "...", level = "ir" | "llc"}
-#     level "ir"  = fails during pythonbpf IR generation (exception or ERROR log)
-#     level "llc" = IR generates but llc rejects it
+#   value = {reason = "...", level = "ir" | "llc" | "verifier"}
+#     level "ir"       = fails during pythonbpf IR generation (exception or ERROR log)
+#     level "llc"      = IR generates but llc rejects it
+#     level "verifier" = IR and llc both succeed, but the kernel verifier rejects it
+#
+# A failure at one level implies failure at every later one, so the declared
+# level marks that level and all later ones xfail.
 #
 
 [xfail]
 
 "failing_tests/conditionals/struct_ptr.py" = {reason = "Struct pointer used directly as boolean condition not supported", level = "ir"}
+
+# Compiles cleanly; rejected by the kernel. The `data + 34 < data_end` guard is
+# emitted as a signed compare over values round-tripped through the stack, so the
+# verifier never narrows the packet range (it stays r=0) and the later
+# `iph.saddr` read fails with "invalid access to packet, off=26 size=4" /
+# "R1 offset is outside of the packet". Direct packet access needs bounds checks
+# in a form the verifier can follow.
+"failing_tests/xdp/xdp_test_1.py" = {reason = "XDP direct packet access: the data/data_end guard does not establish a packet range the verifier can use", level = "verifier"}
 
 "failing_tests/license.py" = {reason = "Missing LICENSE global produces IR that llc rejects — should be caught earlier with a clear error message", level = "llc"}
 
