@@ -36,3 +36,5 @@
 "kernel_selftest_equivalent/maps/array_map_lookup_update.py" = {reason = "ArrayMap / BPF_MAP_TYPE_ARRAY support is planned but not implemented yet", level = "ir"}
 
 "kernel_selftest_equivalent/ringbuf/reserve_submit_discard.py" = {reason = "RingBuffer reserve/typed record/discard workflow is planned but not implemented yet", level = "ir"}
+
+"kernel_selftest_equivalent/vmlinux/perf_skip.py" = {reason = "Nested struct field access (ctx.regs.ip) not supported; one level such as ctx.sample_period works", level = "ir"}
