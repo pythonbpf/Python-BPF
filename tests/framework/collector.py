@@ -7,7 +7,10 @@ from tests.framework.bpf_test_case import BpfTestCase
 TESTS_DIR = Path(__file__).parent.parent
 CONFIG_FILE = TESTS_DIR / "test_config.toml"
 
-VMLINUX_TEST_DIRS_PASSING = {"passing_tests/vmlinux"}
+VMLINUX_TEST_DIRS_PASSING = {
+    "passing_tests/vmlinux",
+    "kernel_selftest_equivalent/vmlinux",
+}
 VMLINUX_TEST_DIRS_FAILING = {
     "failing_tests/vmlinux",
     "failing_tests/xdp",
