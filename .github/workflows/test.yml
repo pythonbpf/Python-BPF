@@ -24,7 +24,10 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang llvm libclang-dev bpftool
+          # bpftool isn't an installable package by itself on Ubuntu: it's a
+          # virtual package provided by linux-tools-common + a kernel-flavor
+          # linux-tools-<flavor> package.
+          sudo apt-get install -y clang llvm libclang-dev linux-tools-common linux-tools-generic
 
       - name: Install uv
         run: pip install uv
