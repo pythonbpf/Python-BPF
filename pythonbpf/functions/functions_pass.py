@@ -1,11 +1,12 @@
 from llvmlite import ir
 import ast
+import ctypes
 import logging
 
 from pythonbpf.helper import (
     HelperHandlerRegistry,
 )
-from pythonbpf.type_deducer import ctypes_to_ir
+from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
 from pythonbpf.expr import (
     eval_expr,
     handle_expr,
@@ -325,11 +326,26 @@ def process_func_body(
                     f"Unsupported annotation type: {ast.dump(context_arg.annotation)}"
                 )
 
+            # NOTE: `var` is None for the context parameter. It is the sentinel
+            # that tells consumers the symbol is an incoming function argument
+            # (`func.args[0]`) rather than a stack slot they can load from.
             if VmlinuxHandlerRegistry.is_vmlinux_struct(context_type_name):
                 resolved_type = VmlinuxHandlerRegistry.get_struct_type(
                     context_type_name
                 )
                 context_type = LocalSymbol(None, None, resolved_type)
+                local_sym_tab[context_name] = context_type
+                logger.info(f"Added argument '{context_name}' to local symbol table")
+            elif is_ctypes(context_type_name):
+                # Plain ctypes annotation, e.g. `ctx: c_void_p`. Register it so
+                # helpers that take the raw context (probe_read, ...) can resolve
+                # the name. Metadata is the annotated Python type, mirroring the
+                # vmlinux branch above.
+                context_type = LocalSymbol(
+                    None,
+                    ir.PointerType(),
+                    getattr(ctypes, context_type_name, None),
+                )
                 local_sym_tab[context_name] = context_type
                 logger.info(f"Added argument '{context_name}' to local symbol table")
 

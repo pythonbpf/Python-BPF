@@ -340,9 +340,15 @@ def _allocate_for_attribute(
 
     struct_type: type = local_sym_tab[struct_var].metadata
     if not struct_type or struct_type not in structs_sym_tab:
-        if VmlinuxHandlerRegistry.is_vmlinux_struct(struct_type.__name__):
+        # `metadata` only names a struct for struct-typed symbols. For anything
+        # else (None, an IR type, or a plain ctypes class such as a `c_void_p`
+        # context parameter) there is no vmlinux struct name to look up, so guard
+        # the attribute access instead of blowing up with an AttributeError.
+        vmlinux_struct_name = getattr(struct_type, "__name__", None)
+        if vmlinux_struct_name and VmlinuxHandlerRegistry.is_vmlinux_struct(
+            vmlinux_struct_name
+        ):
             # Handle vmlinux struct field access
-            vmlinux_struct_name = struct_type.__name__
             if not VmlinuxHandlerRegistry.has_field(vmlinux_struct_name, field_name):
                 logger.error(
                     f"Field '{field_name}' not found in vmlinux struct '{vmlinux_struct_name}'"
