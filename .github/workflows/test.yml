@@ -2,12 +2,19 @@
 # tests additionally need passwordless sudo and a kernel with BTF/BPF
 # enabled, which isn't guaranteed on every runner, so we probe for working
 # sudo first and only attempt them if it's there.
+#
+# `push` is scoped to master only: branches here live in this repo rather
+# than forks, so a push to a branch with an open PR would otherwise fire
+# both `push` and `pull_request` for the same commit, running everything
+# twice. `pull_request` covers feature branches; `push` still gives master
+# a post-merge check.
 
 name: Test
 
 on:
   workflow_dispatch:
   push:
+    branches: [master]
   pull_request:
 
 jobs:
