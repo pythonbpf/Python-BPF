@@ -45,6 +45,13 @@ test = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ctypeslib2",
+    # Pinned rather than left to ctypeslib2's own (unpinned) dependency: pip
+    # installs the latest release by default, and its libclang API surface
+    # can be newer than the system libclang (e.g. Ubuntu 24.04 ships
+    # libclang-16), which fails with a LibclangError about an undefined
+    # symbol. Older bindings against a newer libclang stay compatible, so
+    # pin to an old-enough release instead of pinning apt's libclang.
+    "clang==16.0.6",
 ]
 
 [tool.setuptools.packages.find]
