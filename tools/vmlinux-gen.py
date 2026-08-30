@@ -261,10 +261,108 @@ class BTFConverter:
         for name in invalid_ctypes:
             data = re.sub(rf"\bctypes\.{name}\b", name, data)
 
+        data = self.disambiguate_anonymous_field_names(data)
+
         with open(self.output_file, "w") as f:
             f.write(data)
 
         self.log(f"Saved final output to {self.output_file}")
+
+    def disambiguate_anonymous_field_names(self, data):
+        """Make clang2py's generic '_N' field names globally unique per struct/union.
+
+        clang2py names both (a) unnamed anonymous struct/union members that go
+        into `_anonymous_`, and (b) other unnamed/reserved members, using the
+        same per-struct sequential scheme ('_0', '_1', ...). ctypes flattens
+        anonymous members by promoting their field names onto the parent class,
+        so if a struct has an anonymous member (say '_0') whose type itself has
+        a field also named '_1', and that same struct has ANOTHER anonymous
+        member named '_1', the promoted name collides with the parent's own
+        field key. ctypes then fails with a cryptic
+        "type object 'c_ulong' has no attribute '_fields_'" (or similar) when
+        `_fields_` is assigned. Prefixing every generic '_N' key with its
+        owning struct/union name keeps these names unique across the whole
+        file, so promoted names can never collide with a sibling's own key.
+        """
+        self.log("Disambiguating generic anonymous-field names...")
+
+        def sanitize(name):
+            return re.sub(r"[^0-9A-Za-z_]", "_", name)
+
+        lines = data.split("\n")
+        class_re = re.compile(r"^class\s+(\w+)\(")
+        stmt_fields_re = re.compile(r"^(\w+)\._fields_\s*=\s*\[\s*$")
+        inline_fields_re = re.compile(r"^\s+_fields_\s*=\s*\[\s*$")
+        anon_stmt_re = re.compile(r"^(\w+)\._anonymous_\s*=\s*\((.*)\)\s*$")
+        anon_inline_re = re.compile(r"^(\s+)_anonymous_\s*=\s*\((.*)\)\s*$")
+        key_re = re.compile(r"(\('_)([0-9]+)(',)")
+
+        last_class = None
+        out = []
+        i = 0
+        n = len(lines)
+        renamed_count = 0
+        while i < n:
+            line = lines[i]
+
+            m_class = class_re.match(line)
+            if m_class:
+                last_class = m_class.group(1)
+                out.append(line)
+                i += 1
+                continue
+
+            m_anon = anon_stmt_re.match(line)
+            if m_anon:
+                cls, body = m_anon.group(1), m_anon.group(2)
+                prefix = sanitize(cls)
+                new_body, cnt = re.subn(
+                    r"'_([0-9]+)'", lambda mm: f"'_{prefix}_{mm.group(1)}'", body
+                )
+                renamed_count += cnt
+                out.append(f"{cls}._anonymous_ = ({new_body})")
+                i += 1
+                continue
+
+            m_anon_inline = anon_inline_re.match(line)
+            if m_anon_inline and last_class:
+                indent, body = m_anon_inline.group(1), m_anon_inline.group(2)
+                prefix = sanitize(last_class)
+                new_body, cnt = re.subn(
+                    r"'_([0-9]+)'", lambda mm: f"'_{prefix}_{mm.group(1)}'", body
+                )
+                renamed_count += cnt
+                out.append(f"{indent}_anonymous_ = ({new_body})")
+                i += 1
+                continue
+
+            m_stmt = stmt_fields_re.match(line)
+            m_inline = inline_fields_re.match(line) if not m_stmt else None
+            if m_stmt or m_inline:
+                cls = m_stmt.group(1) if m_stmt else last_class
+                prefix = sanitize(cls) if cls else None
+                out.append(line)
+                i += 1
+                while i < n and lines[i].strip() != "]":
+                    fl = lines[i]
+                    if prefix:
+                        fl, cnt = key_re.subn(
+                            lambda mm: f"{mm.group(1)}{prefix}_{mm.group(2)}{mm.group(3)}",
+                            fl,
+                        )
+                        renamed_count += cnt
+                    out.append(fl)
+                    i += 1
+                if i < n:
+                    out.append(lines[i])  # closing ']'
+                    i += 1
+                continue
+
+            out.append(line)
+            i += 1
+
+        self.log(f"Renamed {renamed_count} generic field keys")
+        return "\n".join(out)
 
     def cleanup(self):
         """Remove temporary files if not keeping them."""
