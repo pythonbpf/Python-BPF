@@ -403,7 +403,7 @@ def process_bpf_chunk(func_node, compilation_context, return_type):
     if func_node.args.args:
         # Only look at the first argument for now
         param = func.args[0]
-        param.add_attribute("nocapture")
+        param.add_attribute("captures(none)")
 
     probe_string = get_probe_string(func_node)
     if probe_string is not None:

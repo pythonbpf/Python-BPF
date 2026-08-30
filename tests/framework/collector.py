@@ -35,6 +35,10 @@ def collect_all_test_files() -> list[BpfTestCase]:
     cases = []
     for subdir in ("passing_tests", "failing_tests"):
         for py_file in sorted((TESTS_DIR / subdir).rglob("*.py")):
+            if py_file.name == "vmlinux.py":
+                # Not a test case: the per-directory symlink to the master
+                # vmlinux fixture module, kept alongside tests that import it.
+                continue
             rel = str(py_file.relative_to(TESTS_DIR))
             needs_vmlinux = _is_vmlinux_test(rel)
 
