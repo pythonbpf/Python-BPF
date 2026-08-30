@@ -185,22 +185,24 @@ def handle_variable_assignment(
                 return False
         if isinstance(val_type, Field):
             logger.info("Handling assignment to struct field")
-            # Special handling for struct_xdp_md i32 fields that are zero-extended to i64
-            # The load_ctx_field already extended them, so val is i64 but val_type.type shows c_uint
+            field_ir_type = ctypes_to_ir(val_type.type.__name__)
+            # Sub-register-width context fields are zero-extended to i64 by
+            # load_ctx_field, so val is already i64 even though the field type
+            # says otherwise (c_uint for xdp_md, c_ushort for pt_regs.cs/ss).
             if (
-                hasattr(val_type, "type")
-                and val_type.type.__name__ == "c_uint"
+                isinstance(field_ir_type, ir.IntType)
+                and field_ir_type.width < 64
                 and isinstance(var_type, ir.IntType)
                 and var_type.width == 64
             ):
-                # This is the struct_xdp_md case - value is already i64
                 builder.store(val, var_ptr)
                 logger.info(
-                    f"Assigned zero-extended struct_xdp_md i32 field to {var_name} (i64)"
+                    f"Assigned zero-extended i{field_ir_type.width} context field "
+                    f"to {var_name} (i64)"
                 )
                 return True
             # TODO: handling only ctype struct fields for now. Handle other stuff too later.
-            elif var_type == ctypes_to_ir(val_type.type.__name__):
+            elif var_type == field_ir_type:
                 builder.store(val, var_ptr)
                 logger.info(f"Assigned ctype struct field to {var_name}")
                 return True

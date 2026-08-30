@@ -315,7 +315,7 @@ class VmlinuxHandler:
 
         # Determine the appropriate IR type based on field information
         int_width = 64  # Default to 64-bit
-        needs_zext = False  # Track if we need zero-extension for xdp_md
+        needs_zext = False  # Track if we need zero-extension to a full register
 
         if field_data is not None:
             # Try to determine the size from field metadata
@@ -328,12 +328,14 @@ class VmlinuxHandler:
                         int_width = field_size_bits
                         logger.info(f"Determined field size: {int_width} bits")
 
-                        # Special handling for struct_xdp_md i32 fields
-                        # Load as i32 but extend to i64 before storing
-                        if struct_name == "struct_xdp_md" and int_width == 32:
+                        # Context fields are loaded at their natural width and
+                        # widened to a full 64-bit register, so that everything
+                        # downstream sees one uniform integer type.
+                        if int_width < 64:
                             needs_zext = True
                             logger.info(
-                                "struct_xdp_md i32 field detected, will zero-extend to i64"
+                                f"i{int_width} field {struct_name} detected, "
+                                "will zero-extend to i64"
                             )
                     else:
                         logger.warning(
@@ -363,44 +365,69 @@ class VmlinuxHandler:
         # Load and return the value
         value = builder.load(typed_ptr)
 
-        # Zero-extend i32 to i64 for struct_xdp_md fields
+        # Widen sub-register-width context fields to i64
         if needs_zext:
             value = builder.zext(value, ir.IntType(64))
-            logger.info("Zero-extended i32 value to i64 for struct_xdp_md field")
+            logger.info(f"Zero-extended i{int_width} context field value to i64")
 
         return value
 
+    def _parsed_members(self, vmlinux_struct_name):
+        """
+        Return the dict of fields the vmlinux parser actually produced for a struct.
+
+        This is the single source of truth for "does the compiler know about this
+        field", as opposed to `hasattr(python_type, ...)` which merely reports what
+        ctypes exposes on the class (including members the parser never registered).
+        """
+        if not self.is_vmlinux_struct(vmlinux_struct_name):
+            raise ValueError(f"{vmlinux_struct_name} is not a vmlinux struct")
+        return self.vmlinux_symtab[vmlinux_struct_name].members
+
+    def _unsupported_field_error(self, vmlinux_struct_name, field_name):
+        """Build an actionable error for a field lookup that failed."""
+        python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
+        if hasattr(python_type, field_name):
+            return ValueError(
+                f"Field {field_name} of vmlinux struct {vmlinux_struct_name} exists in "
+                "vmlinux.py but was not registered by the vmlinux parser, so it cannot "
+                "be accessed yet (unsupported field kind)"
+            )
+        return ValueError(
+            f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
+        )
+
     def has_field(self, struct_name, field_name):
-        """Check if a vmlinux struct has a specific field"""
+        """Check if a vmlinux struct has a specific field the parser understands"""
         if self.is_vmlinux_struct(struct_name):
-            python_type = self.vmlinux_symtab[struct_name].python_type
-            return hasattr(python_type, field_name)
+            return field_name in self.vmlinux_symtab[struct_name].members
         return False
 
     def get_field_type(self, vmlinux_struct_name, field_name):
         """Get the type of a field in a vmlinux struct"""
-        if self.is_vmlinux_struct(vmlinux_struct_name):
-            python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
-            if hasattr(python_type, field_name):
-                return self.vmlinux_symtab[vmlinux_struct_name].members[field_name]
-            else:
-                raise ValueError(
-                    f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
-                )
-        else:
-            raise ValueError(f"{vmlinux_struct_name} is not a vmlinux struct")
+        members = self._parsed_members(vmlinux_struct_name)
+        if field_name in members:
+            return members[field_name]
+        raise self._unsupported_field_error(vmlinux_struct_name, field_name)
 
     def get_field_index(self, vmlinux_struct_name, field_name):
-        """Get the type of a field in a vmlinux struct"""
-        if self.is_vmlinux_struct(vmlinux_struct_name):
-            python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
-            if hasattr(python_type, field_name):
-                return list(
-                    self.vmlinux_symtab[vmlinux_struct_name].members.keys()
-                ).index(field_name)
-            else:
-                raise ValueError(
-                    f"Field {field_name} not found in vmlinux struct {vmlinux_struct_name}"
-                )
-        else:
-            raise ValueError(f"{vmlinux_struct_name} is not a vmlinux struct")
+        """
+        Get the declaration index of a field in a vmlinux struct.
+
+        The index is derived from the ctypes `_fields_` list, i.e. from the C
+        declaration order, rather than from the insertion order of the parsed
+        members dict.
+        """
+        members = self._parsed_members(vmlinux_struct_name)
+        if field_name not in members:
+            raise self._unsupported_field_error(vmlinux_struct_name, field_name)
+
+        python_type = self.vmlinux_symtab[vmlinux_struct_name].python_type
+        declared_fields = getattr(python_type, "_fields_", None)
+        if declared_fields is not None:
+            for index, declared in enumerate(declared_fields):
+                if declared[0] == field_name:
+                    return index
+        # No `_fields_` (or the field is not declared at the top level, e.g. it was
+        # flattened out of an anonymous member): fall back to the parsed ordering.
+        return list(members.keys()).index(field_name)

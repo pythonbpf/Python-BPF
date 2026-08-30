@@ -151,6 +151,21 @@ class DebugInfoGenerator:
             is_distinct=is_distinct,
         )
 
+    def create_union_type(
+        self, members: List[Any], size: int, is_distinct: bool
+    ) -> Any:
+        """Create an unnamed union type with the given members and size"""
+        return self.module.add_debug_info(
+            "DICompositeType",
+            {
+                "tag": dc.DW_TAG_union_type,
+                "file": self.module._file_metadata,
+                "size": size,
+                "elements": members,
+            },
+            is_distinct=is_distinct,
+        )
+
     def create_struct_type_with_name(
         self, name: str, members: List[Any], size: int, is_distinct: bool
     ) -> Any:
