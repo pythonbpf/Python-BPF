@@ -1,0 +1,53 @@
+# Runs the pytest suite (IR generation + LLC compilation). Kernel verifier
+# tests additionally need passwordless sudo and a kernel with BTF/BPF
+# enabled, which isn't guaranteed on every runner, so we probe for working
+# sudo first and only attempt them if it's there.
+
+name: Test
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libclang-dev bpftool
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install project
+        run: uv pip install --system -e ".[test]"
+
+      - name: Run test suite
+        run: make test
+
+      - name: Check whether sudo is usable
+        id: sudo-check
+        run: |
+          if sudo -n true 2>/dev/null; then
+            echo "Passwordless sudo is available."
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No passwordless sudo on this runner; kernel verifier tests will be skipped."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run kernel verifier tests
+        if: steps.sudo-check.outputs.available == 'true'
+        run: |
+          sudo -v
+          make test-verifier
