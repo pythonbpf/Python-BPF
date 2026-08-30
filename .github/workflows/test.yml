@@ -28,16 +28,18 @@ jobs:
 
           # Ubuntu's default `llvm`/`clang` packages (LLVM 18 on noble) are
           # too old to assemble the IR llvmlite>=0.49 emits: llvmlite's
-          # ArgumentAttributes only knows the LLVM 19+ 'captures(none)'
-          # spelling (LLVM renamed 'nocapture' to it), and an older llc
-          # can't parse that attribute in the .ll text. Install a
-          # known-recent LLVM from apt.llvm.org instead of the distro
-          # default, and make its tools the ones found on PATH.
+          # ArgumentAttributes only knows the 'captures(none)' spelling of
+          # the renamed 'nocapture' attribute, matching the LLVM 22.1.0 it
+          # bundles internally - and an llc from an older LLVM (verified:
+          # 19 still rejects it as a parse error) can't read that attribute
+          # in the .ll text. Install a matching-generation LLVM from
+          # apt.llvm.org instead of the distro default, and make its tools
+          # the ones found on PATH.
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
-          sudo ./llvm.sh 19 all
-          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
-          sudo ln -sf /usr/bin/llc-19 /usr/local/bin/llc
+          sudo ./llvm.sh 22 all
+          sudo ln -sf /usr/bin/clang-22 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/llc-22 /usr/local/bin/llc
           clang --version
           llc --version
 
