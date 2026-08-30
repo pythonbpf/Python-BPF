@@ -1,0 +1,92 @@
+# Runs the pytest suite (IR generation + LLC compilation). Kernel verifier
+# tests additionally need passwordless sudo and a kernel with BTF/BPF
+# enabled, which isn't guaranteed on every runner, so we probe for working
+# sudo first and only attempt them if it's there.
+#
+# `push` is scoped to master only: branches here live in this repo rather
+# than forks, so a push to a branch with an open PR would otherwise fire
+# both `push` and `pull_request` for the same commit, running everything
+# twice. `pull_request` covers feature branches; `push` still gives master
+# a post-merge check.
+
+name: Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lsb-release wget software-properties-common gnupg linux-tools-common linux-tools-generic
+
+          # Ubuntu's default `llvm`/`clang` packages (LLVM 18 on noble) are
+          # too old to assemble the IR llvmlite>=0.49 emits: llvmlite's
+          # ArgumentAttributes only knows the 'captures(none)' spelling of
+          # the renamed 'nocapture' attribute, matching the LLVM 22.1.0 it
+          # bundles internally - and an llc from an older LLVM (verified:
+          # 19 still rejects it as a parse error) can't read that attribute
+          # in the .ll text. Install a matching-generation LLVM from
+          # apt.llvm.org instead of the distro default, and make its tools
+          # the ones found on PATH.
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 22 all
+          sudo ln -sf /usr/bin/clang-22 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/llc-22 /usr/local/bin/llc
+          clang --version
+          llc --version
+
+          # bpftool isn't an installable package by itself on Ubuntu: it's a
+          # virtual package provided by linux-tools-common + a kernel-flavor
+          # linux-tools-<flavor> package. The runner's exact kernel version
+          # has no matching linux-tools-<version> package, so the
+          # update-alternatives symlink for `bpftool` doesn't get set up;
+          # find whatever binary the generic-flavor package installed and
+          # put it on PATH ourselves.
+          bpftool_bin=$(sudo find /usr/lib/linux-tools* -name bpftool -type f 2>/dev/null | head -1)
+          if [ -z "$bpftool_bin" ]; then
+            echo "::error::Could not find a bpftool binary after installing linux-tools-generic"
+            exit 1
+          fi
+          sudo ln -sf "$bpftool_bin" /usr/local/bin/bpftool
+          bpftool version
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install project
+        run: uv pip install --system -e ".[test]"
+
+      - name: Run test suite
+        run: make test
+
+      - name: Check whether sudo is usable
+        id: sudo-check
+        run: |
+          if sudo -n true 2>/dev/null; then
+            echo "Passwordless sudo is available."
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No passwordless sudo on this runner; kernel verifier tests will be skipped."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run kernel verifier tests
+        if: steps.sudo-check.outputs.available == 'true'
+        run: |
+          sudo -v
+          make test-verifier

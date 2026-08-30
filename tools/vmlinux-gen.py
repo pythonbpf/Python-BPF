@@ -247,14 +247,57 @@ class BTFConverter:
         # Replace ('_20', ctypes.c_char, 8) with ('_20', ctypes.c_uint8, 8)
         data = re.sub(r"(ctypes\.c_char)(\s*,\s*\d+\))", r"ctypes.c_uint8\2", data)
 
-        # below to replace those c_bool with bitfield greater than 8
-        def repl(m):
-            name, bits = m.groups()
-            return (
-                f"('{name}', ctypes.c_uint32, {bits})" if int(bits) > 8 else m.group(0)
-            )
+        # Some bitfields come out of clang2py with a declared width that
+        # exceeds their own base type's bit width (e.g. a 15-bit field typed
+        # as ctypes.c_ubyte, which only has 8 bits) - ctypes rejects these
+        # outright with "ValueError: number of bits invalid for bit field".
+        # Widen the base type to the smallest standard integer type that can
+        # actually hold the declared width.
+        bitfield_type_widths = {
+            "c_bool": 8,
+            "c_byte": 8,
+            "c_ubyte": 8,
+            "c_int8": 8,
+            "c_uint8": 8,
+            "c_short": 16,
+            "c_ushort": 16,
+            "c_int16": 16,
+            "c_uint16": 16,
+            "c_int": 32,
+            "c_uint": 32,
+            "c_int32": 32,
+            "c_uint32": 32,
+            "c_long": 64,
+            "c_ulong": 64,
+            "c_longlong": 64,
+            "c_ulonglong": 64,
+            "c_int64": 64,
+            "c_uint64": 64,
+        }
+        promoted_type_for_width = {
+            8: "c_uint8",
+            16: "c_uint16",
+            32: "c_uint32",
+            64: "c_uint64",
+        }
 
-        data = re.sub(r"\('([^']+)',\s*ctypes\.c_bool,\s*(\d+)\)", repl, data)
+        def widen_oversized_bitfields(m):
+            name, base_type, bits = m.group(1), m.group(2), int(m.group(3))
+            type_width = bitfield_type_widths.get(base_type)
+            if type_width is None or bits <= type_width:
+                return m.group(0)
+            for width in (8, 16, 32, 64):
+                if bits <= width:
+                    return (
+                        f"('{name}', ctypes.{promoted_type_for_width[width]}, {bits})"
+                    )
+            return m.group(0)
+
+        data = re.sub(
+            r"\('([^']+)',\s*ctypes\.([a-zA-Z0-9_]+),\s*(\d+)\)",
+            widen_oversized_bitfields,
+            data,
+        )
 
         # Remove ctypes. prefix from invalid entries
         invalid_ctypes = ["bpf_iter_state", "_cache_type", "fs_context_purpose"]
