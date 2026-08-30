@@ -288,7 +288,9 @@ class BTFConverter:
                 return m.group(0)
             for width in (8, 16, 32, 64):
                 if bits <= width:
-                    return f"('{name}', ctypes.{promoted_type_for_width[width]}, {bits})"
+                    return (
+                        f"('{name}', ctypes.{promoted_type_for_width[width]}, {bits})"
+                    )
             return m.group(0)
 
         data = re.sub(
