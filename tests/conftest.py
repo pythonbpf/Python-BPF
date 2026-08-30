@@ -19,6 +19,7 @@ import logging
 
 import pytest
 
+from tests.framework.bpf_test_case import level_index
 from tests.framework.collector import collect_all_test_files
 
 # ── vmlinux availability ────────────────────────────────────────────────────
@@ -70,14 +71,19 @@ def pytest_collection_modifyitems(items):
 
         # xfail (strict: XPASS counts as a test failure, alerting us to fixed bugs)
         if case.is_expected_fail:
-            # Level "ir" → fails at IR generation: xfail both IR and LLC tests
-            # Level "llc" → IR succeeds but LLC fails: only xfail the LLC test
-            is_llc_test = item.nodeid.startswith("tests/test_llc_compilation.py")
+            # A failure at one level implies failure at every later one, so mark
+            # this item xfail whenever the declared level is at or before it:
+            #   "ir"       → IR, LLC and verifier
+            #   "llc"      → LLC and verifier (IR is expected to succeed)
+            #   "verifier" → verifier only
+            if item.nodeid.startswith("tests/test_verifier.py"):
+                item_level = "verifier"
+            elif item.nodeid.startswith("tests/test_llc_compilation.py"):
+                item_level = "llc"
+            else:
+                item_level = "ir"
 
-            apply_xfail = (case.xfail_level == "ir") or (
-                case.xfail_level == "llc" and is_llc_test
-            )
-            if apply_xfail:
+            if level_index(case.xfail_level) <= level_index(item_level):
                 item.add_marker(
                     pytest.mark.xfail(
                         reason=case.xfail_reason,

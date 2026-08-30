@@ -33,3 +33,8 @@ class MapProcessorRegistry:
     def get_processor(cls, map_type_name):
         """Get the processor function for a map type"""
         return cls._processors.get(map_type_name)
+
+    @classmethod
+    def known_types(cls):
+        """Names of every registered map type, for error messages"""
+        return list(cls._processors.keys())

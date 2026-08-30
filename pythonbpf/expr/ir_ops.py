@@ -11,7 +11,7 @@ def deref_to_depth(func, builder, val, target_depth):
     cur_type = val.type
 
     for depth in range(target_depth):
-        if not isinstance(val.type, ir.PointerType):
+        if not isinstance(cur_type, ir.PointerType):
             logger.error("Cannot dereference further, non-pointer type")
             return None
 

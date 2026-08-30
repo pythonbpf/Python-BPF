@@ -69,8 +69,16 @@ Known-broken tests are declared in `tests/test_config.toml`:
 "failing_tests/my_test.py" = {reason = "...", level = "ir"}
 ```
 
-- `level = "ir"` — fails during IR generation; both IR and LLC tests are marked xfail.
-- `level = "llc"` — IR generates fine but `llc` rejects it; only the LLC test is marked xfail.
+- `level = "ir"` — fails during IR generation.
+- `level = "llc"` — IR generates fine but `llc` rejects it.
+- `level = "verifier"` — IR and `llc` both succeed, but the kernel verifier rejects the object.
+
+A failure at one level implies failure at every later one, so the declared level marks
+that level **and all later ones** xfail. An `"ir"` entry is xfail at all three levels; a
+`"verifier"` entry is xfail at level 3 only and must still pass levels 1 and 2.
+
+Every test file runs at every level, including the ones declared here — level 3 does not
+skip declared failures, it reports them as expected ones.
 
 All xfails use `strict = True`: if a test starts **passing** it shows up as **XPASS** and is treated as a test failure. This is intentional — it means the bug was fixed and the test should be promoted to `passing_tests/`.
 

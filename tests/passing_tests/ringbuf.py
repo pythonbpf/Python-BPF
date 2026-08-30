@@ -1,13 +1,13 @@
 from pythonbpf import bpf, BPF, map, bpfglobal, section, compile, compile_to_ir
-from pythonbpf.maps import RingBuf, HashMap
+from pythonbpf.maps import RingBuffer, HashMap
 from ctypes import c_int32, c_void_p
 
 
 # Define a map
 @bpf
 @map
-def mymap() -> RingBuf:
-    return RingBuf(max_entries=(1024))
+def mymap() -> RingBuffer:
+    return RingBuffer(max_entries=4096)
 
 
 @bpf

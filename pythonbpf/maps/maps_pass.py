@@ -175,10 +175,15 @@ def process_bpf_map(func_node, compilation_context):
 
     if isinstance(rval, ast.Call) and isinstance(rval.func, ast.Name):
         handler = MapProcessorRegistry.get_processor(rval.func.id)
-        if handler:
-            return handler(map_name, rval, compilation_context)
-        else:
-            logger.warning(f"Unknown map type {rval.func.id}, defaulting to HashMap")
-            return process_hash_map(map_name, rval, compilation_context)
+        if handler is None:
+            # Raise an exception and fail the build because the
+            # map carried the wrong type. A misspelled map type
+            # is a program error.
+            known = ", ".join(sorted(MapProcessorRegistry.known_types()))
+            raise ValueError(
+                f"Unknown map type '{rval.func.id}' returned by '{map_name}'. "
+                f"Known map types: {known}"
+            )
+        return handler(map_name, rval, compilation_context)
     else:
         raise ValueError("Function under @map must return a map")

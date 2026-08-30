@@ -222,10 +222,12 @@ This architecture eliminates the need for embedding C code in Python, allowing f
 
 ---
 
-## Resources
+## Resources and Talks
 
+* [Linux Plumbers Conference 2025](https://www.youtube.com/watch?v=eFVhLnWFxtE)
 * [Video demonstration](https://youtu.be/eMyLW8iWbks)
-* [Slide deck](https://docs.google.com/presentation/d/1DsWDIVrpJhM4RgOETO9VWqUtEHo3-c7XIWmNpi6sTSo/edit?usp=sharing)
+* [More Demos](https://www.youtube.com/watch?v=GN17VBZYdCY)
+* [FOSDEM 2026](https://mirrors.dotsrc.org/fosdem/2026/h1308/T9D8ZR-pythonbpf.mp4)
 
 ---
 

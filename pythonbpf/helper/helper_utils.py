@@ -6,6 +6,8 @@ from pythonbpf.expr import (
     eval_expr,
     access_struct_field,
 )
+from pythonbpf.expr.ir_ops import deref_to_depth
+from pythonbpf.expr.type_normalization import get_base_type_and_depth
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +52,20 @@ def get_or_create_ptr_from_arg(
     logger.info(f"Getting pointer from arg: {ast.dump(arg)}")
     sz = None
     if isinstance(arg, ast.Name):
-        # Stack space is already allocated
-        ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
+        symbol = local_sym_tab.get(arg.id) if local_sym_tab else None
+        if symbol is not None and symbol.var is None:
+            # A None `var` marks the context parameter (see process_func_body):
+            # it arrives as the function's first argument, not as a stack slot,
+            # so there is no alloca to hand back. Use the argument itself.
+            if not func.args:
+                raise ValueError(
+                    f"'{arg.id}' is the context parameter but "
+                    f"'{func.name}' takes no arguments"
+                )
+            ptr = builder.bitcast(func.args[0], ir.PointerType())
+        else:
+            # Stack space is already allocated
+            ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
     elif isinstance(arg, ast.Constant) and isinstance(arg.value, int):
         int_width = 64  # Default to i64
         if expected_type and isinstance(expected_type, ir.IntType):
@@ -103,6 +117,18 @@ def get_or_create_ptr_from_arg(
             val = val[0]
         if val is None:
             raise ValueError("Failed to evaluate expression for helper arg.")
+
+        if expected_type and isinstance(val.type, ir.PointerType):
+            _, val_depth = get_base_type_and_depth(val.type)
+            _, expected_depth = get_base_type_and_depth(expected_type)
+            if val_depth > expected_depth:
+                val = deref_to_depth(func, builder, val, val_depth - expected_depth)
+                if val is None:
+                    raise ValueError("Failed to dereference pointer to expected depth")
+        else:
+            logger.debug(
+                "Expected Type not known / Not a pointer, skipping dereference"
+            )
 
         ptr, temp_name = compilation_context.scratch_pool.get_next_temp(
             local_sym_tab, expected_type

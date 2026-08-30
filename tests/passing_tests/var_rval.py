@@ -5,7 +5,7 @@ from ctypes import c_void_p, c_int64
 
 
 @bpf
-@section("sometag1")
+@section("tracepoint/syscalls/sys_enter_execve")
 def sometag(ctx: c_void_p) -> c_int64:
     a = 1 - 1
     return c_int64(a)

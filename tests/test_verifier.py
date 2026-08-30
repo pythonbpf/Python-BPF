@@ -24,12 +24,12 @@ from tests.framework.compiler import run_ir_generation, run_llc
 from tests.framework.verifier import verify_object
 
 
-def _passing_test_files():
-    return [c.path for c in collect_all_test_files() if not c.is_expected_fail]
+def _verifier_test_files():
+    return [c.path for c in collect_all_test_files()]
 
 
-def _passing_test_ids():
-    return [c.rel_path for c in collect_all_test_files() if not c.is_expected_fail]
+def _verifier_test_ids():
+    return [c.rel_path for c in collect_all_test_files()]
 
 
 def _get_rejection_reason(verifier_test_file: Path, output) -> str:
@@ -43,11 +43,16 @@ def _get_rejection_reason(verifier_test_file: Path, output) -> str:
     return errstr
 
 
+# Every test file runs at this level, including the ones declared in
+# test_config.toml. conftest marks those xfail, so an "ir"- or "llc"-level
+# failure is still reported as an expected failure rather than being silently
+# dropped from the level-3 run — and a "verifier"-level entry becomes possible
+# at all.
 @pytest.mark.verifier
 @pytest.mark.parametrize(
     "verifier_test_file",
-    _passing_test_files(),
-    ids=_passing_test_ids(),
+    _verifier_test_files(),
+    ids=_verifier_test_ids(),
 )
 def test_kernel_verifier(verifier_test_file: Path, tmp_path, caplog):
     """Compile the BPF test and verify it passes the kernel verifier."""
