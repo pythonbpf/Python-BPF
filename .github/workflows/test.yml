@@ -24,6 +24,23 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
+          sudo apt-get install -y lsb-release wget software-properties-common gnupg linux-tools-common linux-tools-generic
+
+          # Ubuntu's default `llvm`/`clang` packages (LLVM 18 on noble) are
+          # too old to assemble the IR llvmlite>=0.49 emits: llvmlite's
+          # ArgumentAttributes only knows the LLVM 19+ 'captures(none)'
+          # spelling (LLVM renamed 'nocapture' to it), and an older llc
+          # can't parse that attribute in the .ll text. Install a
+          # known-recent LLVM from apt.llvm.org instead of the distro
+          # default, and make its tools the ones found on PATH.
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 19 all
+          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/llc-19 /usr/local/bin/llc
+          clang --version
+          llc --version
+
           # bpftool isn't an installable package by itself on Ubuntu: it's a
           # virtual package provided by linux-tools-common + a kernel-flavor
           # linux-tools-<flavor> package. The runner's exact kernel version
@@ -31,7 +48,6 @@ jobs:
           # update-alternatives symlink for `bpftool` doesn't get set up;
           # find whatever binary the generic-flavor package installed and
           # put it on PATH ourselves.
-          sudo apt-get install -y clang llvm libclang-dev linux-tools-common linux-tools-generic
           bpftool_bin=$(sudo find /usr/lib/linux-tools* -name bpftool -type f 2>/dev/null | head -1)
           if [ -z "$bpftool_bin" ]; then
             echo "::error::Could not find a bpftool binary after installing linux-tools-generic"
