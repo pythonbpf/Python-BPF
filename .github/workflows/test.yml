@@ -49,10 +49,6 @@ jobs:
       - name: Run test suite
         run: make test
 
-      - name: DEBUG - dump offending struct on failure
-        if: failure()
-        run: grep -n -B2 -A40 'class struct_vmbus_channel_offer_channel' vmlinux.py || true
-
       - name: Check whether sudo is usable
         id: sudo-check
         run: |
