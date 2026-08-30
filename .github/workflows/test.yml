@@ -26,8 +26,19 @@ jobs:
           sudo apt-get update
           # bpftool isn't an installable package by itself on Ubuntu: it's a
           # virtual package provided by linux-tools-common + a kernel-flavor
-          # linux-tools-<flavor> package.
+          # linux-tools-<flavor> package. The runner's exact kernel version
+          # has no matching linux-tools-<version> package, so the
+          # update-alternatives symlink for `bpftool` doesn't get set up;
+          # find whatever binary the generic-flavor package installed and
+          # put it on PATH ourselves.
           sudo apt-get install -y clang llvm libclang-dev linux-tools-common linux-tools-generic
+          bpftool_bin=$(sudo find /usr/lib/linux-tools* -name bpftool -type f 2>/dev/null | head -1)
+          if [ -z "$bpftool_bin" ]; then
+            echo "::error::Could not find a bpftool binary after installing linux-tools-generic"
+            exit 1
+          fi
+          sudo ln -sf "$bpftool_bin" /usr/local/bin/bpftool
+          bpftool version
 
       - name: Install uv
         run: pip install uv
