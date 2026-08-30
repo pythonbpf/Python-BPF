@@ -68,10 +68,7 @@ jobs:
       - name: DEBUG - show real llc stderr
         if: failure()
         run: |
-          python3 -c "
-from pythonbpf.codegen import compile_to_ir
-compile_to_ir('tests/passing_tests/if.py', '/tmp/debug.ll')
-"
+          python3 -c "from pythonbpf.codegen import compile_to_ir; compile_to_ir('tests/passing_tests/if.py', '/tmp/debug.ll')"
           cat /tmp/debug.ll
           llc -march=bpf -filetype=obj -O2 /tmp/debug.ll -o /tmp/debug.o
 
