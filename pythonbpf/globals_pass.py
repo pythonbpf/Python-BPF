@@ -5,8 +5,24 @@ from dataclasses import dataclass
 from logging import Logger
 import logging
 from .type_deducer import ctypes_to_ir
+from .debuginfo import DebugInfoGenerator
+from .debuginfo import dwarf_constants as dc
 
 logger: Logger = logging.getLogger(__name__)
+
+_SIGNED_CTYPES = {
+    "c_int8",
+    "c_int16",
+    "c_int32",
+    "c_int64",
+    "c_int",
+    "c_short",
+    "c_long",
+    "c_longlong",
+    "c_byte",
+}
+
+_C_NAME_BY_WIDTH = {8: "char", 16: "short", 32: "int", 64: "long long"}
 
 
 @dataclass
@@ -93,6 +109,28 @@ def _emit_global(module: ir.Module, node, name):
     return gvar
 
 
+def _emit_global_debug_info(compilation_context, gvar, name, ctype_name):
+    """Attach DIGlobalVariableExpression metadata to a BPF global.
+
+    llc's BPF backend manufactures the BTF VAR and DATASEC ('.bss'/'.data')
+    entries from exactly this metadata (see tests/c-form/global_vars.bpf.c);
+    without it, libbpf still creates the section maps but neither bpftool nor a
+    future skeleton can tell which variable lives at which offset.
+    """
+    generator = DebugInfoGenerator(compilation_context.module)
+    width = gvar.value_type.width
+    signed = ctype_name in _SIGNED_CTYPES
+    base = _C_NAME_BY_WIDTH[width]
+    if width == 8:
+        encoding = dc.DW_ATE_signed_char if signed else dc.DW_ATE_unsigned_char
+    else:
+        encoding = dc.DW_ATE_signed if signed else dc.DW_ATE_unsigned
+    cname = base if signed else f"unsigned {base}"
+    di_type = generator.get_basic_type(cname, width, encoding)
+    dv = generator.create_global_var_debug_info(name, di_type, is_local=False)
+    gvar.set_metadata("dbg", dv)
+
+
 def globals_processing(tree, compilation_context):
     """Process stuff decorated with @bpf and @bpfglobal except license and return the section name"""
     # Local tracking for duplicate checking if needed, or we can iterate context
@@ -136,6 +174,9 @@ def globals_processing(tree, compilation_context):
                             var=gvar,
                             ir_type=gvar.value_type,
                             ctype_name=node.returns.id,
+                        )
+                        _emit_global_debug_info(
+                            compilation_context, gvar, name, node.returns.id
                         )
                     else:
                         raise NotImplementedError(
