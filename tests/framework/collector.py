@@ -33,7 +33,7 @@ def collect_all_test_files() -> list[BpfTestCase]:
     xfail_map: dict = config.get("xfail", {})
 
     cases = []
-    for subdir in ("passing_tests", "failing_tests"):
+    for subdir in ("passing_tests", "failing_tests", "kernel_selftest_equivalent"):
         for py_file in sorted((TESTS_DIR / subdir).rglob("*.py")):
             if py_file.name == "vmlinux.py":
                 # Not a test case: the per-directory symlink to the master

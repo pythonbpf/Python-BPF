@@ -16,6 +16,7 @@ Run the suite:
 """
 
 import logging
+import warnings
 
 import pytest
 
@@ -25,11 +26,15 @@ from tests.framework.collector import collect_all_test_files
 # ── vmlinux availability ────────────────────────────────────────────────────
 
 try:
-    import vmlinux  # noqa: F401
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        import vmlinux  # noqa: F401
 
     VMLINUX_AVAILABLE = True
-except ImportError:
+    VMLINUX_SKIP_REASON = ""
+except Exception as exc:
     VMLINUX_AVAILABLE = False
+    VMLINUX_SKIP_REASON = f"vmlinux.py not usable for current kernel: {exc}"
 
 
 # ── pytest_generate_tests: parametrize on bpf_test_file ───────────────────
@@ -65,7 +70,10 @@ def pytest_collection_modifyitems(items):
         # vmlinux skip
         if case.needs_vmlinux and not VMLINUX_AVAILABLE:
             item.add_marker(
-                pytest.mark.skip(reason="vmlinux.py not available for current kernel")
+                pytest.mark.skip(
+                    reason=VMLINUX_SKIP_REASON
+                    or "vmlinux.py not available for current kernel"
+                )
             )
             continue
 
