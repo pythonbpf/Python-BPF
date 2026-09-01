@@ -189,6 +189,33 @@ def handle_assign(func, compilation_context, builder, stmt, local_sym_tab):
         logger.error(f"Unsupported assignment target: {ast.dump(target)}")
 
 
+def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
+    """Handle `x += v` by desugaring to `x = x op v` and reusing handle_assign.
+
+    That is the statement's Python semantics for the targets we support, and it
+    means globals come along for free: `counter += 1` under `global counter`
+    becomes load/add/store on @counter.
+    """
+    if isinstance(stmt.target, ast.Name):
+        load_target = ast.Name(id=stmt.target.id, ctx=ast.Load())
+    elif isinstance(stmt.target, ast.Attribute):
+        load_target = ast.Attribute(
+            value=stmt.target.value, attr=stmt.target.attr, ctx=ast.Load()
+        )
+    else:
+        raise SyntaxError(
+            f"Unsupported augmented-assignment target: {ast.dump(stmt.target)}"
+        )
+
+    desugared = ast.Assign(
+        targets=[stmt.target],
+        value=ast.BinOp(left=load_target, op=stmt.op, right=stmt.value),
+    )
+    ast.copy_location(desugared, stmt)
+    ast.fix_missing_locations(desugared)
+    handle_assign(func, compilation_context, builder, desugared, local_sym_tab)
+
+
 def handle_cond(func, compilation_context, builder, cond, local_sym_tab):
     val = eval_expr(func, compilation_context, builder, cond, local_sym_tab)[0]
     return convert_to_bool(builder, val)
@@ -283,7 +310,7 @@ def process_stmt(
     elif isinstance(stmt, ast.Assign):
         handle_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.AugAssign):
-        raise SyntaxError("Augmented assignment not supported")
+        handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Global):
         # Declarations were collected by process_func_body; nothing to emit.
         pass
