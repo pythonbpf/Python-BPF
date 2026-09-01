@@ -7,7 +7,10 @@ from tests.framework.bpf_test_case import BpfTestCase
 TESTS_DIR = Path(__file__).parent.parent
 CONFIG_FILE = TESTS_DIR / "test_config.toml"
 
-VMLINUX_TEST_DIRS_PASSING = {"passing_tests/vmlinux"}
+VMLINUX_TEST_DIRS_PASSING = {
+    "passing_tests/vmlinux",
+    "kernel_selftest_equivalent/vmlinux",
+}
 VMLINUX_TEST_DIRS_FAILING = {
     "failing_tests/vmlinux",
     "failing_tests/xdp",
@@ -33,7 +36,7 @@ def collect_all_test_files() -> list[BpfTestCase]:
     xfail_map: dict = config.get("xfail", {})
 
     cases = []
-    for subdir in ("passing_tests", "failing_tests"):
+    for subdir in ("passing_tests", "failing_tests", "kernel_selftest_equivalent"):
         for py_file in sorted((TESTS_DIR / subdir).rglob("*.py")):
             if py_file.name == "vmlinux.py":
                 # Not a test case: the per-directory symlink to the master
