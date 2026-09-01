@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pythonbpf.structs.struct_type import StructType
     from pythonbpf.maps.maps_utils import MapSymbol
+    from pythonbpf.globals_pass import BpfGlobalSymbol
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,11 @@ class CompilationContext:
         self.global_sym_tab: list[ir.GlobalVariable] = []
         self.structs_sym_tab: dict[str, "StructType"] = {}
         self.map_sym_tab: dict[str, "MapSymbol"] = {}
+        self.bpf_globals: dict[str, "BpfGlobalSymbol"] = {}
+
+        # Names a `global` statement declared writable in the function whose
+        # body is currently being emitted; managed by process_func_body.
+        self.current_func_globals: set[str] = set()
 
         # Helper management
         self.scratch_pool = ScratchPoolManager()
@@ -80,3 +86,4 @@ class CompilationContext:
         """Reset state between functions if necessary, though new context per compile is preferred."""
         self.scratch_pool.reset()
         self.current_func = None
+        self.current_func_globals = set()

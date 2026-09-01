@@ -1,11 +1,26 @@
 from llvmlite import ir
 import ast
 
+from dataclasses import dataclass
 from logging import Logger
 import logging
 from .type_deducer import ctypes_to_ir
 
 logger: Logger = logging.getLogger(__name__)
+
+
+@dataclass
+class BpfGlobalSymbol:
+    """A mutable BPF global variable declared with @bpfglobal.
+
+    Lands in .bss (zero initializer) or .data (non-zero) and is read with a
+    plain load / written with a plain store; libbpf exposes the sections to
+    userspace as global-data maps.
+    """
+
+    var: ir.GlobalVariable
+    ir_type: ir.Type
+    ctype_name: str
 
 
 def populate_global_symbol_table(tree, compilation_context):
@@ -68,7 +83,11 @@ def _emit_global(module: ir.Module, node, name):
 
     gvar = ir.GlobalVariable(module, ty, name=name)
     gvar.initializer = llvm_init
-    gvar.align = 8
+    # Natural alignment, matching what clang emits for the same declaration
+    # (align 4 for i32, align 8 for i64). llc derives the BTF DATASEC layout
+    # from these symbols, so the alignment should mirror the C reference in
+    # tests/c-form/global_vars.bpf.c.
+    gvar.align = ty.width // 8 if isinstance(ty, ir.IntType) else 8
     gvar.linkage = "dso_local"
     gvar.global_constant = False
     return gvar
@@ -111,7 +130,19 @@ def globals_processing(tree, compilation_context):
                         node.body[0].value, (ast.Constant, ast.Name, ast.Call)
                     )
                 ):
-                    _emit_global(compilation_context.module, node, name)
+                    gvar = _emit_global(compilation_context.module, node, name)
+                    if isinstance(gvar.value_type, ir.IntType):
+                        compilation_context.bpf_globals[name] = BpfGlobalSymbol(
+                            var=gvar,
+                            ir_type=gvar.value_type,
+                            ctype_name=node.returns.id,
+                        )
+                    else:
+                        raise NotImplementedError(
+                            f"Global '{name}': only integer scalar globals are "
+                            f"supported so far; '{node.returns.id}' globals are "
+                            f"planned for a later milestone"
+                        )
                 else:
                     raise SyntaxError(f"ERROR: Invalid syntax for {name} global")
 
