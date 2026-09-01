@@ -105,6 +105,30 @@ def handle_variable_assignment(
 ):
     """Handle single named variable assignment."""
 
+    # A name declared with `global` writes the @bpfglobal symbol directly:
+    # the plain `store i64 %v, ptr @counter` form of the C reference.
+    if var_name in compilation_context.current_func_globals:
+        sym = compilation_context.bpf_globals[var_name]
+        val_result = eval_expr(func, compilation_context, builder, rval, local_sym_tab)
+        if val_result is None:
+            logger.error(f"Failed to evaluate value for global {var_name}")
+            return False
+        val, val_type = val_result
+        if isinstance(val_type, ir.IntType) and isinstance(sym.ir_type, ir.IntType):
+            # Same implicit widening/truncation rules as local assignments
+            if val_type.width < sym.ir_type.width:
+                val = builder.sext(val, sym.ir_type)
+            elif val_type.width > sym.ir_type.width:
+                val = builder.trunc(val, sym.ir_type)
+        elif val_type != sym.ir_type:
+            logger.error(
+                f"Type mismatch for global {var_name}: {val_type} vs {sym.ir_type}"
+            )
+            return False
+        builder.store(val, sym.var)
+        logger.info(f"Stored to BPF global {var_name}")
+        return True
+
     if var_name not in local_sym_tab:
         logger.error(f"Variable {var_name} not declared.")
         return False

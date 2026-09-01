@@ -284,6 +284,9 @@ def process_stmt(
         handle_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.AugAssign):
         raise SyntaxError("Augmented assignment not supported")
+    elif isinstance(stmt, ast.Global):
+        # Declarations were collected by process_func_body; nothing to emit.
+        pass
     elif isinstance(stmt, ast.If):
         handle_if(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Return):
@@ -310,6 +313,22 @@ def process_func_body(
     did_return = False
 
     local_sym_tab = {}
+
+    # Collect `global x` declarations. Python scoping rules apply: a declared
+    # name may be written anywhere in this function and always means the
+    # @bpfglobal, never a local. Undeclared writes to a global name are
+    # rejected in the allocation pass rather than silently shadowing.
+    declared_globals: set[str] = set()
+    for node in ast.walk(func_node):
+        if isinstance(node, ast.Global):
+            for gname in node.names:
+                if gname not in compilation_context.bpf_globals:
+                    raise SyntaxError(
+                        f"'global {gname}' in '{func_node.name}': no @bpfglobal "
+                        f"named '{gname}' is declared"
+                    )
+                declared_globals.add(gname)
+    compilation_context.current_func_globals = declared_globals
 
     # Add the context parameter (first function argument) to the local symbol table
     if func_node.args.args and len(func_node.args.args) > 0:
@@ -374,6 +393,8 @@ def process_func_body(
 
     if not did_return:
         builder.ret(ir.Constant(ir.IntType(64), 0))
+
+    compilation_context.current_func_globals = set()
 
 
 def process_bpf_chunk(func_node, compilation_context, return_type):
