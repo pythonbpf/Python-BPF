@@ -22,12 +22,20 @@ logger: Logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def _handle_name_expr(expr: ast.Name, local_sym_tab: Dict, builder: ir.IRBuilder):
+def _handle_name_expr(
+    expr: ast.Name, compilation_context, local_sym_tab: Dict, builder: ir.IRBuilder
+):
     """Handle ast.Name expressions."""
     if expr.id in local_sym_tab:
         var = local_sym_tab[expr.id].var
         val = builder.load(var)
         return val, local_sym_tab[expr.id].ir_type
+    elif expr.id in compilation_context.bpf_globals:
+        # A @bpfglobal: read straight off the global symbol, exactly the
+        # `load i64, ptr @counter` form clang emits (tests/c-form/global_vars).
+        sym = compilation_context.bpf_globals[expr.id]
+        val = builder.load(sym.var)
+        return val, sym.ir_type
     else:
         # Check if it's a vmlinux enum/constant
         vmlinux_result = VmlinuxHandlerRegistry.handle_name(expr.id)
@@ -175,6 +183,9 @@ def get_operand_value(func, compilation_context, operand, builder, local_sym_tab
             else:
                 val = deref_to_depth(func, builder, var, depth)
             return val
+        elif operand.id in compilation_context.bpf_globals:
+            # A @bpfglobal: plain load off the global symbol.
+            return builder.load(compilation_context.bpf_globals[operand.id].var)
         else:
             # Check if it's a vmlinux enum/constant
             vmlinux_result = VmlinuxHandlerRegistry.handle_name(operand.id)
@@ -662,7 +673,7 @@ def eval_expr(
 
     logger.info(f"Evaluating expression: {ast.dump(expr)}")
     if isinstance(expr, ast.Name):
-        return _handle_name_expr(expr, local_sym_tab, builder)
+        return _handle_name_expr(expr, compilation_context, local_sym_tab, builder)
     elif isinstance(expr, ast.Constant):
         return _handle_constant_expr(compilation_context, builder, expr)
     elif isinstance(expr, ast.Call):
