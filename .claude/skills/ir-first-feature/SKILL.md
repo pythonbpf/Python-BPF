@@ -68,5 +68,5 @@ bar; llc accepts plenty of subtly wrong IR.
 - **Never read/cat/grep `vmlinux.py` or `vmlinux.h`** — generated, enormous, will
   exhaust context. Probe with one-liners:
   `.venv/bin/python -c "import vmlinux; print(vmlinux.struct_x._fields_[:3])"`
-- Use `.venv/bin/python`; the system python has no llvmlite.
+- Ask the dev which Python binary to use, and remember that for future. The original authors use `.venv/bin/python` as their system python has no llvmlite.
 - Atomic commits, `Core:`/`Tests:` subject prefixes, one logical change each.
