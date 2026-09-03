@@ -265,7 +265,19 @@ def handle_return(builder, stmt, local_sym_tab, ret_type, compilation_context=No
     logger.info(f"Handling return statement: {ast.dump(stmt)}")
     if stmt.value is None:
         return handle_none_return(builder)
-    elif isinstance(stmt.value, ast.Name) and is_xdp_name(stmt.value.id):
+    elif (
+        isinstance(stmt.value, ast.Name)
+        and is_xdp_name(stmt.value.id)
+        and stmt.value.id not in local_sym_tab
+        and (
+            compilation_context is None
+            or stmt.value.id not in compilation_context.bpf_globals
+        )
+    ):
+        # The XDP fast path resolves names like XDP_PASS from the helper
+        # constant table, but only as a fallback: a local or @bpfglobal of the
+        # same name shadows it, mirroring C (a local shadows an enum constant)
+        # and the resolution order everywhere else in the compiler.
         return handle_xdp_return(stmt, builder, ret_type)
     else:
         # Fallback for now if ctx not passed, but caller should pass it

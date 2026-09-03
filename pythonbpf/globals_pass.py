@@ -6,6 +6,7 @@ from logging import Logger
 import logging
 from .type_deducer import ctypes_to_ir
 from .debuginfo import DebugInfoGenerator
+from .expr import VmlinuxHandlerRegistry
 from .debuginfo import dwarf_constants as dc
 
 logger: Logger = logging.getLogger(__name__)
@@ -169,6 +170,17 @@ def globals_processing(tree, compilation_context):
                     )
                 ):
                     gvar = _emit_global(compilation_context.module, node, name)
+                    if VmlinuxHandlerRegistry.handle_name(name) is not None:
+                        # C rejects this outright ("redefinition as different
+                        # kind of symbol"); Python's rebinding semantics let
+                        # the global win, and resolution order (local, then
+                        # global, then vmlinux) applies it consistently. Warn
+                        # so the shadowing is at least never silent.
+                        logger.warning(
+                            f"@bpfglobal '{name}' shadows a vmlinux enum "
+                            f"constant of the same name; reads of '{name}' "
+                            f"will use the global"
+                        )
                     if isinstance(gvar.value_type, ir.IntType):
                         compilation_context.bpf_globals[name] = BpfGlobalSymbol(
                             var=gvar,
