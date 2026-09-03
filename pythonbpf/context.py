@@ -69,10 +69,6 @@ class CompilationContext:
         self.map_sym_tab: dict[str, "MapSymbol"] = {}
         self.bpf_globals: dict[str, "BpfGlobalSymbol"] = {}
 
-        # Names a `global` statement declared writable in the function whose
-        # body is currently being emitted; managed by process_func_body.
-        self.current_func_globals: set[str] = set()
-
         # Helper management
         self.scratch_pool = ScratchPoolManager()
 
@@ -86,4 +82,3 @@ class CompilationContext:
         """Reset state between functions if necessary, though new context per compile is preferred."""
         self.scratch_pool.reset()
         self.current_func = None
-        self.current_func_globals = set()

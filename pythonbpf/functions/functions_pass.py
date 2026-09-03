@@ -205,10 +205,8 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
     """
     if isinstance(stmt.target, ast.Name):
         name = stmt.target.id
-        # Same resolution order as reads: local, then declared global. The two
-        # cannot both hold a name (a parameter may not be declared global, and
-        # an undeclared write to a global's name is refused), so this order is
-        # about giving the same answer as _handle_name_expr, not precedence.
+        # One table: a declared global is a local_sym_tab entry whose slot is
+        # the GlobalVariable, so it needs no separate branch.
         if name in local_sym_tab:
             slot = local_sym_tab[name].var
             slot_type = local_sym_tab[name].ir_type
@@ -216,9 +214,6 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
                 raise SyntaxError(
                     f"cannot assign to '{name}': it is the context parameter"
                 )
-        elif name in compilation_context.current_func_globals:
-            sym = compilation_context.bpf_globals[name]
-            slot, slot_type = sym.var, sym.ir_type
         elif name in compilation_context.bpf_globals:
             raise SyntaxError(
                 f"augmented assignment to '{name}' shadows the BPF global of "
@@ -414,28 +409,6 @@ def process_func_body(
 
     local_sym_tab = {}
 
-    # Collect `global x` declarations. Python scoping rules apply: a declared
-    # name may be written anywhere in this function and always means the
-    # @bpfglobal, never a local. Undeclared writes to a global name are
-    # rejected in the allocation pass rather than silently shadowing.
-    declared_globals: set[str] = set()
-    param_names = {arg.arg for arg in func_node.args.args}
-    for node in ast.walk(func_node):
-        if isinstance(node, ast.Global):
-            for gname in node.names:
-                if gname in param_names:
-                    # Python's own rule and wording. Without it the read path
-                    # (local first) and the write path would resolve the same
-                    # name to different storage.
-                    raise SyntaxError(f"name '{gname}' is parameter and global")
-                if gname not in compilation_context.bpf_globals:
-                    raise SyntaxError(
-                        f"'global {gname}' in '{func_node.name}': no @bpfglobal "
-                        f"named '{gname}' is declared"
-                    )
-                declared_globals.add(gname)
-    compilation_context.current_func_globals = declared_globals
-
     # Add the context parameter (first function argument) to the local symbol table
     if func_node.args.args and len(func_node.args.args) > 0:
         context_arg = func_node.args.args[0]
@@ -474,6 +447,26 @@ def process_func_body(
                 local_sym_tab[context_name] = context_type
                 logger.info(f"Added argument '{context_name}' to local symbol table")
 
+    # A `global x` statement binds x in this function's scope to the
+    # @bpfglobal's storage. It goes into local_sym_tab like any other name,
+    # flagged, so every read and write resolves it through the one table with
+    # no separate lookup order to get wrong. Python's rules apply: a parameter
+    # cannot be declared global, and the name must be a @bpfglobal.
+    for node in ast.walk(func_node):
+        if isinstance(node, ast.Global):
+            for gname in node.names:
+                if gname in local_sym_tab:
+                    raise SyntaxError(f"name '{gname}' is parameter and global")
+                if gname not in compilation_context.bpf_globals:
+                    raise SyntaxError(
+                        f"'global {gname}' in '{func_node.name}': no @bpfglobal "
+                        f"named '{gname}' is declared"
+                    )
+                sym = compilation_context.bpf_globals[gname]
+                local_sym_tab[gname] = LocalSymbol(
+                    sym.var, sym.ir_type, None, declared_global=True
+                )
+
     # pre-allocate dynamic variables
     local_sym_tab = allocate_mem(
         compilation_context,
@@ -499,8 +492,6 @@ def process_func_body(
 
     if not did_return:
         builder.ret(ir.Constant(ir.IntType(64), 0))
-
-    compilation_context.current_func_globals = set()
 
 
 def process_bpf_chunk(func_node, compilation_context, return_type):

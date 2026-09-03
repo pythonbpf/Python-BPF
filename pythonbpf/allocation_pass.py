@@ -50,23 +50,19 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
 
         var_name = target.id
 
-        # Writes to @bpfglobal variables use the global symbol, not a stack
-        # slot. Requires Python's own `global` declaration; without it an
-        # assignment to a global's name would silently create a local that
-        # shadows it, which is exactly the bug class we refuse to compile.
-        if var_name in compilation_context.current_func_globals:
-            logger.debug(f"'{var_name}' is a declared global, no allocation needed")
+        # Already bound in this scope: a parameter, an earlier assignment, or a
+        # `global` declaration (whose slot is the GlobalVariable). No slot needed.
+        if var_name in local_sym_tab:
+            logger.debug(f"'{var_name}' already bound, no allocation needed")
             continue
+
+        # Not declared `global`, yet named like one: in real Python this would
+        # create a shadowing local. Refuse rather than guess which was meant.
         if var_name in compilation_context.bpf_globals:
             raise SyntaxError(
                 f"assignment to '{var_name}' shadows the BPF global of the same "
                 f"name — add 'global {var_name}' to write to it"
             )
-
-        # Skip if already allocated
-        if var_name in local_sym_tab:
-            logger.debug(f"Variable {var_name} already allocated, skipping")
-            continue
 
         # Determine type and allocate based on rval
         if isinstance(rval, ast.Call):
