@@ -1,7 +1,35 @@
+import ast
 import logging
 from llvmlite import ir
 
 logger = logging.getLogger(__name__)
+
+
+BINOP_METHODS = {
+    ast.Add: "add",
+    ast.Sub: "sub",
+    ast.Mult: "mul",
+    ast.Div: "sdiv",
+    ast.Mod: "srem",
+    ast.LShift: "shl",
+    ast.RShift: "lshr",
+    ast.BitOr: "or_",
+    ast.BitXor: "xor",
+    ast.BitAnd: "and_",
+    ast.FloorDiv: "udiv",
+}
+
+
+def apply_binop(builder, op, left, right):
+    """Emit the LLVM instruction for a Python binary operator.
+
+    Shared by binary-op evaluation and augmented assignment so the operator
+    table exists exactly once.
+    """
+    method = BINOP_METHODS.get(type(op))
+    if method is None:
+        raise SyntaxError("Unsupported binary operation")
+    return getattr(builder, method)(left, right)
 
 
 def deref_to_depth(func, builder, val, target_depth):

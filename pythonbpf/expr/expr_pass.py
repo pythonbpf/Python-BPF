@@ -6,7 +6,7 @@ from typing import Dict
 
 from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
 from .call_registry import CallHandlerRegistry
-from .ir_ops import deref_to_depth, access_struct_field
+from .ir_ops import deref_to_depth, access_struct_field, apply_binop
 from .type_normalization import (
     convert_to_bool,
     handle_comparator,
@@ -31,8 +31,7 @@ def _handle_name_expr(
         val = builder.load(var)
         return val, local_sym_tab[expr.id].ir_type
     elif expr.id in compilation_context.bpf_globals:
-        # A @bpfglobal: read straight off the global symbol, exactly the
-        # `load i64, ptr @counter` form clang emits (tests/c-form/global_vars).
+        # A @bpfglobal
         sym = compilation_context.bpf_globals[expr.id]
         val = builder.load(sym.var)
         return val, sym.ir_type
@@ -86,7 +85,9 @@ def _handle_attribute_expr(
             var_ptr, var_type, var_metadata = local_sym_tab[var_name]
             logger.info(f"Loading attribute {attr_name} from variable {var_name}")
             logger.info(
-                f"Variable type: {var_type}, Variable ptr: {var_ptr}, Variable Metadata: {var_metadata}"
+                f"Variable type: {var_type}, Variable ptr: {
+                    var_ptr
+                }, Variable Metadata: {var_metadata}"
             )
             if (
                 hasattr(var_metadata, "__module__")
@@ -104,7 +105,9 @@ def _handle_attribute_expr(
 
             elif isinstance(var_metadata, Field):
                 logger.error(
-                    f"Cannot access field '{attr_name}' on already-loaded field value '{var_name}'"
+                    f"Cannot access field '{attr_name}' on already-loaded field value '{
+                        var_name
+                    }'"
                 )
                 return None
 
@@ -234,25 +237,7 @@ def _handle_binary_op_impl(func, compilation_context, rval, builder, local_sym_t
         right = builder.sext(right, ir.IntType(64))
 
     # Map AST operation nodes to LLVM IR builder methods
-    op_map = {
-        ast.Add: builder.add,
-        ast.Sub: builder.sub,
-        ast.Mult: builder.mul,
-        ast.Div: builder.sdiv,
-        ast.Mod: builder.srem,
-        ast.LShift: builder.shl,
-        ast.RShift: builder.lshr,
-        ast.BitOr: builder.or_,
-        ast.BitXor: builder.xor,
-        ast.BitAnd: builder.and_,
-        ast.FloorDiv: builder.udiv,
-    }
-
-    if type(op) in op_map:
-        result = op_map[type(op)](left, right)
-        return result
-    else:
-        raise SyntaxError("Unsupported binary operation")
+    return apply_binop(builder, op, left, right)
 
 
 def _handle_binary_op(
@@ -315,7 +300,9 @@ def _handle_ctypes_call(
         # Get the IR type from the value itself
         actual_ir_type = value.type
         logger.info(
-            f"Converting vmlinux field {val_type.name} (IR type: {actual_ir_type}) to {call_type}"
+            f"Converting vmlinux field {val_type.name} (IR type: {actual_ir_type}) to {
+                call_type
+            }"
         )
     else:
         actual_ir_type = val_type
@@ -328,7 +315,9 @@ def _handle_ctypes_call(
             if actual_ir_type.width < expected_type.width:
                 value = builder.sext(value, expected_type)
                 logger.info(
-                    f"Sign-extended from i{actual_ir_type.width} to i{expected_type.width}"
+                    f"Sign-extended from i{actual_ir_type.width} to i{
+                        expected_type.width
+                    }"
                 )
             elif actual_ir_type.width > expected_type.width:
                 value = builder.trunc(value, expected_type)
@@ -340,7 +329,9 @@ def _handle_ctypes_call(
                 pass
         else:
             raise ValueError(
-                f"Type mismatch: expected {expected_type}, got {actual_ir_type} (original type: {val_type})"
+                f"Type mismatch: expected {expected_type}, got {
+                    actual_ir_type
+                } (original type: {val_type})"
             )
 
     return value, expected_type

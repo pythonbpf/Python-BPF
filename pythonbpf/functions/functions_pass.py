@@ -11,6 +11,8 @@ from pythonbpf.expr import (
     eval_expr,
     handle_expr,
     convert_to_bool,
+    get_operand_value,
+    apply_binop,
     VmlinuxHandlerRegistry,
 )
 from pythonbpf.assign_pass import (
@@ -190,30 +192,81 @@ def handle_assign(func, compilation_context, builder, stmt, local_sym_tab):
 
 
 def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
-    """Handle `x += v` by desugaring to `x = x op v` and reusing handle_assign.
+    """Handle `x += v` and friends by direct lowering: resolve the target's
+    slot, load it, apply the operator, store back.
 
-    That is the statement's Python semantics for the targets we support, and it
-    means globals come along for free: `counter += 1` under `global counter`
-    becomes load/add/store on @counter.
+    No desugaring into synthetic Assign/BinOp nodes: every pass in this
+    compiler walks the tree the user wrote, and nodes invented mid-codegen are
+    invisible to the passes that already ran and carry no source locations.
+    Semantic agreement with `x = x op v` comes from sharing the value-level
+    helpers instead — the RHS goes through get_operand_value like any other
+    read, and the operator table is apply_binop, the same one binary-op
+    evaluation uses.
     """
     if isinstance(stmt.target, ast.Name):
-        load_target = ast.Name(id=stmt.target.id, ctx=ast.Load())
-    elif isinstance(stmt.target, ast.Attribute):
-        load_target = ast.Attribute(
-            value=stmt.target.value, attr=stmt.target.attr, ctx=ast.Load()
-        )
+        name = stmt.target.id
+        if name in compilation_context.current_func_globals:
+            sym = compilation_context.bpf_globals[name]
+            slot, slot_type = sym.var, sym.ir_type
+        elif name in compilation_context.bpf_globals:
+            raise SyntaxError(
+                f"augmented assignment to '{name}' shadows the BPF global of "
+                f"the same name — add 'global {name}' to write to it"
+            )
+        elif name in local_sym_tab:
+            slot = local_sym_tab[name].var
+            slot_type = local_sym_tab[name].ir_type
+        else:
+            raise SyntaxError(f"augmented assignment to undefined variable '{name}'")
+    elif isinstance(stmt.target, ast.Attribute) and isinstance(
+        stmt.target.value, ast.Name
+    ):
+        var_name, field_name = stmt.target.value.id, stmt.target.attr
+        if var_name not in local_sym_tab:
+            raise SyntaxError(
+                f"augmented assignment to field of undefined variable '{var_name}'"
+            )
+        metadata = local_sym_tab[var_name].metadata
+        structs_sym_tab = compilation_context.structs_sym_tab
+        if metadata not in structs_sym_tab:
+            raise SyntaxError(
+                f"augmented assignment to '{var_name}.{field_name}' is only "
+                f"supported for struct fields"
+            )
+        struct_info = structs_sym_tab[metadata]
+        if field_name not in struct_info.fields:
+            raise SyntaxError(f"Field '{field_name}' not found in struct '{metadata}'")
+        slot = struct_info.gep(builder, local_sym_tab[var_name].var, field_name)
+        slot_type = struct_info.field_type(field_name)
     else:
         raise SyntaxError(
             f"Unsupported augmented-assignment target: {ast.dump(stmt.target)}"
         )
 
-    desugared = ast.Assign(
-        targets=[stmt.target],
-        value=ast.BinOp(left=load_target, op=stmt.op, right=stmt.value),
+    if not isinstance(slot_type, ir.IntType):
+        raise SyntaxError(
+            f"augmented assignment needs an integer target, got {slot_type}"
+        )
+
+    # Python evaluates the target's current value before the right-hand side.
+    current = builder.load(slot)
+    rhs = get_operand_value(
+        func, compilation_context, stmt.value, builder, local_sym_tab
     )
-    ast.copy_location(desugared, stmt)
-    ast.fix_missing_locations(desugared)
-    handle_assign(func, compilation_context, builder, desugared, local_sym_tab)
+    if rhs is None:
+        raise SyntaxError(
+            f"Failed to evaluate augmented-assignment value: {ast.dump(stmt.value)}"
+        )
+    # Same width discipline as binary-op evaluation: compute in i64, narrow
+    # back to the slot's width on the way out.
+    if current.type.width < 64:
+        current = builder.sext(current, ir.IntType(64))
+    if isinstance(rhs.type, ir.IntType) and rhs.type.width < 64:
+        rhs = builder.sext(rhs, ir.IntType(64))
+    result = apply_binop(builder, stmt.op, current, rhs)
+    if result.type.width > slot_type.width:
+        result = builder.trunc(result, slot_type)
+    builder.store(result, slot)
 
 
 def handle_cond(func, compilation_context, builder, cond, local_sym_tab):
