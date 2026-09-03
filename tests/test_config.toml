@@ -38,3 +38,5 @@
 "failing_tests/globals_undeclared_name.py" = {reason = "`global x` naming something that is not a @bpfglobal is a compile error", level = "ir"}
 
 "failing_tests/globals_bad_type.py" = {reason = "Non-integer-scalar globals are not supported in milestone 1 (NotImplementedError by design)", level = "ir"}
+
+"failing_tests/globals_augassign_shadowing.py" = {reason = "Augmented assignment to a global name without a `global` statement is a deliberate compile error (would shadow the BPF global)", level = "ir"}
