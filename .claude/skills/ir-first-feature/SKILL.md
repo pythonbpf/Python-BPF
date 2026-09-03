@@ -54,6 +54,33 @@ Emit IR through the existing passes (`globals_pass`, `expr_pass`, `assign_pass`,
 clang reference for the same shapes** — "it compiles and llc accepts it" is not the
 bar; llc accepts plenty of subtly wrong IR.
 
+### House style: lower, don't desugar
+
+Handlers walk the AST the user wrote and emit IR directly. **Do not synthesize new AST
+nodes mid-compilation and feed them back through other handlers** — no
+`ast.Assign(ast.BinOp(...))` conjured to make `x += v` reuse the assignment path.
+
+The temptation is legitimate, so know the argument you are declining. Desugaring is a
+standard compiler move (CPython itself lowers `x += v` this way), it guarantees semantic
+agreement with the composed form, it is the smallest diff, and any later fix to the
+composed path applies automatically. Those are real benefits.
+
+They lose in this codebase for structural reasons: the passes communicate through the
+source tree. Allocation runs before codegen and walks `Assign` — a synthetic `Assign`
+created during codegen is invisible to it, so the two passes silently disagree about
+what the function contains (it happened to be harmless for augmented assignment only
+because that statement never needs a fresh slot; that is luck, not design). Synthetic
+nodes carry no source location, so diagnostics point nowhere. And `ast.dump` in the logs
+shows statements the user never typed, which turns every debugging session into an
+archaeology exercise.
+
+The resolution is to move sharing down a level: **equivalence should come from shared
+value-level helpers, not shared AST.** When two constructs must agree, extract the common
+logic into a helper both call — the way binary-op evaluation and augmented assignment
+both use `apply_binop` for the operator table and `get_operand_value` for operands —
+and let each handler resolve its own target and emit its own store. Two handlers calling
+one helper is the idiom; one handler manufacturing input for another is not.
+
 ## 6. Test at the right tier
 
 - Works now → `tests/passing_tests/<category>/`.
