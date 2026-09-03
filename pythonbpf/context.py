@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pythonbpf.structs.struct_type import StructType
     from pythonbpf.maps.maps_utils import MapSymbol
-    from pythonbpf.globals_pass import BpfGlobalSymbol
+    from pythonbpf.symbols import BpfGlobalSymbol
 
 logger = logging.getLogger(__name__)
 

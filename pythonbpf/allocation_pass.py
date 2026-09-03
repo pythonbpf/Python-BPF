@@ -2,7 +2,7 @@ import ast
 import logging
 import ctypes
 from llvmlite import ir
-from .local_symbol import LocalSymbol
+from .symbols import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry

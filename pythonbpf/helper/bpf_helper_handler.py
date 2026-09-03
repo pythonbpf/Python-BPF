@@ -1111,6 +1111,6 @@ def handle_helper_call(
         if not map_sym_tab or map_name not in map_sym_tab:
             raise ValueError(f"Map '{map_name}' not found in symbol table")
 
-        return invoke_helper(method_name, map_sym_tab[map_name].sym)
+        return invoke_helper(method_name, map_sym_tab[map_name].var)
 
     return None

@@ -1,10 +1,10 @@
 from llvmlite import ir
 import ast
 
-from dataclasses import dataclass
 from logging import Logger
 import logging
 from .type_deducer import ctypes_to_ir
+from .symbols import BpfGlobalSymbol
 from .debuginfo import DebugInfoGenerator
 from .expr import VmlinuxHandlerRegistry
 from .debuginfo import dwarf_constants as dc
@@ -24,20 +24,6 @@ _SIGNED_CTYPES = {
 }
 
 _C_NAME_BY_WIDTH = {8: "char", 16: "short", 32: "int", 64: "long long"}
-
-
-@dataclass
-class BpfGlobalSymbol:
-    """A mutable BPF global variable declared with @bpfglobal.
-
-    Lands in .bss (zero initializer) or .data (non-zero) and is read with a
-    plain load / written with a plain store; libbpf exposes the sections to
-    userspace as global-data maps.
-    """
-
-    var: ir.GlobalVariable
-    ir_type: ir.Type
-    ctype_name: str
 
 
 def populate_global_symbol_table(tree, compilation_context):
