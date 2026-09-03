@@ -6,7 +6,8 @@ from typing import Dict
 
 from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
 from .call_registry import CallHandlerRegistry
-from .ir_ops import deref_to_depth, access_struct_field, apply_binop
+from .ir_ops import deref_to_depth, access_struct_field
+from .operators import apply_binop, UNARY_OPS, BOOL_OPS
 from .type_normalization import (
     convert_to_bool,
     handle_comparator,
@@ -375,7 +376,7 @@ def _handle_unary_op(
     local_sym_tab,
 ):
     """Handle ast.UnaryOp expressions."""
-    if not isinstance(expr.op, ast.Not) and not isinstance(expr.op, ast.USub):
+    if not isinstance(expr.op, UNARY_OPS):
         logger.error("Only 'not' and '-' unary operators are supported")
         return None
 
@@ -518,6 +519,9 @@ def _handle_boolean_op(
 ):
     """Handle `and` and `or` boolean operations."""
 
+    if not isinstance(expr.op, BOOL_OPS):
+        logger.error(f"Unsupported boolean operator: {type(expr.op).__name__}")
+        return None
     if isinstance(expr.op, ast.And):
         return _handle_and_op(func, builder, expr, local_sym_tab, compilation_context)
     elif isinstance(expr.op, ast.Or):

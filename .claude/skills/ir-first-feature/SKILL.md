@@ -81,6 +81,10 @@ both use `apply_binop` for the operator table and `get_operand_value` for operan
 and let each handler resolve its own target and emit its own store. Two handlers calling
 one helper is the idiom; one handler manufacturing input for another is not.
 
+The operator tables themselves — binary operators, comparisons, and the supported
+unary/boolean operators — live in exactly one place, `expr/operators.py`. A new operator
+is added there first; if it is not in that file, the compiler does not support it.
+
 ## 6. Test at the right tier
 
 - Works now → `tests/passing_tests/<category>/`.
