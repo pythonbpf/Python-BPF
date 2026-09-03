@@ -32,3 +32,13 @@
 "failing_tests/vmlinux/assignment_handling.py" = {reason = "Assigning vmlinux enum value (XDP_PASS) to a local variable not yet supported", level = "ir"}
 
 "failing_tests/xdp_pass.py" = {reason = "XDP program using vmlinux structs (struct_xdp_md) and complex map/struct interaction not yet supported", level = "ir"}
+
+"failing_tests/globals_shadowing.py" = {reason = "Assignment to a global name without a `global` statement is a deliberate compile error (would shadow the BPF global)", level = "ir"}
+
+"failing_tests/globals_undeclared_name.py" = {reason = "`global x` naming something that is not a @bpfglobal is a compile error", level = "ir"}
+
+"failing_tests/globals_bad_type.py" = {reason = "Non-integer-scalar globals are not supported in milestone 1 (NotImplementedError by design)", level = "ir"}
+
+"failing_tests/globals_augassign_shadowing.py" = {reason = "Augmented assignment to a global name without a `global` statement is a deliberate compile error (would shadow the BPF global)", level = "ir"}
+
+"failing_tests/globals_parameter_and_global.py" = {reason = "A parameter may not be declared global (Python: name is parameter and global)", level = "ir"}

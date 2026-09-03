@@ -2,7 +2,7 @@ import ast
 import logging
 import ctypes
 from llvmlite import ir
-from .local_symbol import LocalSymbol
+from .symbols import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
@@ -49,10 +49,20 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
             continue
 
         var_name = target.id
-        # Skip if already allocated
+
+        # Already bound in this scope: a parameter, an earlier assignment, or a
+        # `global` declaration (whose slot is the GlobalVariable). No slot needed.
         if var_name in local_sym_tab:
-            logger.debug(f"Variable {var_name} already allocated, skipping")
+            logger.debug(f"'{var_name}' already bound, no allocation needed")
             continue
+
+        # Not declared `global`, yet named like one: in real Python this would
+        # create a shadowing local. Refuse rather than guess which was meant.
+        if var_name in compilation_context.bpf_globals:
+            raise SyntaxError(
+                f"assignment to '{var_name}' shadows the BPF global of the same "
+                f"name — add 'global {var_name}' to write to it"
+            )
 
         # Determine type and allocate based on rval
         if isinstance(rval, ast.Call):
