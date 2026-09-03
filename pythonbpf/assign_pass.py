@@ -115,7 +115,10 @@ def handle_variable_assignment(
 
     # A name declared with `global` writes the @bpfglobal symbol directly:
     # the plain `store i64 %v, ptr @counter` form of the C reference.
-    if var_name in compilation_context.current_func_globals:
+    if (
+        var_name not in local_sym_tab
+        and var_name in compilation_context.current_func_globals
+    ):
         sym = compilation_context.bpf_globals[var_name]
         val_result = eval_expr(func, compilation_context, builder, rval, local_sym_tab)
         if val_result is None:

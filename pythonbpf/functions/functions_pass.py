@@ -205,7 +205,18 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
     """
     if isinstance(stmt.target, ast.Name):
         name = stmt.target.id
-        if name in compilation_context.current_func_globals:
+        # Same resolution order as reads: local, then declared global. The two
+        # cannot both hold a name (a parameter may not be declared global, and
+        # an undeclared write to a global's name is refused), so this order is
+        # about giving the same answer as _handle_name_expr, not precedence.
+        if name in local_sym_tab:
+            slot = local_sym_tab[name].var
+            slot_type = local_sym_tab[name].ir_type
+            if slot is None:
+                raise SyntaxError(
+                    f"cannot assign to '{name}': it is the context parameter"
+                )
+        elif name in compilation_context.current_func_globals:
             sym = compilation_context.bpf_globals[name]
             slot, slot_type = sym.var, sym.ir_type
         elif name in compilation_context.bpf_globals:
@@ -213,9 +224,6 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
                 f"augmented assignment to '{name}' shadows the BPF global of "
                 f"the same name — add 'global {name}' to write to it"
             )
-        elif name in local_sym_tab:
-            slot = local_sym_tab[name].var
-            slot_type = local_sym_tab[name].ir_type
         else:
             raise SyntaxError(f"augmented assignment to undefined variable '{name}'")
     elif isinstance(stmt.target, ast.Attribute) and isinstance(
@@ -411,9 +419,15 @@ def process_func_body(
     # @bpfglobal, never a local. Undeclared writes to a global name are
     # rejected in the allocation pass rather than silently shadowing.
     declared_globals: set[str] = set()
+    param_names = {arg.arg for arg in func_node.args.args}
     for node in ast.walk(func_node):
         if isinstance(node, ast.Global):
             for gname in node.names:
+                if gname in param_names:
+                    # Python's own rule and wording. Without it the read path
+                    # (local first) and the write path would resolve the same
+                    # name to different storage.
+                    raise SyntaxError(f"name '{gname}' is parameter and global")
                 if gname not in compilation_context.bpf_globals:
                     raise SyntaxError(
                         f"'global {gname}' in '{func_node.name}': no @bpfglobal "

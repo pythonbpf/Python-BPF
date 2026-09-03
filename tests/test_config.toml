@@ -40,3 +40,5 @@
 "failing_tests/globals_bad_type.py" = {reason = "Non-integer-scalar globals are not supported in milestone 1 (NotImplementedError by design)", level = "ir"}
 
 "failing_tests/globals_augassign_shadowing.py" = {reason = "Augmented assignment to a global name without a `global` statement is a deliberate compile error (would shadow the BPF global)", level = "ir"}
+
+"failing_tests/globals_parameter_and_global.py" = {reason = "A parameter may not be declared global (Python: name is parameter and global)", level = "ir"}
