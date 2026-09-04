@@ -44,6 +44,9 @@ PythonBPF uses Python's `ctypes` module for type definitions:
 * `c_void_p` - Void pointers
 * `str(N)` - Fixed-length strings (e.g., `str(16)` for 16-byte string)
 
+Integers follow C's rules for width, sign, conversion and arithmetic; see
+{doc}`integers` for the details and the places where this differs from Python.
+
 ## Example Structure
 
 A typical PythonBPF program follows this structure:
