@@ -11,9 +11,12 @@ from pythonbpf.expr import (
     eval_expr,
     handle_expr,
     convert_to_bool,
-    get_operand_value,
+    get_typed_operand,
     apply_binop,
     convert,
+    to_promoted,
+    canonicalise,
+    usual_arithmetic_conversions,
     VmlinuxHandlerRegistry,
 )
 from pythonbpf.assign_pass import (
@@ -254,20 +257,22 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
 
     # Python evaluates the target's current value before the right-hand side.
     current = builder.load(slot)
-    rhs = get_operand_value(
+    rhs, rhs_ty = get_typed_operand(
         func, compilation_context, stmt.value, builder, local_sym_tab
     )
     if rhs is None:
         raise SyntaxError(
             f"Failed to evaluate augmented-assignment value: {ast.dump(stmt.value)}"
         )
-    # Same width discipline as binary-op evaluation: compute in i64, narrow
-    # back to the slot's width on the way out.
-    current = convert(builder, current, slot_type, ir.IntType(64))
-    rhs = convert(builder, rhs, rhs.type, ir.IntType(64))
-    result = apply_binop(builder, stmt.op, current, rhs)
-    result = convert(builder, result, result.type, slot_type)
-    builder.store(result, slot)
+    # x op= v is typed exactly like x = x op v: operate in the promoted type,
+    # then convert the result to the target's type on the way back in.
+    result_ty = usual_arithmetic_conversions(slot_type, rhs_ty)
+    current = to_promoted(builder, current, slot_type, result_ty)
+    rhs = to_promoted(builder, rhs, rhs_ty, result_ty)
+    result = canonicalise(
+        builder, apply_binop(builder, stmt.op, current, rhs), result_ty
+    )
+    builder.store(convert(builder, result, result_ty, slot_type), slot)
 
 
 def handle_cond(func, compilation_context, builder, cond, local_sym_tab):
@@ -348,7 +353,9 @@ def handle_return(builder, stmt, local_sym_tab, ret_type, compilation_context=No
             local_sym_tab=local_sym_tab,
         )
         logger.info(f"Evaluated return expression to {val}")
-        builder.ret(val[0])
+        # The declared return type is the LHS of an implicit assignment:
+        # widen per the value's sign, truncate if narrower.
+        builder.ret(convert(builder, val[0], val[1], ret_type))
         return True
 
 

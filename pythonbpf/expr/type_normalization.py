@@ -62,12 +62,36 @@ def convert(builder, val, from_ty, to_ty):
     return val
 
 
+def _fold_int_constant(val, ty, width):
+    """A literal re-expressed at the working width holding type ty's value:
+    wrap to ty's width, take the representative ty's sign implies."""
+    v = val.constant % (1 << ty.width)
+    if signedness(ty) and v >= 1 << (ty.width - 1):
+        v -= 1 << ty.width
+    return ir.Constant(ir.IntType(width), v)
+
+
+def to_promoted(builder, val, from_ty, to_ty, width=64):
+    """Bring an operand to the promoted type of its operation, C-style.
+
+    First convert it to to_ty per its *own* sign (that is C's conversion of an
+    operand to the common type), then widen to the working width per to_ty's
+    sign so the i64 register holds exactly a to_ty value. Literals are folded.
+    """
+    if isinstance(val, ir.Constant) and isinstance(val.constant, int):
+        return _fold_int_constant(val, to_ty, width)
+    val = convert(builder, val, from_ty, ir.IntType(to_ty.width))
+    return canonicalise(builder, val, to_ty, width)
+
+
 def canonicalise(builder, val, ty, width=64):
     """Bring `val` to the working width holding exactly the value of type `ty`:
     truncate to ty's width if the register is wider (so the operation wraps at
     ty's width, as C does), then extend per ty's sign."""
     if not isinstance(val.type, ir.IntType):
         return val
+    if isinstance(val, ir.Constant) and isinstance(val.constant, int):
+        return _fold_int_constant(val, ty, width)
     if val.type.width > ty.width:
         val = builder.trunc(val, ir.IntType(ty.width))
     if val.type.width < width:
