@@ -418,7 +418,7 @@ def _handle_unary_op(
     if isinstance(expr.op, ast.Not):
         true_const = ir.Constant(ir.IntType(1), 1)
         result = builder.xor(convert_to_bool(builder, operand), true_const)
-        return result, ir.IntType(1)
+        return result, IntTy(1, False)
     elif isinstance(expr.op, ast.USub):
         if isinstance(operand, ir.Constant) and isinstance(operand.constant, int):
             # -2 parses as USub(Constant 2); fold it so it is a literal like
@@ -488,7 +488,7 @@ def _handle_and_op(func, builder, expr, local_sym_tab, compilation_context):
         phi.add_incoming(val, block)
 
     logger.debug(f"Generated 'and' with {len(incoming_values)} incoming values")
-    return phi, ir.IntType(1)
+    return phi, IntTy(1, False)
 
 
 def _handle_or_op(func, builder, expr, local_sym_tab, compilation_context):
@@ -541,7 +541,7 @@ def _handle_or_op(func, builder, expr, local_sym_tab, compilation_context):
         phi.add_incoming(val, block)
 
     logger.debug(f"Generated 'or' with {len(incoming_values)} incoming values")
-    return phi, ir.IntType(1)
+    return phi, IntTy(1, False)
 
 
 def _handle_boolean_op(
