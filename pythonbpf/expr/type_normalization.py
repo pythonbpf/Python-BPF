@@ -1,6 +1,7 @@
 import logging
 from llvmlite import ir
 from .ir_ops import deref_to_depth
+from pythonbpf.type_deducer import signedness
 from .operators import COMPARISON_OPS
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,39 @@ def _normalize_types(func, builder, lhs, rhs):
             elif rhs_depth < lhs_depth:
                 lhs = deref_to_depth(func, builder, lhs, lhs_depth - rhs_depth)
             return _normalize_types(func, builder, lhs, rhs)
+
+
+def convert(builder, val, from_ty, to_ty):
+    """Convert an integer value between types the way C does.
+
+    Widening is driven by the *source* sign (zext for unsigned, sext for
+    signed) so the mathematical value is preserved; narrowing truncates; equal
+    width is a reinterpretation and emits nothing. `from_ty` and `to_ty` are
+    descriptors (see type_deducer.IntTy); the physical width comes from the
+    value itself, which may already be wider than its descriptor says.
+    """
+    if not (isinstance(to_ty, ir.IntType) and isinstance(val.type, ir.IntType)):
+        return val
+    if val.type.width > to_ty.width:
+        return builder.trunc(val, to_ty)
+    if val.type.width < to_ty.width:
+        ext = builder.zext if not signedness(from_ty) else builder.sext
+        return ext(val, to_ty)
+    return val
+
+
+def canonicalise(builder, val, ty, width=64):
+    """Bring `val` to the working width holding exactly the value of type `ty`:
+    truncate to ty's width if the register is wider (so the operation wraps at
+    ty's width, as C does), then extend per ty's sign."""
+    if not isinstance(val.type, ir.IntType):
+        return val
+    if val.type.width > ty.width:
+        val = builder.trunc(val, ir.IntType(ty.width))
+    if val.type.width < width:
+        ext = builder.zext if not signedness(ty) else builder.sext
+        val = ext(val, ir.IntType(width))
+    return val
 
 
 def convert_to_bool(builder, val):

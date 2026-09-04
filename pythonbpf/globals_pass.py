@@ -3,25 +3,13 @@ import ast
 
 from logging import Logger
 import logging
-from .type_deducer import ctypes_to_ir
+from .type_deducer import ctypes_to_ir, is_signed_ctype
 from .symbols import BpfGlobalSymbol
 from .debuginfo import DebugInfoGenerator
 from .expr import VmlinuxHandlerRegistry
 from .debuginfo import dwarf_constants as dc
 
 logger: Logger = logging.getLogger(__name__)
-
-_SIGNED_CTYPES = {
-    "c_int8",
-    "c_int16",
-    "c_int32",
-    "c_int64",
-    "c_int",
-    "c_short",
-    "c_long",
-    "c_longlong",
-    "c_byte",
-}
 
 _C_NAME_BY_WIDTH = {8: "char", 16: "short", 32: "int", 64: "long long"}
 
@@ -106,7 +94,7 @@ def _emit_global_debug_info(compilation_context, gvar, name, ctype_name):
     """
     generator = DebugInfoGenerator(compilation_context.module)
     width = gvar.value_type.width
-    signed = ctype_name in _SIGNED_CTYPES
+    signed = is_signed_ctype(ctype_name)
     base = _C_NAME_BY_WIDTH[width]
     if width == 8:
         encoding = dc.DW_ATE_signed_char if signed else dc.DW_ATE_unsigned_char
