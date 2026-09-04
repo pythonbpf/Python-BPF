@@ -11,20 +11,24 @@ import ast
 
 from pythonbpf.type_deducer import IntTy, signedness
 
-# ast.BinOp.op class -> llvmlite IRBuilder method name.
-# Shared by binary-op evaluation and augmented assignment.
+# ast.BinOp.op class -> (signed IRBuilder method, unsigned IRBuilder method).
+# Shared by binary-op evaluation and augmented assignment. The ring operations
+# are sign-blind (two's complement gives identical low bits); division,
+# remainder and right shift are not, and the operation's type decides. `/` and
+# `//` are the same C truncating division -- Python's floor semantics for `//`
+# and `%` on negatives are a documented divergence.
 BINOP_METHODS = {
-    ast.Add: "add",
-    ast.Sub: "sub",
-    ast.Mult: "mul",
-    ast.Div: "sdiv",
-    ast.Mod: "srem",
-    ast.LShift: "shl",
-    ast.RShift: "lshr",
-    ast.BitOr: "or_",
-    ast.BitXor: "xor",
-    ast.BitAnd: "and_",
-    ast.FloorDiv: "udiv",
+    ast.Add: ("add", "add"),
+    ast.Sub: ("sub", "sub"),
+    ast.Mult: ("mul", "mul"),
+    ast.Div: ("sdiv", "udiv"),
+    ast.FloorDiv: ("sdiv", "udiv"),
+    ast.Mod: ("srem", "urem"),
+    ast.LShift: ("shl", "shl"),
+    ast.RShift: ("ashr", "lshr"),
+    ast.BitOr: ("or_", "or_"),
+    ast.BitXor: ("xor", "xor"),
+    ast.BitAnd: ("and_", "and_"),
 }
 
 # ast.Compare op class -> icmp predicate string.
@@ -44,12 +48,13 @@ UNARY_OPS = (ast.Not, ast.USub)
 BOOL_OPS = (ast.And, ast.Or)
 
 
-def apply_binop(builder, op, left, right):
-    """Emit the LLVM instruction for a Python binary operator."""
-    method = BINOP_METHODS.get(type(op))
-    if method is None:
+def apply_binop(builder, op, left, right, signed=True):
+    """Emit the LLVM instruction for a Python binary operator, in the signed or
+    unsigned form the operation's type calls for."""
+    methods = BINOP_METHODS.get(type(op))
+    if methods is None:
         raise SyntaxError(f"Unsupported binary operation: {type(op).__name__}")
-    return getattr(builder, method)(left, right)
+    return getattr(builder, methods[0] if signed else methods[1])(left, right)
 
 
 def comparison_predicate(op):

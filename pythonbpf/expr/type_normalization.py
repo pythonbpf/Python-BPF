@@ -111,8 +111,8 @@ def convert_to_bool(builder, val):
     return builder.icmp_signed("!=", val, zero)
 
 
-def handle_comparator(func, builder, op, lhs, rhs):
-    """Handle comparison operations."""
+def handle_comparator(func, builder, op, lhs, rhs, signed=True):
+    """Handle comparison operations, signed or unsigned per the compared type."""
 
     if lhs.type != rhs.type:
         lhs, rhs = _normalize_types(func, builder, lhs, rhs)
@@ -125,6 +125,7 @@ def handle_comparator(func, builder, op, lhs, rhs):
         return None
 
     predicate = COMPARISON_OPS[type(op)]
-    result = builder.icmp_signed(predicate, lhs, rhs)
+    icmp = builder.icmp_signed if signed else builder.icmp_unsigned
+    result = icmp(predicate, lhs, rhs)
     logger.debug(f"Comparison result: {result}")
     return result, ir.IntType(1)
