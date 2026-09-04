@@ -48,14 +48,20 @@ def _handle_name_expr(
         raise SyntaxError(f"Undefined variable {expr.id}")
 
 
+def _int_literal(v: int):
+    """An integer literal: a 64-bit constant with C's literal rank as its
+    descriptor, `int` if the value fits and `long long` otherwise."""
+    lit_ty = IntTy(32, True) if -(1 << 31) <= v < (1 << 31) else IntTy(64, True)
+    return ir.Constant(ir.IntType(64), v), lit_ty
+
+
 def _handle_constant_expr(compilation_context, builder, expr: ast.Constant):
     """Handle ast.Constant expressions."""
     if isinstance(expr.value, int) or isinstance(expr.value, bool):
         # C gives a literal the type int if it fits, otherwise long long. That
         # rank is what makes `u32 / -2` an unsigned 32-bit division as in C.
         v = int(expr.value)
-        lit_ty = IntTy(32, True) if -(1 << 31) <= v < (1 << 31) else IntTy(64, True)
-        return ir.Constant(ir.IntType(64), v), lit_ty
+        return _int_literal(v)
     elif isinstance(expr.value, str):
         str_name = f".str.{id(expr)}"
         str_bytes = expr.value.encode("utf-8") + b"\x00"
@@ -414,6 +420,10 @@ def _handle_unary_op(
         result = builder.xor(convert_to_bool(builder, operand), true_const)
         return result, ir.IntType(1)
     elif isinstance(expr.op, ast.USub):
+        if isinstance(operand, ir.Constant) and isinstance(operand.constant, int):
+            # -2 parses as USub(Constant 2); fold it so it is a literal like
+            # any other, with a literal's C rank.
+            return _int_literal(-operand.constant)
         # Negation happens in the operand's promoted type; for an unsigned
         # operand that is C's 2^N - x, which the narrowing produces.
         result_ty = usual_arithmetic_conversions(operand_ty, operand_ty)
