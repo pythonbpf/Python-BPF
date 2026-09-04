@@ -151,7 +151,12 @@ def handle_variable_assignment(
         f"Evaluated value for {var_name}: {val} of type {val_type}, expected {var_type}"
     )
 
-    if val_type != var_type:
+    if isinstance(val_type, ir.IntType) and isinstance(var_type, ir.IntType):
+        # The descriptor may be narrower than the constant carrying the value
+        # (a literal is a 64-bit constant typed as C int), so never decide
+        # from descriptor equality: convert is a no-op when widths match.
+        val = convert(builder, val, val_type, var_type)
+    elif val_type != var_type:
         # Handle vmlinux struct pointers - they're represented as Python classes but are i64 pointers
         if isclass(val_type) and (val_type.__module__ == "vmlinux"):
             logger.info("Handling vmlinux struct pointer assignment")
@@ -216,8 +221,6 @@ def handle_variable_assignment(
                     f"Failed to assign ctype struct field to {var_name}: {val_type} != {var_type}"
                 )
                 return False
-        elif isinstance(val_type, ir.IntType) and isinstance(var_type, ir.IntType):
-            val = convert(builder, val, val_type, var_type)
         elif isinstance(val_type, ir.IntType) and isinstance(var_type, ir.PointerType):
             # NOTE: This is assignment to a PTR_TO_MAP_VALUE_OR_NULL
             logger.info(

@@ -42,10 +42,18 @@ class IntTy(ir.IntType):
 
 
 def signedness(ty) -> bool:
-    """Sign of an integer type descriptor. Plain ir.IntType (a site that has not
-    been taught to carry a sign yet) reads as signed, which is the compiler's
-    historical behaviour."""
-    return getattr(ty, "signed", True)
+    """Sign of an integer type descriptor.
+
+    IntTy carries it directly. A vmlinux Field carries a ctypes class in .type,
+    whose name decides. A plain ir.IntType -- a site that has not been taught to
+    carry a sign yet -- reads as signed, the compiler's historical behaviour.
+    """
+    if hasattr(ty, "signed"):
+        return ty.signed
+    ctype = getattr(getattr(ty, "type", None), "__name__", None)
+    if ctype in _INT_CTYPE_WIDTHS:
+        return is_signed_ctype(ctype)
+    return True
 
 
 _SIGNED_CTYPES = {

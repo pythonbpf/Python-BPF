@@ -4,6 +4,7 @@ import ctypes
 from llvmlite import ir
 
 from pythonbpf.symbols import LocalSymbol
+from pythonbpf.type_deducer import is_signed_ctype
 from pythonbpf.vmlinux_parser.assignment_info import AssignmentType
 
 logger = logging.getLogger(__name__)
@@ -367,8 +368,12 @@ class VmlinuxHandler:
 
         # Widen sub-register-width context fields to i64
         if needs_zext:
-            value = builder.zext(value, ir.IntType(64))
-            logger.info(f"Zero-extended i{int_width} context field value to i64")
+            if is_signed_ctype(getattr(field_data.type, "__name__", "")):
+                value = builder.sext(value, ir.IntType(64))
+                logger.info(f"Sign-extended i{int_width} context field value to i64")
+            else:
+                value = builder.zext(value, ir.IntType(64))
+                logger.info(f"Zero-extended i{int_width} context field value to i64")
 
         return value
 
