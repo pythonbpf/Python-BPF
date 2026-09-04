@@ -78,7 +78,9 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
             )
         elif isinstance(rval, ast.Name):
             # Variable-to-variable assignment (b = a)
-            _allocate_for_name(builder, var_name, rval, local_sym_tab)
+            _allocate_for_name(
+                builder, var_name, rval, local_sym_tab, compilation_context
+            )
         elif isinstance(rval, ast.Attribute):
             # Struct field-to-variable assignment (a = dat.fld)
             _allocate_for_attribute(
@@ -323,21 +325,24 @@ def allocate_temp_pool(builder, max_temps, local_sym_tab):
             logger.debug(f"Allocated temp variable: {temp_name}")
 
 
-def _allocate_for_name(builder, var_name, rval, local_sym_tab):
+def _allocate_for_name(builder, var_name, rval, local_sym_tab, compilation_context):
     """Allocate memory for variable-to-variable assignment (b = a)."""
     source_var = rval.id
 
-    if source_var not in local_sym_tab:
+    # Local first, then a BPF global: the copy takes the source's type either
+    # way (a c_uint32 global gives a c_uint32 local).
+    if source_var in local_sym_tab:
+        source_symbol = local_sym_tab[source_var]
+    elif source_var in compilation_context.bpf_globals:
+        source_symbol = compilation_context.bpf_globals[source_var]
+    else:
         logger.error(f"Source variable '{source_var}' not found in symbol table")
         return
-
-    # Get type and metadata from source variable
-    source_symbol = local_sym_tab[source_var]
 
     # Allocate with same type and alignment
     var = _allocate_with_type(builder, var_name, source_symbol.ir_type)
     local_sym_tab[var_name] = LocalSymbol(
-        var, source_symbol.ir_type, source_symbol.metadata
+        var, source_symbol.ir_type, getattr(source_symbol, "metadata", None)
     )
 
     logger.info(
