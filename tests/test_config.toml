@@ -16,8 +16,9 @@
 "failing_tests/conditionals/struct_ptr.py" = {reason = "Struct pointer used directly as boolean condition not supported", level = "ir"}
 
 # Compiles cleanly; rejected by the kernel. The `data + 34 < data_end` guard is
-# emitted as a signed compare over values round-tripped through the stack, so the
-# verifier never narrows the packet range (it stays r=0) and the later
+# emitted as a compare over values round-tripped through the stack (an unsigned
+# compare now that c_uint fields carry their sign; recheck at the verifier
+# level), so the verifier never narrows the packet range (it stays r=0) and the later
 # `iph.saddr` read fails with "invalid access to packet, off=26 size=4" /
 # "R1 offset is outside of the packet". Direct packet access needs bounds checks
 # in a form the verifier can follow.
