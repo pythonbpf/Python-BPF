@@ -3,6 +3,7 @@ from llvmlite import ir
 from enum import Enum
 
 from .helper_registry import HelperHandlerRegistry
+from pythonbpf.type_deducer import IntTy
 from .helper_utils import (
     get_or_create_ptr_from_arg,
     get_flags_val,
@@ -45,7 +46,7 @@ class BPFHelperID(Enum):
 @HelperHandlerRegistry.register(
     "ktime",
     param_types=[],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, False),
 )
 def bpf_ktime_get_ns_emitter(
     call,
@@ -70,7 +71,7 @@ def bpf_ktime_get_ns_emitter(
 @HelperHandlerRegistry.register(
     "get_current_cgroup_id",
     param_types=[],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, False),
 )
 def bpf_get_current_cgroup_id(
     call,
@@ -310,7 +311,7 @@ def bpf_map_delete_elem_emitter(
 @HelperHandlerRegistry.register(
     "comm",
     param_types=[ir.PointerType(ir.IntType(8))],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, True),
 )
 def bpf_get_current_comm_emitter(
     call,
@@ -369,7 +370,7 @@ def bpf_get_current_comm_emitter(
 @HelperHandlerRegistry.register(
     "pid",
     param_types=[],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, False),
 )
 def bpf_get_current_pid_tgid_emitter(
     call,
@@ -496,7 +497,7 @@ def bpf_ringbuf_output_emitter(
 @HelperHandlerRegistry.register(
     "output",
     param_types=[ir.PointerType(ir.IntType(8))],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, True),
 )
 def handle_output_helper(
     call,
@@ -566,7 +567,7 @@ def emit_probe_read_kernel_str_call(builder, dst_ptr, dst_size, src_ptr):
         ir.PointerType(ir.IntType(8)),
         ir.PointerType(ir.IntType(8)),
     ],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, True),
 )
 def bpf_probe_read_kernel_str_emitter(
     call,
@@ -633,7 +634,7 @@ def emit_probe_read_kernel_call(builder, dst_ptr, dst_size, src_ptr):
         ir.PointerType(ir.IntType(8)),
         ir.PointerType(ir.IntType(8)),
     ],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, True),
 )
 def bpf_probe_read_kernel_emitter(
     call,
@@ -670,7 +671,7 @@ def bpf_probe_read_kernel_emitter(
 @HelperHandlerRegistry.register(
     "random",
     param_types=[],
-    return_type=ir.IntType(32),
+    return_type=IntTy(32, False),
 )
 def bpf_get_prandom_u32_emitter(
     call,
@@ -698,7 +699,7 @@ def bpf_get_prandom_u32_emitter(
         ir.IntType(32),
         ir.PointerType(ir.IntType(8)),
     ],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, True),
 )
 def bpf_probe_read_emitter(
     call,
@@ -763,7 +764,7 @@ def bpf_probe_read_emitter(
 @HelperHandlerRegistry.register(
     "smp_processor_id",
     param_types=[],
-    return_type=ir.IntType(32),
+    return_type=IntTy(32, False),
 )
 def bpf_get_smp_processor_id_emitter(
     call,
@@ -788,7 +789,7 @@ def bpf_get_smp_processor_id_emitter(
 @HelperHandlerRegistry.register(
     "uid",
     param_types=[],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, False),
 )
 def bpf_get_current_uid_gid_emitter(
     call,
@@ -822,7 +823,7 @@ def bpf_get_current_uid_gid_emitter(
         ir.IntType(32),
         ir.IntType(64),
     ],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, True),
 )
 def bpf_skb_store_bytes_emitter(
     call,
@@ -1010,7 +1011,7 @@ def bpf_ringbuf_submit_emitter(
 @HelperHandlerRegistry.register(
     "get_stack",
     param_types=[ir.PointerType(ir.IntType(8)), ir.IntType(64)],
-    return_type=ir.IntType(64),
+    return_type=IntTy(64, True),
 )
 def bpf_get_stack_emitter(
     call,

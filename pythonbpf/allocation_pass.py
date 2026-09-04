@@ -6,7 +6,8 @@ from .symbols import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
-from pythonbpf.type_deducer import ctypes_to_ir
+from pythonbpf.type_deducer import ctypes_to_ir, IntTy, signedness
+from pythonbpf.expr.type_inference import infer_int_type
 from pythonbpf.maps import BPFMapType
 
 logger = logging.getLogger(__name__)
@@ -72,7 +73,9 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
         elif isinstance(rval, ast.Constant):
             _allocate_for_constant(builder, var_name, rval, local_sym_tab)
         elif isinstance(rval, ast.BinOp):
-            _allocate_for_binop(builder, var_name, local_sym_tab)
+            _allocate_for_binop(
+                builder, var_name, rval, local_sym_tab, compilation_context
+            )
         elif isinstance(rval, ast.Name):
             # Variable-to-variable assignment (b = a)
             _allocate_for_name(builder, var_name, rval, local_sym_tab)
@@ -104,7 +107,11 @@ def _allocate_for_call(builder, var_name, rval, local_sym_tab, compilation_conte
 
         # Helper functions
         elif HelperHandlerRegistry.has_handler(call_type):
-            ir_type = ir.IntType(64)  # Assume i64 return type
+            # Undeclared locals are 64-bit; the sign comes from the helper.
+            ret = HelperHandlerRegistry.get_return_type(call_type)
+            ir_type = IntTy(
+                64, signedness(ret) if isinstance(ret, ir.IntType) else True
+            )
             var = builder.alloca(ir_type, name=var_name)
             var.align = 8
             local_sym_tab[var_name] = LocalSymbol(var, ir_type)
@@ -270,9 +277,17 @@ def _allocate_for_constant(builder, var_name, rval, local_sym_tab):
         )
 
 
-def _allocate_for_binop(builder, var_name, local_sym_tab):
-    """Allocate memory for variable assigned from a binary operation."""
-    ir_type = ir.IntType(64)  # Assume i64 result
+def _allocate_for_binop(builder, var_name, rval, local_sym_tab, compilation_context):
+    """Allocate memory for variable assigned from a binary operation.
+
+    Undeclared locals are 64-bit; the sign is that of the expression's C type,
+    inferred statically. Falls back to signed when the expression involves
+    something the inference does not know.
+    """
+    inferred = infer_int_type(rval, local_sym_tab, compilation_context)
+    if inferred is None:
+        logger.debug(f"Could not infer a type for {var_name}, assuming signed i64")
+    ir_type = IntTy(64, signedness(inferred) if inferred is not None else True)
     var = builder.alloca(ir_type, name=var_name)
     var.align = 8
     local_sym_tab[var_name] = LocalSymbol(var, ir_type)

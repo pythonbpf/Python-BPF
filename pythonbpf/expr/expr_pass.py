@@ -4,7 +4,7 @@ from logging import Logger
 import logging
 from typing import Dict
 
-from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
+from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes, IntTy
 from .call_registry import CallHandlerRegistry
 from .ir_ops import deref_to_depth, access_struct_field
 from .operators import apply_binop, UNARY_OPS, BOOL_OPS
@@ -49,7 +49,11 @@ def _handle_name_expr(
 def _handle_constant_expr(compilation_context, builder, expr: ast.Constant):
     """Handle ast.Constant expressions."""
     if isinstance(expr.value, int) or isinstance(expr.value, bool):
-        return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
+        # C gives a literal the type int if it fits, otherwise long long. That
+        # rank is what makes `u32 / -2` an unsigned 32-bit division as in C.
+        v = int(expr.value)
+        lit_ty = IntTy(32, True) if -(1 << 31) <= v < (1 << 31) else IntTy(64, True)
+        return ir.Constant(ir.IntType(64), v), lit_ty
     elif isinstance(expr.value, str):
         str_name = f".str.{id(expr)}"
         str_bytes = expr.value.encode("utf-8") + b"\x00"
@@ -307,32 +311,17 @@ def _handle_ctypes_call(
     else:
         actual_ir_type = val_type
 
-    if actual_ir_type != expected_type:
-        # NOTE: We are only considering casting to and from int types for now
-        if isinstance(actual_ir_type, ir.IntType) and isinstance(
-            expected_type, ir.IntType
-        ):
-            if actual_ir_type.width < expected_type.width:
-                value = builder.sext(value, expected_type)
-                logger.info(
-                    f"Sign-extended from i{actual_ir_type.width} to i{
-                        expected_type.width
-                    }"
-                )
-            elif actual_ir_type.width > expected_type.width:
-                value = builder.trunc(value, expected_type)
-                logger.info(
-                    f"Truncated from i{actual_ir_type.width} to i{expected_type.width}"
-                )
-            else:
-                # Same width, just use as-is (e.g., both i64)
-                pass
-        else:
-            raise ValueError(
-                f"Type mismatch: expected {expected_type}, got {
-                    actual_ir_type
-                } (original type: {val_type})"
-            )
+    if isinstance(actual_ir_type, ir.IntType) and isinstance(expected_type, ir.IntType):
+        # A cast is truncate-or-extend per the source's sign; the result then
+        # takes the cast's type. Decide from the value's physical width (as
+        # convert does), never from descriptor equality: a literal is a 64-bit
+        # constant whose descriptor may already read as C int.
+        value = convert(builder, value, actual_ir_type, expected_type)
+    elif actual_ir_type != expected_type:
+        raise ValueError(
+            f"Type mismatch: expected {expected_type}, got {actual_ir_type} "
+            f"(original type: {val_type})"
+        )
 
     return value, expected_type
 
