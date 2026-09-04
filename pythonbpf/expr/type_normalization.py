@@ -23,9 +23,9 @@ def _normalize_types(func, builder, lhs, rhs):
     logger.info(f"Normalizing types: {lhs.type} vs {rhs.type}")
     if isinstance(lhs.type, ir.IntType) and isinstance(rhs.type, ir.IntType):
         if lhs.type.width < rhs.type.width:
-            lhs = builder.sext(lhs, rhs.type)
+            lhs = convert(builder, lhs, lhs.type, rhs.type)
         else:
-            rhs = builder.sext(rhs, lhs.type)
+            rhs = convert(builder, rhs, rhs.type, lhs.type)
         return lhs, rhs
     elif not isinstance(lhs.type, ir.PointerType) and not isinstance(
         rhs.type, ir.PointerType

@@ -13,6 +13,7 @@ from pythonbpf.expr import (
     convert_to_bool,
     get_operand_value,
     apply_binop,
+    convert,
     VmlinuxHandlerRegistry,
 )
 from pythonbpf.assign_pass import (
@@ -262,13 +263,10 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
         )
     # Same width discipline as binary-op evaluation: compute in i64, narrow
     # back to the slot's width on the way out.
-    if current.type.width < 64:
-        current = builder.sext(current, ir.IntType(64))
-    if isinstance(rhs.type, ir.IntType) and rhs.type.width < 64:
-        rhs = builder.sext(rhs, ir.IntType(64))
+    current = convert(builder, current, slot_type, ir.IntType(64))
+    rhs = convert(builder, rhs, rhs.type, ir.IntType(64))
     result = apply_binop(builder, stmt.op, current, rhs)
-    if result.type.width > slot_type.width:
-        result = builder.trunc(result, slot_type)
+    result = convert(builder, result, result.type, slot_type)
     builder.store(result, slot)
 
 

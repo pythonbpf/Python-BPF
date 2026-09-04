@@ -9,6 +9,7 @@ from .call_registry import CallHandlerRegistry
 from .ir_ops import deref_to_depth, access_struct_field
 from .operators import apply_binop, UNARY_OPS, BOOL_OPS
 from .type_normalization import (
+    convert,
     convert_to_bool,
     handle_comparator,
     get_base_type_and_depth,
@@ -232,10 +233,8 @@ def _handle_binary_op_impl(func, compilation_context, rval, builder, local_sym_t
     # NOTE: Before doing the operation, if the operands are integers
     # we always extend them to i64. The assignment to LHS will take
     # care of truncation if needed.
-    if isinstance(left.type, ir.IntType) and left.type.width < 64:
-        left = builder.sext(left, ir.IntType(64))
-    if isinstance(right.type, ir.IntType) and right.type.width < 64:
-        right = builder.sext(right, ir.IntType(64))
+    left = convert(builder, left, left.type, ir.IntType(64))
+    right = convert(builder, right, right.type, ir.IntType(64))
 
     # Map AST operation nodes to LLVM IR builder methods
     return apply_binop(builder, op, left, right)
