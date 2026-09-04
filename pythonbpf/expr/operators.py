@@ -9,6 +9,8 @@ in this file, the compiler does not support it. Add new operators here first.
 
 import ast
 
+from pythonbpf.type_deducer import IntTy, signedness
+
 # ast.BinOp.op class -> llvmlite IRBuilder method name.
 # Shared by binary-op evaluation and augmented assignment.
 BINOP_METHODS = {
@@ -53,3 +55,27 @@ def apply_binop(builder, op, left, right):
 def comparison_predicate(op):
     """icmp predicate for a Python comparison operator, or None if unsupported."""
     return COMPARISON_OPS.get(type(op))
+
+
+def usual_arithmetic_conversions(left, right) -> IntTy:
+    """The type a C binary operation on `left` and `right` is performed in.
+
+    Integer promotion first: anything narrower than int becomes a signed 32-bit
+    int (int can represent every value of the narrower type, signed or not).
+    Then, if the signs agree, the wider type wins; if they differ, the unsigned
+    operand wins at equal or greater width, otherwise the signed one -- because
+    it can then represent every value of the unsigned one.
+    """
+
+    def promote(ty):
+        if ty.width < 32:
+            return IntTy(32, True)
+        return IntTy(ty.width, signedness(ty))
+
+    left, right = promote(left), promote(right)
+    if left.signed == right.signed:
+        return IntTy(max(left.width, right.width), left.signed)
+    unsigned, signed = (left, right) if not left.signed else (right, left)
+    if unsigned.width >= signed.width:
+        return IntTy(unsigned.width, False)
+    return IntTy(signed.width, True)
