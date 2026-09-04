@@ -182,9 +182,13 @@ def _handle_deref_call(expr: ast.Call, local_sym_tab: Dict, builder: ir.IRBuilde
 def _descriptor(val, ty):
     """IntTy descriptor for an evaluated integer value: width from the physical
     value unless the descriptor is itself an integer type, sign from the
-    descriptor (an IntTy, a vmlinux Field, or plain -> signed)."""
-    width = ty.width if isinstance(ty, ir.IntType) else val.type.width
-    return IntTy(width, signedness(ty))
+    descriptor (an IntTy, a vmlinux Field, or plain -> signed). None when the
+    value is not an integer at all."""
+    if isinstance(ty, ir.IntType):
+        return IntTy(ty.width, signedness(ty))
+    if val is not None and isinstance(val.type, ir.IntType):
+        return IntTy(val.type.width, signedness(ty))
+    return None
 
 
 def get_typed_operand(func, compilation_context, operand, builder, local_sym_tab):
@@ -260,7 +264,7 @@ def _handle_binary_op_impl(func, compilation_context, rval, builder, local_sym_t
     )
     left = to_promoted(builder, left, left_ty, result_ty)
     right = to_promoted(builder, right, right_ty, result_ty)
-    result = apply_binop(builder, op, left, right)
+    result = apply_binop(builder, op, left, right, signedness(result_ty))
     return canonicalise(builder, result, result_ty), result_ty
 
 
@@ -370,8 +374,19 @@ def _handle_compare(func, compilation_context, builder, cond, local_sym_tab):
         logger.error("Failed to evaluate comparison operands")
         return None
 
-    lhs, _ = lhs
-    rhs, _ = rhs
+    lhs, lhs_ty = lhs
+    rhs, rhs_ty = rhs
+    lhs_desc, rhs_desc = _descriptor(lhs, lhs_ty), _descriptor(rhs, rhs_ty)
+    if lhs_desc is not None and rhs_desc is not None:
+        # Both integers: compare in the promoted type, which also picks the
+        # signed or unsigned predicate (u64 > s64 is an unsigned compare in C).
+        cmp_ty = usual_arithmetic_conversions(lhs_desc, rhs_desc)
+        lhs = to_promoted(builder, lhs, lhs_desc, cmp_ty)
+        rhs = to_promoted(builder, rhs, rhs_desc, cmp_ty)
+        return handle_comparator(
+            func, builder, cond.ops[0], lhs, rhs, signed=signedness(cmp_ty)
+        )
+    # Pointers and struct values: the depth-normalising path
     return handle_comparator(func, builder, cond.ops[0], lhs, rhs)
 
 
