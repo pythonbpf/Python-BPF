@@ -69,6 +69,7 @@ user-guide/maps
 user-guide/structs
 user-guide/compilation
 user-guide/helpers
+user-guide/integers
 ```
 
 ```{toctree}
