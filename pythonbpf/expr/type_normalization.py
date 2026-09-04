@@ -1,7 +1,7 @@
 import logging
 from llvmlite import ir
 from .ir_ops import deref_to_depth
-from pythonbpf.type_deducer import signedness
+from pythonbpf.type_deducer import IntTy, signedness
 from .operators import COMPARISON_OPS
 
 logger = logging.getLogger(__name__)
@@ -128,4 +128,4 @@ def handle_comparator(func, builder, op, lhs, rhs, signed=True):
     icmp = builder.icmp_signed if signed else builder.icmp_unsigned
     result = icmp(predicate, lhs, rhs)
     logger.debug(f"Comparison result: {result}")
-    return result, ir.IntType(1)
+    return result, IntTy(1, False)
