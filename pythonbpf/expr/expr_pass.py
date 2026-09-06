@@ -401,14 +401,52 @@ def _handle_unary_op(
 # ============================================================================
 
 
+def _widen_to(builder, val, result_type, val_bool):
+    """Widen an operand to the phi's result type.
+
+    Anything that is not an integer (a pointer that did not dereference to
+    one) cannot carry a meaningful value, so its truth value is used
+    instead -- preserving the old behaviour for those operands.
+    """
+    if val.type == result_type:
+        return val
+    if isinstance(val.type, ir.IntType):
+        return builder.zext(val, result_type)
+    return builder.zext(val_bool, result_type)
+
+
+def _prepare_bool_operand(func, builder, val):
+    """Dereference a pointer operand so its *value* takes part in the expression.
+
+    `map.lookup()` returns a pointer into the map (NULL when the key is
+    absent). A bare truthiness test on that pointer asks "is the key
+    present?", which is what `if prev:` wants, but not what `prev or 0`
+    means: there the operand's stored value is the result of the expression.
+    The binary-operator path already auto-dereferences pointer results (see
+    `get_operand_value`); this mirrors it for boolean operands.
+
+    `deref_to_depth` emits a null-checked load, so an absent key yields a
+    zero-valued pointee rather than faulting -- exactly the fallback that
+    `prev or 0` asks for.
+    """
+    base_type, depth = get_base_type_and_depth(val.type)
+    if depth > 0:
+        deref = deref_to_depth(func, builder, val, depth)
+        if deref is not None:
+            return deref
+    return val
+
+
 def _handle_and_op(func, builder, expr, local_sym_tab, compilation_context):
     """Handle `and` boolean operations."""
 
     logger.debug(f"Handling 'and' operator with {len(expr.values)} operands")
 
     merge_block = func.append_basic_block(name="and.merge")
-    false_block = func.append_basic_block(name="and.false")
 
+    # Python's `and` evaluates to the operand itself, not to a bool (see the
+    # note in _handle_or_op).
+    result_type = ir.IntType(64)
     incoming_values = []
 
     for i, value in enumerate(expr.values):
@@ -423,35 +461,37 @@ def _handle_and_op(func, builder, expr, local_sym_tab, compilation_context):
             return None
 
         operand_val, operand_type = operand_result
+        operand_val = _prepare_bool_operand(func, builder, operand_val)
 
         # Convert to boolean if needed
         operand_bool = convert_to_bool(builder, operand_val)
+        operand_val = _widen_to(builder, operand_val, result_type, operand_bool)
         current_block = builder.block
 
         if is_last:
             # Last operand: result is this value
             builder.branch(merge_block)
-            incoming_values.append((operand_bool, current_block))
+            incoming_values.append((operand_val, current_block))
         else:
-            # Not last: check if true, continue or short-circuit
+            # Not last: short-circuit with this operand's value if it is falsy
             next_check = func.append_basic_block(name=f"and.check_{i + 1}")
-            builder.cbranch(operand_bool, next_check, false_block)
-            builder.position_at_end(next_check)
+            short_circuit = func.append_basic_block(name=f"and.value_{i}")
+            builder.cbranch(operand_bool, next_check, short_circuit)
 
-    # False block: short-circuit with false
-    builder.position_at_end(false_block)
-    builder.branch(merge_block)
-    false_value = ir.Constant(ir.IntType(1), 0)
-    incoming_values.append((false_value, false_block))
+            builder.position_at_end(short_circuit)
+            builder.branch(merge_block)
+            incoming_values.append((operand_val, short_circuit))
+
+            builder.position_at_end(next_check)
 
     # Merge block: phi node
     builder.position_at_end(merge_block)
-    phi = builder.phi(ir.IntType(1), name="and.result")
+    phi = builder.phi(result_type, name="and.result")
     for val, block in incoming_values:
         phi.add_incoming(val, block)
 
     logger.debug(f"Generated 'and' with {len(incoming_values)} incoming values")
-    return phi, ir.IntType(1)
+    return phi, result_type
 
 
 def _handle_or_op(func, builder, expr, local_sym_tab, compilation_context):
@@ -460,8 +500,11 @@ def _handle_or_op(func, builder, expr, local_sym_tab, compilation_context):
     logger.debug(f"Handling 'or' operator with {len(expr.values)} operands")
 
     merge_block = func.append_basic_block(name="or.merge")
-    true_block = func.append_basic_block(name="or.true")
 
+    # Python's `or` evaluates to the operand itself, not to a bool, so the phi
+    # carries values. i64 covers every integer the frontend produces and keeps
+    # a map-lookup result (i64) exact.
+    result_type = ir.IntType(64)
     incoming_values = []
 
     for i, value in enumerate(expr.values):
@@ -476,35 +519,37 @@ def _handle_or_op(func, builder, expr, local_sym_tab, compilation_context):
             return None
 
         operand_val, operand_type = operand_result
+        operand_val = _prepare_bool_operand(func, builder, operand_val)
 
         # Convert to boolean if needed
         operand_bool = convert_to_bool(builder, operand_val)
+        operand_val = _widen_to(builder, operand_val, result_type, operand_bool)
         current_block = builder.block
 
         if is_last:
             # Last operand: result is this value
             builder.branch(merge_block)
-            incoming_values.append((operand_bool, current_block))
+            incoming_values.append((operand_val, current_block))
         else:
-            # Not last: check if false, continue or short-circuit
+            # Not last: short-circuit with this operand's value if it is truthy
             next_check = func.append_basic_block(name=f"or.check_{i + 1}")
-            builder.cbranch(operand_bool, true_block, next_check)
-            builder.position_at_end(next_check)
+            short_circuit = func.append_basic_block(name=f"or.value_{i}")
+            builder.cbranch(operand_bool, short_circuit, next_check)
 
-    # True block: short-circuit with true
-    builder.position_at_end(true_block)
-    builder.branch(merge_block)
-    true_value = ir.Constant(ir.IntType(1), 1)
-    incoming_values.append((true_value, true_block))
+            builder.position_at_end(short_circuit)
+            builder.branch(merge_block)
+            incoming_values.append((operand_val, short_circuit))
+
+            builder.position_at_end(next_check)
 
     # Merge block: phi node
     builder.position_at_end(merge_block)
-    phi = builder.phi(ir.IntType(1), name="or.result")
+    phi = builder.phi(result_type, name="or.result")
     for val, block in incoming_values:
         phi.add_incoming(val, block)
 
     logger.debug(f"Generated 'or' with {len(incoming_values)} incoming values")
-    return phi, ir.IntType(1)
+    return phi, result_type
 
 
 def _handle_boolean_op(
