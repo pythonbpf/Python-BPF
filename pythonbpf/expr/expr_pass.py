@@ -429,7 +429,7 @@ def _prepare_bool_operand(func, builder, val):
     zero-valued pointee rather than faulting -- exactly the fallback that
     `prev or 0` asks for.
     """
-    base_type, depth = get_base_type_and_depth(val.type)
+    _, depth = get_base_type_and_depth(val.type)
     if depth > 0:
         deref = deref_to_depth(func, builder, val, depth)
         if deref is not None:
