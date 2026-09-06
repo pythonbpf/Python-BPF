@@ -5,8 +5,9 @@
 # is present and to 0 when it is not. Compiling it as a truthiness test on
 # the pointer makes the counter add a 0/1 flag instead of the stored count,
 # so it sticks at 1 (or 2) forever.
-from pythonbpf import bpf, map, section, bpfglobal, compile
-from ctypes import c_void_p, c_int64, c_uint64
+from ctypes import c_int64, c_uint64, c_void_p
+
+from pythonbpf import bpf, bpfglobal, compile, map, section
 from pythonbpf.maps import HashMap
 
 
