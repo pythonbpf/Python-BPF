@@ -42,24 +42,13 @@ class LocalSymbol(Symbol):
     shadows_global_from: int | None = None
 
     def check_bound_at(self, name: str, lineno: int) -> None:
-        """Raise if `name` is read at `lineno` before its first binding.
-
-        Python's scoping is function-wide and static: assigning a name anywhere
-        in a body makes it local everywhere in that body, so a read above the
-        assignment is an UnboundLocalError rather than a read of the global.
-        There is no runtime in which to raise that, so a program in this shape
-        is rejected at compile time. The check applies only to locals that
-        shadow a @bpfglobal, where staying silent would otherwise load an
-        uninitialised slot from a name the author expected to be the global.
-        """
+        """Python's UnboundLocalError, at compile time: a local that shadows a
+        @bpfglobal is unreadable above its binding. No-op for any other local."""
         if self.shadows_global_from is None or lineno > self.shadows_global_from:
             return
         raise SyntaxError(
-            f"local variable '{name}' referenced before assignment: the "
-            f"assignment on line {self.shadows_global_from} makes '{name}' a "
-            f"local that shadows the @bpfglobal of the same name (Python "
-            f"raises UnboundLocalError here). Add 'global {name}' if you meant "
-            f"the global."
+            f"local variable '{name}' referenced before its assignment on line "
+            f"{self.shadows_global_from}; add 'global {name}' to use the @bpfglobal"
         )
 
     def __iter__(self):

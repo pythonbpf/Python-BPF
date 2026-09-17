@@ -217,16 +217,10 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
                     f"cannot assign to '{name}': it is the context parameter"
                 )
         elif name in compilation_context.bpf_globals:
-            # Binding x anywhere in the body makes it local throughout, so this
-            # statement reads an unbound local rather than the global. Python
-            # raises UnboundLocalError; there is no runtime here in which to do
-            # that, so the program is rejected.
+            # `x += v` binds x as a local and reads it unbound: UnboundLocalError.
             raise SyntaxError(
-                f"local variable '{name}' referenced before assignment: "
-                f"'{name} += ...' binds '{name}' as a local, which shadows the "
-                f"@bpfglobal of the same name, and reads it in the same "
-                f"statement (Python raises UnboundLocalError here). Add "
-                f"'global {name}' to update the global."
+                f"local variable '{name}' referenced before assignment; "
+                f"add 'global {name}' to update the @bpfglobal"
             )
         else:
             raise SyntaxError(f"augmented assignment to undefined variable '{name}'")
@@ -399,11 +393,6 @@ def process_stmt(
     elif isinstance(stmt, ast.AugAssign):
         handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Global):
-        # Nothing to emit: `global x` binds a name for the whole function body,
-        # so process_func_body collects every declaration before the first
-        # statement is lowered (and before allocation, which would otherwise
-        # give a declared name a stack slot). The branch exists so that a valid
-        # declaration does not reach the unsupported-statement warning below.
         logger.debug(f"global declaration of {', '.join(stmt.names)} already bound")
     elif isinstance(stmt, ast.If):
         handle_if(func, compilation_context, builder, stmt, local_sym_tab)
