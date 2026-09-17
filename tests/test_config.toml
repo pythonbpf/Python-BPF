@@ -33,12 +33,12 @@
 
 "failing_tests/xdp_pass.py" = {reason = "XDP program using vmlinux structs (struct_xdp_md) and complex map/struct interaction not yet supported", level = "ir"}
 
-"failing_tests/globals_shadowing.py" = {reason = "Assignment to a global name without a `global` statement is a deliberate compile error (would shadow the BPF global)", level = "ir"}
+"failing_tests/globals_read_before_shadow.py" = {reason = "Reading a name above the assignment that makes it a local shadowing a global is UnboundLocalError in Python, and a compile error here", level = "ir"}
 
 "failing_tests/globals_undeclared_name.py" = {reason = "`global x` naming something that is not a @bpfglobal is a compile error", level = "ir"}
 
 "failing_tests/globals_bad_type.py" = {reason = "Non-integer-scalar globals are not supported in milestone 1 (NotImplementedError by design)", level = "ir"}
 
-"failing_tests/globals_augassign_shadowing.py" = {reason = "Augmented assignment to a global name without a `global` statement is a deliberate compile error (would shadow the BPF global)", level = "ir"}
+"failing_tests/globals_augassign_shadowing.py" = {reason = "`x += 1` on a global name without `global` binds a local and reads it unbound: UnboundLocalError in Python, a compile error here", level = "ir"}
 
 "failing_tests/globals_parameter_and_global.py" = {reason = "A parameter may not be declared global (Python: name is parameter and global)", level = "ir"}

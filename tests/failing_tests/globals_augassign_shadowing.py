@@ -1,6 +1,7 @@
-# `counter += 1` without `global counter` must be the same loud error as plain
-# assignment. Before direct lowering this slipped past the allocation pass
-# (which only walks Assign) and failed later with a misleading message.
+# `counter += 1` without `global counter` binds `counter` as a local and reads
+# it in the same statement, which is UnboundLocalError in Python. Plain
+# assignment shadows the global instead (see passing_tests/globals/shadowing.py);
+# this shape cannot, because it reads before it binds.
 from pythonbpf import bpf, section, bpfglobal, compile
 from ctypes import c_void_p, c_int64, c_uint64
 
