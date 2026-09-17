@@ -233,6 +233,10 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
     elif isinstance(stmt.target, ast.Attribute) and isinstance(
         stmt.target.value, ast.Name
     ):
+        # NOTE: one level of struct dereference only (`obj.field += v`). A
+        # nested target (`obj.inner.field += v`) has an Attribute, not a Name,
+        # as its value and is rejected below; supporting it means walking the
+        # chain of gep()s, which plain assignment does not do either.
         var_name, field_name = stmt.target.value.id, stmt.target.attr
         if var_name not in local_sym_tab:
             raise SyntaxError(
@@ -250,6 +254,12 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
             raise SyntaxError(f"Field '{field_name}' not found in struct '{metadata}'")
         slot = struct_info.gep(builder, local_sym_tab[var_name].var, field_name)
         slot_type = struct_info.field_type(field_name)
+    elif isinstance(stmt.target, ast.Attribute):
+        raise SyntaxError(
+            f"augmented assignment to a nested struct field "
+            f"('...{stmt.target.attr}') is not supported yet; only one level "
+            f"of dereference (obj.field) works so far"
+        )
     else:
         raise SyntaxError(
             f"Unsupported augmented-assignment target: {ast.dump(stmt.target)}"
@@ -389,13 +399,24 @@ def process_stmt(
     elif isinstance(stmt, ast.AugAssign):
         handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Global):
-        # Declarations were collected by process_func_body; nothing to emit.
-        pass
+        # Nothing to emit: `global x` binds a name for the whole function body,
+        # so process_func_body collects every declaration before the first
+        # statement is lowered (and before allocation, which would otherwise
+        # give a declared name a stack slot). The branch exists so that a valid
+        # declaration does not reach the unsupported-statement warning below.
+        logger.debug(f"global declaration of {', '.join(stmt.names)} already bound")
     elif isinstance(stmt, ast.If):
         handle_if(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Return):
         did_return = handle_return(
             builder, stmt, local_sym_tab, ret_type, compilation_context
+        )
+    else:
+        # Silently dropping a statement makes the program mean something other
+        # than what it says, so say so.
+        logger.warning(
+            f"Unsupported statement on line {getattr(stmt, 'lineno', '?')}, "
+            f"ignored: {type(stmt).__name__}"
         )
     return did_return
 
