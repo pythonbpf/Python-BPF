@@ -11,6 +11,8 @@ from pythonbpf.expr import (
     eval_expr,
     handle_expr,
     convert_to_bool,
+    get_operand_value,
+    apply_binop,
     VmlinuxHandlerRegistry,
 )
 from pythonbpf.assign_pass import (
@@ -189,6 +191,100 @@ def handle_assign(func, compilation_context, builder, stmt, local_sym_tab):
         logger.error(f"Unsupported assignment target: {ast.dump(target)}")
 
 
+def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
+    """Handle `x += v` and friends by direct lowering: resolve the target's
+    slot, load it, apply the operator, store back.
+
+    No desugaring into synthetic Assign/BinOp nodes: every pass in this
+    compiler walks the tree the user wrote, and nodes invented mid-codegen are
+    invisible to the passes that already ran and carry no source locations.
+    Semantic agreement with `x = x op v` comes from sharing the value-level
+    helpers instead — the RHS goes through get_operand_value like any other
+    read, and the operator table is apply_binop, the same one binary-op
+    evaluation uses.
+    """
+    if isinstance(stmt.target, ast.Name):
+        name = stmt.target.id
+        # One table: a declared global is a local_sym_tab entry whose slot is
+        # the GlobalVariable, so it needs no separate branch.
+        if name in local_sym_tab:
+            # `x += v` reads x first, so it needs x to be bound already.
+            local_sym_tab[name].check_bound_at(name, stmt.lineno)
+            slot = local_sym_tab[name].var
+            slot_type = local_sym_tab[name].ir_type
+            if slot is None:
+                raise SyntaxError(
+                    f"cannot assign to '{name}': it is the context parameter"
+                )
+        elif name in compilation_context.bpf_globals:
+            # `x += v` binds x as a local and reads it unbound: UnboundLocalError.
+            raise SyntaxError(
+                f"local variable '{name}' referenced before assignment; "
+                f"add 'global {name}' to update the @bpfglobal"
+            )
+        else:
+            raise SyntaxError(f"augmented assignment to undefined variable '{name}'")
+    elif isinstance(stmt.target, ast.Attribute) and isinstance(
+        stmt.target.value, ast.Name
+    ):
+        # NOTE: one level of struct dereference only (`obj.field += v`). A
+        # nested target (`obj.inner.field += v`) has an Attribute, not a Name,
+        # as its value and is rejected below; supporting it means walking the
+        # chain of gep()s, which plain assignment does not do either.
+        var_name, field_name = stmt.target.value.id, stmt.target.attr
+        if var_name not in local_sym_tab:
+            raise SyntaxError(
+                f"augmented assignment to field of undefined variable '{var_name}'"
+            )
+        metadata = local_sym_tab[var_name].metadata
+        structs_sym_tab = compilation_context.structs_sym_tab
+        if metadata not in structs_sym_tab:
+            raise SyntaxError(
+                f"augmented assignment to '{var_name}.{field_name}' is only "
+                f"supported for struct fields"
+            )
+        struct_info = structs_sym_tab[metadata]
+        if field_name not in struct_info.fields:
+            raise SyntaxError(f"Field '{field_name}' not found in struct '{metadata}'")
+        slot = struct_info.gep(builder, local_sym_tab[var_name].var, field_name)
+        slot_type = struct_info.field_type(field_name)
+    elif isinstance(stmt.target, ast.Attribute):
+        raise SyntaxError(
+            f"augmented assignment to a nested struct field "
+            f"('...{stmt.target.attr}') is not supported yet; only one level "
+            f"of dereference (obj.field) works so far"
+        )
+    else:
+        raise SyntaxError(
+            f"Unsupported augmented-assignment target: {ast.dump(stmt.target)}"
+        )
+
+    if not isinstance(slot_type, ir.IntType):
+        raise SyntaxError(
+            f"augmented assignment needs an integer target, got {slot_type}"
+        )
+
+    # Python evaluates the target's current value before the right-hand side.
+    current = builder.load(slot)
+    rhs = get_operand_value(
+        func, compilation_context, stmt.value, builder, local_sym_tab
+    )
+    if rhs is None:
+        raise SyntaxError(
+            f"Failed to evaluate augmented-assignment value: {ast.dump(stmt.value)}"
+        )
+    # Same width discipline as binary-op evaluation: compute in i64, narrow
+    # back to the slot's width on the way out.
+    if current.type.width < 64:
+        current = builder.sext(current, ir.IntType(64))
+    if isinstance(rhs.type, ir.IntType) and rhs.type.width < 64:
+        rhs = builder.sext(rhs, ir.IntType(64))
+    result = apply_binop(builder, stmt.op, current, rhs)
+    if result.type.width > slot_type.width:
+        result = builder.trunc(result, slot_type)
+    builder.store(result, slot)
+
+
 def handle_cond(func, compilation_context, builder, cond, local_sym_tab):
     val = eval_expr(func, compilation_context, builder, cond, local_sym_tab)[0]
     return convert_to_bool(builder, val)
@@ -238,7 +334,19 @@ def handle_return(builder, stmt, local_sym_tab, ret_type, compilation_context=No
     logger.info(f"Handling return statement: {ast.dump(stmt)}")
     if stmt.value is None:
         return handle_none_return(builder)
-    elif isinstance(stmt.value, ast.Name) and is_xdp_name(stmt.value.id):
+    elif (
+        isinstance(stmt.value, ast.Name)
+        and is_xdp_name(stmt.value.id)
+        and stmt.value.id not in local_sym_tab
+        and (
+            compilation_context is None
+            or stmt.value.id not in compilation_context.bpf_globals
+        )
+    ):
+        # The XDP fast path resolves names like XDP_PASS from the helper
+        # constant table, but only as a fallback: a local or @bpfglobal of the
+        # same name shadows it, mirroring C (a local shadows an enum constant)
+        # and the resolution order everywhere else in the compiler.
         return handle_xdp_return(stmt, builder, ret_type)
     else:
         # Fallback for now if ctx not passed, but caller should pass it
@@ -283,12 +391,21 @@ def process_stmt(
     elif isinstance(stmt, ast.Assign):
         handle_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.AugAssign):
-        raise SyntaxError("Augmented assignment not supported")
+        handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab)
+    elif isinstance(stmt, ast.Global):
+        logger.debug(f"global declaration of {', '.join(stmt.names)} already bound")
     elif isinstance(stmt, ast.If):
         handle_if(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Return):
         did_return = handle_return(
             builder, stmt, local_sym_tab, ret_type, compilation_context
+        )
+    else:
+        # Silently dropping a statement makes the program mean something other
+        # than what it says, so say so.
+        logger.warning(
+            f"Unsupported statement on line {getattr(stmt, 'lineno', '?')}, "
+            f"ignored: {type(stmt).__name__}"
         )
     return did_return
 
@@ -348,6 +465,38 @@ def process_func_body(
                 )
                 local_sym_tab[context_name] = context_type
                 logger.info(f"Added argument '{context_name}' to local symbol table")
+
+    # A `global x` statement binds x in this function's scope to the
+    # @bpfglobal's storage. It goes into local_sym_tab like any other name,
+    # flagged, so every read and write resolves it through the one table with
+    # no separate lookup order to get wrong. Python's rules apply: a parameter
+    # cannot be declared global, and the name must be a @bpfglobal.
+    first_use = {}
+    for node in ast.walk(func_node):
+        if isinstance(node, ast.Name):
+            first_use[node.id] = min(first_use.get(node.id, node.lineno), node.lineno)
+
+    for node in ast.walk(func_node):
+        if isinstance(node, ast.Global):
+            for gname in node.names:
+                if gname in local_sym_tab:
+                    raise SyntaxError(f"name '{gname}' is parameter and global")
+                # Python reads the declaration as covering the whole body, and
+                # rejects a body that used the name before saying so, because
+                # the two readings of the earlier line disagree.
+                if first_use.get(gname, node.lineno) < node.lineno:
+                    raise SyntaxError(
+                        f"name '{gname}' is used prior to global declaration"
+                    )
+                if gname not in compilation_context.bpf_globals:
+                    raise SyntaxError(
+                        f"'global {gname}' in '{func_node.name}': no @bpfglobal "
+                        f"named '{gname}' is declared"
+                    )
+                sym = compilation_context.bpf_globals[gname]
+                local_sym_tab[gname] = LocalSymbol(
+                    sym.var, sym.ir_type, None, declared_global=True
+                )
 
     # pre-allocate dynamic variables
     local_sym_tab = allocate_mem(

@@ -3,7 +3,7 @@ from typing import Any
 import ctypes
 from llvmlite import ir
 
-from pythonbpf.local_symbol import LocalSymbol
+from pythonbpf.symbols import LocalSymbol
 from pythonbpf.vmlinux_parser.assignment_info import AssignmentType
 
 logger = logging.getLogger(__name__)

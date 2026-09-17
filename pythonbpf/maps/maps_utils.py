@@ -1,16 +1,15 @@
 from collections.abc import Callable
 from dataclasses import dataclass
-from llvmlite import ir
 from typing import Any
 from .map_types import BPFMapType
+from ..symbols import Symbol
 
 
 @dataclass
-class MapSymbol:
-    """Class representing a symbol on the map"""
+class MapSymbol(Symbol):
+    """A BPF map: var is the map's GlobalVariable in the .maps section."""
 
-    type: BPFMapType
-    sym: ir.GlobalVariable
+    type: BPFMapType = BPFMapType.UNSPEC
     params: dict[str, Any] | None = None
 
 

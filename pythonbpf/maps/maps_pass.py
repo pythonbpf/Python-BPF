@@ -50,7 +50,12 @@ def create_bpf_map(compilation_context, map_name, map_params):
     map_global.align = 8
 
     logger.info(f"Created BPF map: {map_name} with params {map_params}")
-    return MapSymbol(type=map_params["type"], sym=map_global, params=map_params)
+    return MapSymbol(
+        var=map_global,
+        ir_type=map_global.value_type,
+        type=map_params["type"],
+        params=map_params,
+    )
 
 
 def _parse_map_params(rval, expected_args=None):
@@ -112,7 +117,7 @@ def process_ringbuf_map(map_name, rval, compilation_context):
     map_global = create_bpf_map(compilation_context, map_name, map_params)
     create_ringbuf_debug_info(
         compilation_context,
-        map_global.sym,
+        map_global.var,
         map_name,
         map_params,
     )
@@ -131,7 +136,7 @@ def process_hash_map(map_name, rval, compilation_context):
     # Generate debug info for BTF
     create_map_debug_info(
         compilation_context,
-        map_global.sym,
+        map_global.var,
         map_name,
         map_params,
     )
@@ -150,7 +155,7 @@ def process_perf_event_map(map_name, rval, compilation_context):
     # Generate debug info for BTF
     create_map_debug_info(
         compilation_context,
-        map_global.sym,
+        map_global.var,
         map_name,
         map_params,
     )

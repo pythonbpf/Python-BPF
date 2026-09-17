@@ -2,7 +2,7 @@ import ast
 import logging
 import ctypes
 from llvmlite import ir
-from .local_symbol import LocalSymbol
+from .symbols import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
@@ -49,10 +49,22 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
             continue
 
         var_name = target.id
-        # Skip if already allocated
+
+        # Already bound in this scope: a parameter, an earlier assignment, or a
+        # `global` declaration (whose slot is the GlobalVariable). No slot needed.
         if var_name in local_sym_tab:
-            logger.debug(f"Variable {var_name} already allocated, skipping")
+            logger.debug(f"'{var_name}' already bound, no allocation needed")
             continue
+
+        # Not declared `global`, yet named like one: Python creates a local
+        # that shadows the global for the whole function body, and leaves the
+        # global untouched. Do the same.
+        shadows_global = var_name in compilation_context.bpf_globals
+        if shadows_global:
+            logger.info(
+                f"'{var_name}' is assigned without a 'global' declaration, so it "
+                f"is a local shadowing the @bpfglobal of the same name"
+            )
 
         # Determine type and allocate based on rval
         if isinstance(rval, ast.Call):
@@ -65,7 +77,9 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
             _allocate_for_binop(builder, var_name, local_sym_tab)
         elif isinstance(rval, ast.Name):
             # Variable-to-variable assignment (b = a)
-            _allocate_for_name(builder, var_name, rval, local_sym_tab)
+            _allocate_for_name(
+                builder, var_name, rval, local_sym_tab, compilation_context
+            )
         elif isinstance(rval, ast.Attribute):
             # Struct field-to-variable assignment (a = dat.fld)
             _allocate_for_attribute(
@@ -74,6 +88,14 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
         else:
             logger.warning(
                 f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
+            )
+
+        if shadows_global and var_name in local_sym_tab:
+            # Where the binding ends, so that a read above it is reported the
+            # way Python reports it. end_lineno, not lineno, so a read on a
+            # continuation line of a multi-line binding counts as above it too.
+            local_sym_tab[var_name].shadows_global_from = (
+                getattr(stmt, "end_lineno", None) or target.lineno
             )
 
 
@@ -298,21 +320,24 @@ def allocate_temp_pool(builder, max_temps, local_sym_tab):
             logger.debug(f"Allocated temp variable: {temp_name}")
 
 
-def _allocate_for_name(builder, var_name, rval, local_sym_tab):
+def _allocate_for_name(builder, var_name, rval, local_sym_tab, compilation_context):
     """Allocate memory for variable-to-variable assignment (b = a)."""
     source_var = rval.id
 
-    if source_var not in local_sym_tab:
+    # Local first, then a BPF global: the copy takes the source's type either
+    # way (a c_uint32 global gives a c_uint32 local).
+    if source_var in local_sym_tab:
+        source_symbol = local_sym_tab[source_var]
+    elif source_var in compilation_context.bpf_globals:
+        source_symbol = compilation_context.bpf_globals[source_var]
+    else:
         logger.error(f"Source variable '{source_var}' not found in symbol table")
         return
-
-    # Get type and metadata from source variable
-    source_symbol = local_sym_tab[source_var]
 
     # Allocate with same type and alignment
     var = _allocate_with_type(builder, var_name, source_symbol.ir_type)
     local_sym_tab[var_name] = LocalSymbol(
-        var, source_symbol.ir_type, source_symbol.metadata
+        var, source_symbol.ir_type, getattr(source_symbol, "metadata", None)
     )
 
     logger.info(

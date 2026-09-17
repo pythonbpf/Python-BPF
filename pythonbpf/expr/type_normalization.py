@@ -1,20 +1,9 @@
 import logging
-import ast
 from llvmlite import ir
 from .ir_ops import deref_to_depth
+from .operators import COMPARISON_OPS
 
 logger = logging.getLogger(__name__)
-
-COMPARISON_OPS = {
-    ast.Eq: "==",
-    ast.NotEq: "!=",
-    ast.Lt: "<",
-    ast.LtE: "<=",
-    ast.Gt: ">",
-    ast.GtE: ">=",
-    ast.Is: "==",
-    ast.IsNot: "!=",
-}
 
 
 def get_base_type_and_depth(ir_type):

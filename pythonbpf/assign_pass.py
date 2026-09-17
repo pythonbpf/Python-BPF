@@ -54,6 +54,14 @@ def handle_struct_field_assignment(
         logger.info(f"Copied string to char array {var_name}.{field_name}")
         return
 
+    # Same implicit widening/truncation as assignment to a local: expressions
+    # evaluate in i64, but a field may be narrower.
+    if isinstance(val_type, ir.IntType) and isinstance(field_type, ir.IntType):
+        if val_type.width < field_type.width:
+            val = builder.sext(val, field_type)
+        elif val_type.width > field_type.width:
+            val = builder.trunc(val, field_type)
+
     # Regular assignment
     builder.store(val, field_ptr)
     logger.info(f"Assigned to struct field {var_name}.{field_name}")
