@@ -208,6 +208,8 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
         # One table: a declared global is a local_sym_tab entry whose slot is
         # the GlobalVariable, so it needs no separate branch.
         if name in local_sym_tab:
+            # `x += v` reads x first, so it needs x to be bound already.
+            local_sym_tab[name].check_bound_at(name, stmt.lineno)
             slot = local_sym_tab[name].var
             slot_type = local_sym_tab[name].ir_type
             if slot is None:
@@ -215,9 +217,16 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
                     f"cannot assign to '{name}': it is the context parameter"
                 )
         elif name in compilation_context.bpf_globals:
+            # Binding x anywhere in the body makes it local throughout, so this
+            # statement reads an unbound local rather than the global. Python
+            # raises UnboundLocalError; there is no runtime here in which to do
+            # that, so the program is rejected.
             raise SyntaxError(
-                f"augmented assignment to '{name}' shadows the BPF global of "
-                f"the same name — add 'global {name}' to write to it"
+                f"local variable '{name}' referenced before assignment: "
+                f"'{name} += ...' binds '{name}' as a local, which shadows the "
+                f"@bpfglobal of the same name, and reads it in the same "
+                f"statement (Python raises UnboundLocalError here). Add "
+                f"'global {name}' to update the global."
             )
         else:
             raise SyntaxError(f"augmented assignment to undefined variable '{name}'")

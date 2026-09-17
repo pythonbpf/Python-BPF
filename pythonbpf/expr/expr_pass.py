@@ -28,9 +28,12 @@ def _handle_name_expr(
 ):
     """Handle ast.Name expressions."""
     if expr.id in local_sym_tab:
-        var = local_sym_tab[expr.id].var
-        val = builder.load(var)
-        return val, local_sym_tab[expr.id].ir_type
+        sym = local_sym_tab[expr.id]
+        # A local that shadows a @bpfglobal is unreadable above its binding,
+        # exactly as in Python; for every other local this is a no-op.
+        sym.check_bound_at(expr.id, expr.lineno)
+        val = builder.load(sym.var)
+        return val, sym.ir_type
     elif expr.id in compilation_context.bpf_globals:
         # A @bpfglobal
         sym = compilation_context.bpf_globals[expr.id]

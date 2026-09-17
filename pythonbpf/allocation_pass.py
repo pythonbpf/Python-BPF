@@ -56,12 +56,14 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
             logger.debug(f"'{var_name}' already bound, no allocation needed")
             continue
 
-        # Not declared `global`, yet named like one: in real Python this would
-        # create a shadowing local. Refuse rather than guess which was meant.
-        if var_name in compilation_context.bpf_globals:
-            raise SyntaxError(
-                f"assignment to '{var_name}' shadows the BPF global of the same "
-                f"name — add 'global {var_name}' to write to it"
+        # Not declared `global`, yet named like one: Python creates a local
+        # that shadows the global for the whole function body, and leaves the
+        # global untouched. Do the same.
+        shadows_global = var_name in compilation_context.bpf_globals
+        if shadows_global:
+            logger.info(
+                f"'{var_name}' is assigned without a 'global' declaration, so it "
+                f"is a local shadowing the @bpfglobal of the same name"
             )
 
         # Determine type and allocate based on rval
@@ -84,6 +86,14 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
         else:
             logger.warning(
                 f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
+            )
+
+        if shadows_global and var_name in local_sym_tab:
+            # Where the binding ends, so that a read above it is reported the
+            # way Python reports it. end_lineno, not lineno, so a read on a
+            # continuation line of a multi-line binding counts as above it too.
+            local_sym_tab[var_name].shadows_global_from = (
+                getattr(stmt, "end_lineno", None) or target.lineno
             )
 
 
