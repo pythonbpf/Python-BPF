@@ -461,11 +461,23 @@ def process_func_body(
     # flagged, so every read and write resolves it through the one table with
     # no separate lookup order to get wrong. Python's rules apply: a parameter
     # cannot be declared global, and the name must be a @bpfglobal.
+    first_use = {}
+    for node in ast.walk(func_node):
+        if isinstance(node, ast.Name):
+            first_use[node.id] = min(first_use.get(node.id, node.lineno), node.lineno)
+
     for node in ast.walk(func_node):
         if isinstance(node, ast.Global):
             for gname in node.names:
                 if gname in local_sym_tab:
                     raise SyntaxError(f"name '{gname}' is parameter and global")
+                # Python reads the declaration as covering the whole body, and
+                # rejects a body that used the name before saying so, because
+                # the two readings of the earlier line disagree.
+                if first_use.get(gname, node.lineno) < node.lineno:
+                    raise SyntaxError(
+                        f"name '{gname}' is used prior to global declaration"
+                    )
                 if gname not in compilation_context.bpf_globals:
                     raise SyntaxError(
                         f"'global {gname}' in '{func_node.name}': no @bpfglobal "
