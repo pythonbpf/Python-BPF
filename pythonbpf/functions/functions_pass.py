@@ -11,8 +11,12 @@ from pythonbpf.expr import (
     eval_expr,
     handle_expr,
     convert_to_bool,
-    get_operand_value,
+    get_typed_operand,
     apply_binop,
+    convert,
+    to_promoted,
+    canonicalise,
+    usual_arithmetic_conversions,
     VmlinuxHandlerRegistry,
 )
 from pythonbpf.assign_pass import (
@@ -266,23 +270,22 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
 
     # Python evaluates the target's current value before the right-hand side.
     current = builder.load(slot)
-    rhs = get_operand_value(
+    rhs, rhs_ty = get_typed_operand(
         func, compilation_context, stmt.value, builder, local_sym_tab
     )
     if rhs is None:
         raise SyntaxError(
             f"Failed to evaluate augmented-assignment value: {ast.dump(stmt.value)}"
         )
-    # Same width discipline as binary-op evaluation: compute in i64, narrow
-    # back to the slot's width on the way out.
-    if current.type.width < 64:
-        current = builder.sext(current, ir.IntType(64))
-    if isinstance(rhs.type, ir.IntType) and rhs.type.width < 64:
-        rhs = builder.sext(rhs, ir.IntType(64))
-    result = apply_binop(builder, stmt.op, current, rhs)
-    if result.type.width > slot_type.width:
-        result = builder.trunc(result, slot_type)
-    builder.store(result, slot)
+    # x op= v is typed exactly like x = x op v: operate in the promoted type,
+    # then convert the result to the target's type on the way back in.
+    result_ty = usual_arithmetic_conversions(slot_type, rhs_ty)
+    current = to_promoted(builder, current, slot_type, result_ty)
+    rhs = to_promoted(builder, rhs, rhs_ty, result_ty)
+    result = canonicalise(
+        builder, apply_binop(builder, stmt.op, current, rhs), result_ty
+    )
+    builder.store(convert(builder, result, result_ty, slot_type), slot)
 
 
 def handle_cond(func, compilation_context, builder, cond, local_sym_tab):
@@ -330,7 +333,9 @@ def handle_if(func, compilation_context, builder, stmt, local_sym_tab):
     builder.position_at_end(merge_block)
 
 
-def handle_return(builder, stmt, local_sym_tab, ret_type, compilation_context=None):
+def handle_return(
+    func, builder, stmt, local_sym_tab, ret_type, compilation_context=None
+):
     logger.info(f"Handling return statement: {ast.dump(stmt)}")
     if stmt.value is None:
         return handle_none_return(builder)
@@ -355,15 +360,15 @@ def handle_return(builder, stmt, local_sym_tab, ret_type, compilation_context=No
                 "CompilationContext required for return statement evaluation"
             )
 
-        val = eval_expr(
-            func=None,
-            compilation_context=compilation_context,
-            builder=builder,
-            expr=stmt.value,
-            local_sym_tab=local_sym_tab,
+        # A pointer to a value is dereferenced to it (null-checked), the way
+        # every other consumer of a value does; get_typed_operand is that path.
+        val = get_typed_operand(
+            func, compilation_context, stmt.value, builder, local_sym_tab
         )
         logger.info(f"Evaluated return expression to {val}")
-        builder.ret(val[0])
+        # The declared return type is the LHS of an implicit assignment:
+        # widen per the value's sign, truncate if narrower.
+        builder.ret(convert(builder, val[0], val[1], ret_type))
         return True
 
 
@@ -398,7 +403,7 @@ def process_stmt(
         handle_if(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Return):
         did_return = handle_return(
-            builder, stmt, local_sym_tab, ret_type, compilation_context
+            func, builder, stmt, local_sym_tab, ret_type, compilation_context
         )
     else:
         # Silently dropping a statement makes the program mean something other

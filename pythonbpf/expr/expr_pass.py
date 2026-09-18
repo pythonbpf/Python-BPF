@@ -4,11 +4,20 @@ from logging import Logger
 import logging
 from typing import Dict
 
-from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
+from pythonbpf.type_deducer import (
+    ctypes_to_ir,
+    is_ctypes,
+    IntTy,
+    int_literal_type,
+    signedness,
+)
 from .call_registry import CallHandlerRegistry
 from .ir_ops import deref_to_depth, access_struct_field
-from .operators import apply_binop, UNARY_OPS, BOOL_OPS
+from .operators import apply_binop, usual_arithmetic_conversions, UNARY_OPS, BOOL_OPS
 from .type_normalization import (
+    convert,
+    to_promoted,
+    canonicalise,
     convert_to_bool,
     handle_comparator,
     get_base_type_and_depth,
@@ -48,10 +57,19 @@ def _handle_name_expr(
         raise SyntaxError(f"Undefined variable {expr.id}")
 
 
+def _int_literal(v: int):
+    """An integer literal: a 64-bit constant with C's literal rank as its
+    descriptor, `int` if the value fits and `long long` otherwise."""
+    return ir.Constant(ir.IntType(64), v), int_literal_type(v)
+
+
 def _handle_constant_expr(compilation_context, builder, expr: ast.Constant):
     """Handle ast.Constant expressions."""
     if isinstance(expr.value, int) or isinstance(expr.value, bool):
-        return ir.Constant(ir.IntType(64), int(expr.value)), ir.IntType(64)
+        # C gives a literal the type int if it fits, otherwise long long. That
+        # rank is what makes `u32 / -2` an unsigned 32-bit division as in C.
+        v = int(expr.value)
+        return _int_literal(v)
     elif isinstance(expr.value, str):
         str_name = f".str.{id(expr)}"
         str_bytes = expr.value.encode("utf-8") + b"\x00"
@@ -175,73 +193,92 @@ def _handle_deref_call(expr: ast.Call, local_sym_tab: Dict, builder: ir.IRBuilde
 # ============================================================================
 
 
-def get_operand_value(func, compilation_context, operand, builder, local_sym_tab):
-    """Extract the value from an operand, handling variables and constants."""
-    logger.info(f"Getting operand value for: {ast.dump(operand)}")
+def _descriptor(val, ty):
+    """IntTy descriptor for an evaluated integer value: width from the physical
+    value unless the descriptor is itself an integer type, sign from the
+    descriptor (an IntTy, a vmlinux Field, or plain -> signed). None when the
+    value is not an integer at all."""
+    if isinstance(ty, ir.IntType):
+        return IntTy(ty.width, signedness(ty))
+    if val is not None and isinstance(val.type, ir.IntType):
+        return IntTy(val.type.width, signedness(ty))
+    return None
+
+
+def get_typed_operand(func, compilation_context, operand, builder, local_sym_tab):
+    """Evaluate an operand to (value, IntTy). Pointers (map-lookup results) are
+    dereferenced to the scalar they point at."""
+    logger.info(f"Getting typed operand for: {ast.dump(operand)}")
     if isinstance(operand, ast.Name):
         if operand.id in local_sym_tab:
-            var = local_sym_tab[operand.id].var
-            var_type = var.type
-            base_type, depth = get_base_type_and_depth(var_type)
-            logger.info(f"var is {var}, base_type is {base_type}, depth is {depth}")
-            if depth == 1:
-                val = builder.load(var)
-                return val
-            else:
-                val = deref_to_depth(func, builder, var, depth)
-            return val
+            sym = local_sym_tab[operand.id]
+            var = sym.var
+            base_type, depth = get_base_type_and_depth(var.type)
+            val = (
+                builder.load(var)
+                if depth == 1
+                else deref_to_depth(func, builder, var, depth)
+            )
+            return val, _descriptor(val, sym.ir_type if depth == 1 else base_type)
         elif operand.id in compilation_context.bpf_globals:
-            # A @bpfglobal: plain load off the global symbol.
-            return builder.load(compilation_context.bpf_globals[operand.id].var)
+            sym = compilation_context.bpf_globals[operand.id]
+            return builder.load(sym.var), _descriptor(None, sym.ir_type)
         else:
-            # Check if it's a vmlinux enum/constant
             vmlinux_result = VmlinuxHandlerRegistry.handle_name(operand.id)
             if vmlinux_result is not None:
-                val, _ = vmlinux_result
-                return val
+                return vmlinux_result  # (i64 constant, its C rank)
     elif isinstance(operand, ast.Constant):
-        if isinstance(operand.value, int):
-            cst = ir.Constant(ir.IntType(64), int(operand.value))
-            return cst
+        if isinstance(operand.value, (int, bool)):
+            v = int(operand.value)
+            lit_ty = IntTy(32, True) if -(1 << 31) <= v < (1 << 31) else IntTy(64, True)
+            return ir.Constant(ir.IntType(64), v), lit_ty
         raise TypeError(f"Unsupported constant type: {type(operand.value)}")
     elif isinstance(operand, ast.BinOp):
-        res = _handle_binary_op_impl(
+        return _handle_binary_op_impl(
             func, compilation_context, operand, builder, local_sym_tab
         )
-        return res
     else:
         res = eval_expr(func, compilation_context, builder, operand, local_sym_tab)
         if res is None:
             raise ValueError(f"Failed to evaluate call expression: {operand}")
-        val, _ = res
+        val, ty = res
         logger.info(f"Evaluated expr to {val} of type {val.type}")
         base_type, depth = get_base_type_and_depth(val.type)
         if depth > 0:
             val = deref_to_depth(func, builder, val, depth)
-        return val
+        return val, _descriptor(val, ty)
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 
 
+def get_operand_value(func, compilation_context, operand, builder, local_sym_tab):
+    """Extract the value from an operand, handling variables and constants."""
+    return get_typed_operand(
+        func, compilation_context, operand, builder, local_sym_tab
+    )[0]
+
+
 def _handle_binary_op_impl(func, compilation_context, rval, builder, local_sym_tab):
+    """A binary operation, typed per node the way C types it: the operation is
+    performed in the type given by the usual arithmetic conversions of its two
+    operands, each operand converted to that type first, and the result
+    narrowed to it -- so u32 * u32 wraps at 32 bits even though the arithmetic
+    itself runs in an i64 register. Returns (value, IntTy)."""
     op = rval.op
-    left = get_operand_value(
+    left, left_ty = get_typed_operand(
         func, compilation_context, rval.left, builder, local_sym_tab
     )
-    right = get_operand_value(
+    right, right_ty = get_typed_operand(
         func, compilation_context, rval.right, builder, local_sym_tab
     )
-    logger.info(f"left is {left}, right is {right}, op is {op}")
-
-    # NOTE: Before doing the operation, if the operands are integers
-    # we always extend them to i64. The assignment to LHS will take
-    # care of truncation if needed.
-    if isinstance(left.type, ir.IntType) and left.type.width < 64:
-        left = builder.sext(left, ir.IntType(64))
-    if isinstance(right.type, ir.IntType) and right.type.width < 64:
-        right = builder.sext(right, ir.IntType(64))
-
-    # Map AST operation nodes to LLVM IR builder methods
-    return apply_binop(builder, op, left, right)
+    result_ty = usual_arithmetic_conversions(left_ty, right_ty)
+    logger.info(
+        f"binop {type(op).__name__}: {left_ty.describe()} x {right_ty.describe()} "
+        f"-> {result_ty.describe()}"
+    )
+    left = to_promoted(builder, left, left_ty, result_ty)
+    right = to_promoted(builder, right, right_ty, result_ty)
+    result = apply_binop(builder, op, left, right, signedness(result_ty))
+    return canonicalise(builder, result, result_ty), result_ty
 
 
 def _handle_binary_op(
@@ -252,15 +289,14 @@ def _handle_binary_op(
     var_name,
     local_sym_tab,
 ):
-    result = _handle_binary_op_impl(
+    result, result_ty = _handle_binary_op_impl(
         func, compilation_context, rval, builder, local_sym_tab
     )
     if var_name and var_name in local_sym_tab:
-        logger.info(
-            f"Storing result {result} into variable {local_sym_tab[var_name].var}"
-        )
-        builder.store(result, local_sym_tab[var_name].var)
-    return result, result.type
+        slot = local_sym_tab[var_name]
+        logger.info(f"Storing result {result} into variable {slot.var}")
+        builder.store(convert(builder, result, result_ty, slot.ir_type), slot.var)
+    return result, result_ty
 
 
 # ============================================================================
@@ -311,32 +347,17 @@ def _handle_ctypes_call(
     else:
         actual_ir_type = val_type
 
-    if actual_ir_type != expected_type:
-        # NOTE: We are only considering casting to and from int types for now
-        if isinstance(actual_ir_type, ir.IntType) and isinstance(
-            expected_type, ir.IntType
-        ):
-            if actual_ir_type.width < expected_type.width:
-                value = builder.sext(value, expected_type)
-                logger.info(
-                    f"Sign-extended from i{actual_ir_type.width} to i{
-                        expected_type.width
-                    }"
-                )
-            elif actual_ir_type.width > expected_type.width:
-                value = builder.trunc(value, expected_type)
-                logger.info(
-                    f"Truncated from i{actual_ir_type.width} to i{expected_type.width}"
-                )
-            else:
-                # Same width, just use as-is (e.g., both i64)
-                pass
-        else:
-            raise ValueError(
-                f"Type mismatch: expected {expected_type}, got {
-                    actual_ir_type
-                } (original type: {val_type})"
-            )
+    if isinstance(actual_ir_type, ir.IntType) and isinstance(expected_type, ir.IntType):
+        # A cast is truncate-or-extend per the source's sign; the result then
+        # takes the cast's type. Decide from the value's physical width (as
+        # convert does), never from descriptor equality: a literal is a 64-bit
+        # constant whose descriptor may already read as C int.
+        value = convert(builder, value, actual_ir_type, expected_type)
+    elif actual_ir_type != expected_type:
+        raise ValueError(
+            f"Type mismatch: expected {expected_type}, got {actual_ir_type} "
+            f"(original type: {val_type})"
+        )
 
     return value, expected_type
 
@@ -366,8 +387,19 @@ def _handle_compare(func, compilation_context, builder, cond, local_sym_tab):
         logger.error("Failed to evaluate comparison operands")
         return None
 
-    lhs, _ = lhs
-    rhs, _ = rhs
+    lhs, lhs_ty = lhs
+    rhs, rhs_ty = rhs
+    lhs_desc, rhs_desc = _descriptor(lhs, lhs_ty), _descriptor(rhs, rhs_ty)
+    if lhs_desc is not None and rhs_desc is not None:
+        # Both integers: compare in the promoted type, which also picks the
+        # signed or unsigned predicate (u64 > s64 is an unsigned compare in C).
+        cmp_ty = usual_arithmetic_conversions(lhs_desc, rhs_desc)
+        lhs = to_promoted(builder, lhs, lhs_desc, cmp_ty)
+        rhs = to_promoted(builder, rhs, rhs_desc, cmp_ty)
+        return handle_comparator(
+            func, builder, cond.ops[0], lhs, rhs, signed=signedness(cmp_ty)
+        )
+    # Pointers and struct values: the depth-normalising path
     return handle_comparator(func, builder, cond.ops[0], lhs, rhs)
 
 
@@ -383,7 +415,7 @@ def _handle_unary_op(
         logger.error("Only 'not' and '-' unary operators are supported")
         return None
 
-    operand = get_operand_value(
+    operand, operand_ty = get_typed_operand(
         func, compilation_context, expr.operand, builder, local_sym_tab
     )
     if operand is None:
@@ -393,12 +425,18 @@ def _handle_unary_op(
     if isinstance(expr.op, ast.Not):
         true_const = ir.Constant(ir.IntType(1), 1)
         result = builder.xor(convert_to_bool(builder, operand), true_const)
-        return result, ir.IntType(1)
+        return result, IntTy(1, False)
     elif isinstance(expr.op, ast.USub):
-        # Multiply by -1
-        neg_one = ir.Constant(ir.IntType(64), -1)
-        result = builder.mul(operand, neg_one)
-        return result, ir.IntType(64)
+        if isinstance(operand, ir.Constant) and isinstance(operand.constant, int):
+            # -2 parses as USub(Constant 2); fold it so it is a literal like
+            # any other, with a literal's C rank.
+            return _int_literal(-operand.constant)
+        # Negation happens in the operand's promoted type; for an unsigned
+        # operand that is C's 2^N - x, which the narrowing produces.
+        result_ty = usual_arithmetic_conversions(operand_ty, operand_ty)
+        operand = to_promoted(builder, operand, operand_ty, result_ty)
+        result = builder.mul(operand, ir.Constant(ir.IntType(64), -1))
+        return canonicalise(builder, result, result_ty), result_ty
     return None
 
 
@@ -457,7 +495,7 @@ def _handle_and_op(func, builder, expr, local_sym_tab, compilation_context):
         phi.add_incoming(val, block)
 
     logger.debug(f"Generated 'and' with {len(incoming_values)} incoming values")
-    return phi, ir.IntType(1)
+    return phi, IntTy(1, False)
 
 
 def _handle_or_op(func, builder, expr, local_sym_tab, compilation_context):
@@ -510,7 +548,7 @@ def _handle_or_op(func, builder, expr, local_sym_tab, compilation_context):
         phi.add_incoming(val, block)
 
     logger.debug(f"Generated 'or' with {len(incoming_values)} incoming values")
-    return phi, ir.IntType(1)
+    return phi, IntTy(1, False)
 
 
 def _handle_boolean_op(
