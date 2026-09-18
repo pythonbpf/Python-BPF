@@ -41,6 +41,14 @@ class IntTy(ir.IntType):
         return f"{'i' if self.signed else 'u'}{self.width}"
 
 
+def int_literal_type(value: int) -> IntTy:
+    """C's type for an integer constant: `int` if the value fits, else
+    `long long`. Literals and enum constants alike; an enum constant is an
+    `int` whatever the enum's underlying type is (that type belongs to
+    variables of the enum type, such as struct fields)."""
+    return IntTy(32, True) if -(1 << 31) <= value < (1 << 31) else IntTy(64, True)
+
+
 def signedness(ty) -> bool:
     """Sign of an integer type descriptor.
 

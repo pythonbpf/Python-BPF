@@ -4,7 +4,7 @@ import ctypes
 from llvmlite import ir
 
 from pythonbpf.symbols import LocalSymbol
-from pythonbpf.type_deducer import is_signed_ctype
+from pythonbpf.type_deducer import int_literal_type, is_signed_ctype
 from pythonbpf.vmlinux_parser.assignment_info import AssignmentType
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ class VmlinuxHandler:
         if self.is_vmlinux_enum(name):
             value = self.vmlinux_symtab[name].value
             logger.info(f"Resolving vmlinux enum {name} = {value}")
-            return ir.Constant(ir.IntType(64), value), ir.IntType(64)
+            return ir.Constant(ir.IntType(64), value), int_literal_type(value)
         return None
 
     def get_vmlinux_enum_value(self, name):

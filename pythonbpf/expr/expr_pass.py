@@ -4,7 +4,13 @@ from logging import Logger
 import logging
 from typing import Dict
 
-from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes, IntTy, signedness
+from pythonbpf.type_deducer import (
+    ctypes_to_ir,
+    is_ctypes,
+    IntTy,
+    int_literal_type,
+    signedness,
+)
 from .call_registry import CallHandlerRegistry
 from .ir_ops import deref_to_depth, access_struct_field
 from .operators import apply_binop, usual_arithmetic_conversions, UNARY_OPS, BOOL_OPS
@@ -54,8 +60,7 @@ def _handle_name_expr(
 def _int_literal(v: int):
     """An integer literal: a 64-bit constant with C's literal rank as its
     descriptor, `int` if the value fits and `long long` otherwise."""
-    lit_ty = IntTy(32, True) if -(1 << 31) <= v < (1 << 31) else IntTy(64, True)
-    return ir.Constant(ir.IntType(64), v), lit_ty
+    return ir.Constant(ir.IntType(64), v), int_literal_type(v)
 
 
 def _handle_constant_expr(compilation_context, builder, expr: ast.Constant):
@@ -221,8 +226,7 @@ def get_typed_operand(func, compilation_context, operand, builder, local_sym_tab
         else:
             vmlinux_result = VmlinuxHandlerRegistry.handle_name(operand.id)
             if vmlinux_result is not None:
-                val, _ = vmlinux_result
-                return val, IntTy(64, True)
+                return vmlinux_result  # (i64 constant, its C rank)
     elif isinstance(operand, ast.Constant):
         if isinstance(operand.value, (int, bool)):
             v = int(operand.value)

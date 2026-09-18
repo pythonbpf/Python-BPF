@@ -40,8 +40,9 @@ def infer_int_type(expr, local_sym_tab, compilation_context):
             return _as_intty(local_sym_tab[expr.id].ir_type)
         if expr.id in compilation_context.bpf_globals:
             return _as_intty(compilation_context.bpf_globals[expr.id].ir_type)
-        if VmlinuxHandlerRegistry.handle_name(expr.id) is not None:
-            return IntTy(64, True)  # enum constants are emitted as i64
+        enum = VmlinuxHandlerRegistry.handle_name(expr.id)
+        if enum is not None:
+            return _as_intty(enum[1])
         return None
 
     if isinstance(expr, ast.BinOp):
