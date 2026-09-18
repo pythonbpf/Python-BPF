@@ -53,7 +53,12 @@ def convert(builder, val, from_ty, to_ty):
     value itself, which may already be wider than its descriptor says.
     """
     if not (isinstance(to_ty, ir.IntType) and isinstance(val.type, ir.IntType)):
-        return val
+        # Every caller either checks both sides are integers or sits on a path
+        # that only carries integers, so reaching here is a type error that
+        # would otherwise surface as an llc rejection with no Python line.
+        raise TypeError(
+            f"integer conversion requested for a {val.type} value to {to_ty}"
+        )
     if val.type.width > to_ty.width:
         return builder.trunc(val, to_ty)
     if val.type.width < to_ty.width:

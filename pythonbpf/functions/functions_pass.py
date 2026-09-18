@@ -333,7 +333,9 @@ def handle_if(func, compilation_context, builder, stmt, local_sym_tab):
     builder.position_at_end(merge_block)
 
 
-def handle_return(builder, stmt, local_sym_tab, ret_type, compilation_context=None):
+def handle_return(
+    func, builder, stmt, local_sym_tab, ret_type, compilation_context=None
+):
     logger.info(f"Handling return statement: {ast.dump(stmt)}")
     if stmt.value is None:
         return handle_none_return(builder)
@@ -358,12 +360,10 @@ def handle_return(builder, stmt, local_sym_tab, ret_type, compilation_context=No
                 "CompilationContext required for return statement evaluation"
             )
 
-        val = eval_expr(
-            func=None,
-            compilation_context=compilation_context,
-            builder=builder,
-            expr=stmt.value,
-            local_sym_tab=local_sym_tab,
+        # A pointer to a value is dereferenced to it (null-checked), the way
+        # every other consumer of a value does; get_typed_operand is that path.
+        val = get_typed_operand(
+            func, compilation_context, stmt.value, builder, local_sym_tab
         )
         logger.info(f"Evaluated return expression to {val}")
         # The declared return type is the LHS of an implicit assignment:
@@ -403,7 +403,7 @@ def process_stmt(
         handle_if(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Return):
         did_return = handle_return(
-            builder, stmt, local_sym_tab, ret_type, compilation_context
+            func, builder, stmt, local_sym_tab, ret_type, compilation_context
         )
     else:
         # Silently dropping a statement makes the program mean something other
