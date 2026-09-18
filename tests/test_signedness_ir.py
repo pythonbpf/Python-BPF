@@ -8,6 +8,7 @@ is the whole point of the cases: zext vs sext on widening, udiv vs sdiv,
 icmp ugt vs sgt, lshr vs ashr, and the trunc/zext pair that wraps u32 * u32.
 """
 
+import importlib.util
 import re
 from pathlib import Path
 
@@ -15,46 +16,62 @@ import pytest
 
 from tests.framework.compiler import run_ir_generation
 
-SIGNEDNESS_DIR = Path(__file__).parent / "passing_tests" / "signedness"
+PASSING_DIR = Path(__file__).parent / "passing_tests"
+HAVE_VMLINUX = importlib.util.find_spec("vmlinux") is not None
 
-# file -> (patterns that must appear, patterns that must not)
+# path under passing_tests -> (patterns that must appear, patterns that must not)
 CASES = {
-    "widen_unsigned.py": (
+    "signedness/widen_unsigned.py": (
         [r"zext i32 .* to i64"],
         [r"sext i32 .* to i64"],
     ),
-    "widen_signed.py": (
+    "signedness/widen_signed.py": (
         [r"sext i32 .* to i64"],
         [r"zext i32 .* to i64"],
     ),
-    "mixed_division.py": (
+    "signedness/mixed_division.py": (
         [r"\budiv i64", r"\burem i64", r"\bsdiv i64"],
         [r"\bsrem i64"],
     ),
-    "unsigned_compare.py": (
+    "signedness/unsigned_compare.py": (
         [r"icmp ugt i64", r"icmp sgt i64"],
         [],
     ),
-    "narrow_wrap.py": (
+    "signedness/narrow_wrap.py": (
         # the product is computed at 64 bits, cut to 32, then zero-extended
         [r"\bmul i64", r"trunc i64 .* to i32", r"zext i32 .* to i64"],
         [r"sext i32 .* to i64"],
     ),
-    "right_shift.py": (
+    "signedness/right_shift.py": (
         [r"\blshr i64 .*, 4", r"\bashr i64 .*, 4"],
         [],
     ),
-    "literal_rank.py": (
+    "signedness/literal_rank.py": (
         [r"\budiv i64 .*, 4294967294"],
         [r"\bsdiv i64"],
+    ),
+    # An enum constant is a C `int`, so `XDP_PASS - k` with k a c_uint32 is a
+    # u32 operation: the result is cut to 32 bits and zero-extended. Ranked
+    # as i64 it would be a signed 64-bit subtraction with no trunc at all.
+    "vmlinux/enum_rank.py": (
+        [r"trunc i64 .* to i32", r"zext i32 .* to i64"],
+        [r"sext i32 .* to i64"],
+    ),
+    # `return p` on a map lookup dereferences through a null check and returns
+    # the i64, never the pointer.
+    "return/map_value.py": (
+        [r"deref_0_not_null", r"ret i64 %"],
+        [r"ret i64\*"],
     ),
 }
 
 
 @pytest.mark.parametrize("name", list(CASES))
 def test_signedness_ir_shape(name, tmp_path):
-    ll_path = tmp_path / name.replace(".py", ".ll")
-    run_ir_generation(SIGNEDNESS_DIR / name, ll_path)
+    if name.startswith("vmlinux/") and not HAVE_VMLINUX:
+        pytest.skip("vmlinux.py not importable")
+    ll_path = tmp_path / Path(name).name.replace(".py", ".ll")
+    run_ir_generation(PASSING_DIR / name, ll_path)
     ir_text = ll_path.read_text()
 
     expected, forbidden = CASES[name]
