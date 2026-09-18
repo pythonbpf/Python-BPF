@@ -339,12 +339,19 @@ def _allocate_for_name(builder, var_name, rval, local_sym_tab, compilation_conte
     """Allocate memory for variable-to-variable assignment (b = a)."""
     source_var = rval.id
 
-    # Local first, then a BPF global: the copy takes the source's type either
-    # way (a c_uint32 global gives a c_uint32 local).
+    # Same resolution order as every other read of a bare name: local, then
+    # BPF global, then vmlinux enum constant. A variable source gives the copy
+    # its type; an enum constant is an immediate with no storage, so the copy
+    # gets the i64 slot a literal gets.
     if source_var in local_sym_tab:
         source_symbol = local_sym_tab[source_var]
     elif source_var in compilation_context.bpf_globals:
         source_symbol = compilation_context.bpf_globals[source_var]
+    elif VmlinuxHandlerRegistry.handle_name(source_var) is not None:
+        var = _allocate_with_type(builder, var_name, ir.IntType(64))
+        local_sym_tab[var_name] = LocalSymbol(var, ir.IntType(64))
+        logger.info(f"Pre-allocated {var_name} from enum constant {source_var}")
+        return
     else:
         logger.error(f"Source variable '{source_var}' not found in symbol table")
         return
