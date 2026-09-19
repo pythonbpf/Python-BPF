@@ -109,23 +109,27 @@ def allocate_mem(compilation_context, builder, body, func, ret_type, local_sym_t
         for typ, cnt in count_dict.items():
             max_temps_needed[typ] = max(max_temps_needed.get(typ, 0), cnt)
 
-    def update_max_temps_for_stmt(stmt):
-        nonlocal max_temps_needed
+    def count_temps_in(node):
+        """Temps one statement-sized piece of AST needs, merged into the max."""
+        temps = {}
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Call):
+                for typ, cnt in count_temps_in_call(sub, local_sym_tab).items():
+                    temps[typ] = temps.get(typ, 0) + cnt
+        merge_type_counts(temps)
 
+    def update_max_temps_for_stmt(stmt):
         if isinstance(stmt, ast.If):
+            # The condition is evaluated before any nested statement and the
+            # pool resets between statements, so it counts as a piece of its
+            # own; the bodies then take the max. `elif` is an If in orelse.
+            count_temps_in(stmt.test)
             for s in stmt.body:
                 update_max_temps_for_stmt(s)
             for s in stmt.orelse:
                 update_max_temps_for_stmt(s)
             return
-
-        stmt_temps = {}
-        for node in ast.walk(stmt):
-            if isinstance(node, ast.Call):
-                call_temps = count_temps_in_call(node, local_sym_tab)
-                for typ, cnt in call_temps.items():
-                    stmt_temps[typ] = stmt_temps.get(typ, 0) + cnt
-        merge_type_counts(stmt_temps)
+        count_temps_in(stmt)
 
     for stmt in body:
         update_max_temps_for_stmt(stmt)
