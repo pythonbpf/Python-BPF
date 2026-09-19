@@ -147,6 +147,13 @@ def allocate_mem(compilation_context, builder, body, func, ret_type, local_sym_t
         elif isinstance(stmt, ast.Assign):
             handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab)
 
+    # TODO: allocate_mem is re-entered for every if body (handle_if_allocation),
+    # and each level allocates a pool of its own even though the top-level count
+    # already covers nested statements. The duplicates are unreferenced and LLVM
+    # deletes them (verified: the BPF frame is identical with and without the
+    # nesting), so this costs nothing at runtime; it is IR noise and a trap,
+    # since only the last-allocated pool stays in local_sym_tab. Fix: count
+    # recursively, allocate once at the top level.
     allocate_temp_pool(builder, max_temps_needed, local_sym_tab)
 
     return local_sym_tab
