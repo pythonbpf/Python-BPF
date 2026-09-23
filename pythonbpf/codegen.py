@@ -15,6 +15,7 @@ from .globals_pass import (
 )
 from .debuginfo import DW_LANG_C11, DwarfBehaviorEnum, DebugInfoGenerator
 import os
+import shutil
 import subprocess
 import inspect
 from pathlib import Path
@@ -175,8 +176,66 @@ def compile_to_ir(filename: str, output: str, loglevel=logging.INFO):
     return output, structs_sym_tab, maps_sym_tab
 
 
+MIN_OPT_VERSION = 15
+_OPT_VERSIONED_RE = re.compile(r"opt-(\d+)")
+
+
+def _find_opt():
+    """Locate an LLVM opt binary.
+
+    Prefers a plain ``opt`` on PATH. Otherwise falls back to the newest
+    versioned ``opt-N`` (N >= MIN_OPT_VERSION) that distros such as
+    Debian/Ubuntu install, e.g. ``opt-18``. Returns None if none is found.
+    """
+    opt = shutil.which("opt")
+    if opt:
+        return opt
+
+    best_version, best_path = -1, None
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        try:
+            entries = os.listdir(directory or ".")
+        except OSError:
+            continue
+        for entry in entries:
+            match = _OPT_VERSIONED_RE.fullmatch(entry)
+            if not match:
+                continue
+            version = int(match.group(1))
+            if version < MIN_OPT_VERSION or version <= best_version:
+                continue
+            path = shutil.which(entry, path=directory or ".")
+            if path:
+                best_version, best_path = version, path
+    return best_path
+
+
+def _run_opt(ll_file):
+    """Run the O2 pipeline over the IR and return it as bitcode, or None if
+    no opt binary is available."""
+
+    opt = _find_opt()
+    if opt is None:
+        logger.warning(
+            f"No LLVM 'opt' (or 'opt-N', N >= {MIN_OPT_VERSION}) found on PATH; "
+            "skipping IR optimization."
+        )
+        return None
+
+    logger.info(f"Optimizing IR with {opt} -O2: {ll_file}")
+    result = subprocess.run(
+        [opt, "-O2", str(ll_file), "-o", "-"],
+        check=True,
+        capture_output=True,
+    )
+    return result.stdout
+
+
 def _run_llc(ll_file, obj_file):
-    """Compile LLVM IR to BPF object file using llc."""
+    """Optimize LLVM IR with opt (when available) and compile it to a BPF
+    object file using llc."""
+
+    bitcode = _run_opt(ll_file)
 
     logger.info(f"Compiling IR to object: {ll_file} -> {obj_file}")
     result = subprocess.run(
@@ -185,20 +244,20 @@ def _run_llc(ll_file, obj_file):
             "-march=bpf",
             "-filetype=obj",
             "-O2",
-            str(ll_file),
+            "-" if bitcode is not None else str(ll_file),
             "-o",
             str(obj_file),
         ],
+        input=bitcode,
         check=True,
         capture_output=True,
-        text=True,
     )
 
     if result.returncode == 0:
         logger.info(f"Object file written to {obj_file}")
         return True
     else:
-        logger.error(f"llc compilation failed: {result.stderr}")
+        logger.error(f"llc compilation failed: {result.stderr.decode()}")
         return False
 
 
