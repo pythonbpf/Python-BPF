@@ -401,11 +401,11 @@ def process_stmt(
             builder, stmt, local_sym_tab, ret_type, compilation_context
         )
     else:
-        # Silently dropping a statement makes the program mean something other
-        # than what it says, so say so.
-        logger.warning(
-            f"Unsupported statement on line {getattr(stmt, 'lineno', '?')}, "
-            f"ignored: {type(stmt).__name__}"
+        # Dropping a statement makes the program mean something other than what
+        # it says (a loop compiles to nothing), so refuse rather than warn.
+        raise NotImplementedError(
+            f"Unsupported statement on line {getattr(stmt, 'lineno', '?')}: "
+            f"{type(stmt).__name__}"
         )
     return did_return
 
