@@ -109,6 +109,34 @@ compares in the resulting type. `c_uint64(10) > c_int64(-1)` is therefore an uns
 comparison in which `-1` is the largest possible value, and the result is false. The
 result of a comparison is `1` or `0`, as in C.
 
+## A verifier gotcha: packet pointer fields
+
+A few context fields are declared as 32-bit integers but are pointers as far as the
+kernel verifier is concerned: `data`, `data_end` and `data_meta` on `xdp_md`, and `data`
+and `data_end` on `__sk_buff`. Because they are `c_uint32`, arithmetic on them directly
+is a 32-bit operation, exactly as in C, and the verifier rejects 32-bit arithmetic on a
+pointer:
+
+```
+R0 32-bit pointer arithmetic prohibited
+```
+
+C programs cast these fields through `(void *)(long)` before using them for the same
+reason. Until PythonBPF does this for you, copy the field into a local first, which is a
+64-bit slot, or cast it with `c_void_p`:
+
+```python
+data = ctx.data            # 64-bit local
+end = ctx.data_end
+if data + 34 < end:        # 64-bit pointer arithmetic, accepted
+    ...
+```
+
+```{note}
+This is a known gap. The plan is to give these fields pointer rank automatically so that
+no cast or copy is needed; this section will go away when that lands.
+```
+
 ## Divergences from Python
 
 Because the semantics are C's, some Python behaviour does not carry over:

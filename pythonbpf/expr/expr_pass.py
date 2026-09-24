@@ -205,6 +205,17 @@ def _descriptor(val, ty):
     if field is not None:
         # A vmlinux field: load_ctx_field already widened the value, but C
         # ranks it by its declared width (a c_uint32 field is unsigned int).
+        #
+        # TODO(gotcha): some u32 context fields are packet pointers to the
+        # verifier, not numbers: xdp_md.data / data_end / data_meta and
+        # __sk_buff.data / data_end. Ranking them as u32 is what C does, and
+        # the verifier then rejects any arithmetic on them ("32-bit pointer
+        # arithmetic prohibited"), so C code casts them through
+        # (void *)(long) first. The plan is to spare users that: give these
+        # fields 64-bit pointer rank here, so `ctx.data + 34 < ctx.data_end`
+        # lowers to 64-bit pointer arithmetic without a cast. Until then,
+        # copy the field into a local (a 64-bit slot) or cast it via
+        # c_void_p before using it.
         return field
     if val is not None and isinstance(val.type, ir.IntType):
         return IntTy(val.type.width, signedness(ty))
