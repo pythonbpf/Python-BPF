@@ -263,7 +263,7 @@ def _allocate_for_constant(builder, var_name, rval, local_sym_tab):
     """Allocate memory for variable assigned from a constant."""
 
     if isinstance(rval.value, bool):
-        ir_type = ir.IntType(1)
+        ir_type = IntTy(1, False)  # a bool widens to 0 or 1, never sign-extends
         var = builder.alloca(ir_type, name=var_name)
         var.align = 1
         local_sym_tab[var_name] = LocalSymbol(var, ir_type)

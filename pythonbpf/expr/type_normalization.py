@@ -60,6 +60,10 @@ def convert(builder, val, from_ty, to_ty):
             f"integer conversion requested for a {val.type} value to {to_ty}"
         )
     if val.type.width > to_ty.width:
+        if to_ty.width == 1:
+            # C's rule for bool: nonzero is true. Truncation would keep the
+            # low bit and turn 2 into false.
+            return builder.icmp_unsigned("!=", val, ir.Constant(val.type, 0))
         return builder.trunc(val, to_ty)
     if val.type.width < to_ty.width:
         ext = builder.zext if not signedness(from_ty) else builder.sext

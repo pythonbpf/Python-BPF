@@ -50,6 +50,11 @@ def int_literal_type(value: int) -> IntTy:
 
 
 def signedness(ty) -> bool:
+    """Sign of a descriptor: an IntTy says; a vmlinux Field says through its
+    ctype; a 1-bit integer is a bool and never negative, whatever it is
+    wrapped in; anything else is signed, the pre-signedness default."""
+    if isinstance(ty, ir.IntType) and ty.width == 1:
+        return False
     """Sign of an integer type descriptor.
 
     IntTy carries it directly. A vmlinux Field carries a ctypes class in .type,
