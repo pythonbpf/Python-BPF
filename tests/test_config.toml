@@ -38,8 +38,6 @@
 
 "failing_tests/globals_parameter_and_global.py" = {reason = "A parameter may not be declared global (Python: name is parameter and global)", level = "ir"}
 
-"failing_tests/assign/annotated_assign.py" = {reason = "Annotated assignment (ast.AnnAssign, e.g. `x: c_int64 = 0`) is not handled by process_stmt", level = "ir"}
-
 # Loop constructs: ast.For/ast.While are not handled by the statement dispatcher
 # (pythonbpf/functions/functions_pass.py process_stmt only matches Expr, Assign,
 # AugAssign, If, Return) and the pre-pass variable scan does not descend into
