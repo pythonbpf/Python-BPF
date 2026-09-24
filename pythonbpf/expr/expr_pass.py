@@ -407,6 +407,28 @@ def _handle_unary_op(
 # ============================================================================
 
 
+def _bpf_passthrough(builder, compilation_context, val):
+    """Wrap an i1 in llvm.bpf.passthrough, an optimization barrier the BPF
+    backend strips before instruction selection.
+
+    Without it, opt's SimplifyCFG speculates a short-circuit operand's compare
+    into the preceding block, and SelectionDAG then folds the two null checks
+    of `p1 or p2` into `(p1 | p2) != 0`. The verifier rejects that with
+    "pointer |= pointer prohibited". BPFAdjustOpt uses the same intrinsic to
+    keep compares serialized for the verifier.
+    """
+    module = compilation_context.module
+    name = "llvm.bpf.passthrough.i1.i1"
+    fn = module.globals.get(name)
+    if fn is None:
+        fn_type = ir.FunctionType(ir.IntType(1), [ir.IntType(32), ir.IntType(1)])
+        fn = ir.Function(module, fn_type, name=name)
+
+    seq = ir.Constant(ir.IntType(32), compilation_context.passthrough_seq)
+    compilation_context.passthrough_seq += 1
+    return builder.call(fn, [seq, val])
+
+
 def _handle_and_op(func, builder, expr, local_sym_tab, compilation_context):
     """Handle `and` boolean operations."""
 
@@ -432,6 +454,8 @@ def _handle_and_op(func, builder, expr, local_sym_tab, compilation_context):
 
         # Convert to boolean if needed
         operand_bool = convert_to_bool(builder, operand_val)
+        if i > 0:
+            operand_bool = _bpf_passthrough(builder, compilation_context, operand_bool)
         current_block = builder.block
 
         if is_last:
@@ -485,6 +509,8 @@ def _handle_or_op(func, builder, expr, local_sym_tab, compilation_context):
 
         # Convert to boolean if needed
         operand_bool = convert_to_bool(builder, operand_val)
+        if i > 0:
+            operand_bool = _bpf_passthrough(builder, compilation_context, operand_bool)
         current_block = builder.block
 
         if is_last:
