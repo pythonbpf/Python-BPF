@@ -203,7 +203,7 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
     compiler walks the tree the user wrote, and nodes invented mid-codegen are
     invisible to the passes that already ran and carry no source locations.
     Semantic agreement with `x = x op v` comes from sharing the value-level
-    helpers instead — the RHS goes through get_operand_value like any other
+    helpers instead — the RHS goes through get_typed_operand like any other
     read, and the operator table is apply_binop, the same one binary-op
     evaluation uses.
     """

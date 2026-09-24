@@ -1,4 +1,4 @@
-from .expr_pass import eval_expr, handle_expr, get_operand_value, get_typed_operand
+from .expr_pass import eval_expr, handle_expr, get_typed_operand
 from .type_normalization import (
     convert_to_bool,
     get_base_type_and_depth,
@@ -25,7 +25,6 @@ __all__ = [
     "deref_to_depth",
     "apply_binop",
     "access_struct_field",
-    "get_operand_value",
     "CallHandlerRegistry",
     "VmlinuxHandlerRegistry",
 ]

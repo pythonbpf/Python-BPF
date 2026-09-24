@@ -237,7 +237,8 @@ def get_typed_operand(func, compilation_context, operand, builder, local_sym_tab
             )
         elif operand.id in compilation_context.bpf_globals:
             sym = compilation_context.bpf_globals[operand.id]
-            return builder.load(sym.var), _descriptor(None, sym.ir_type)
+            val = builder.load(sym.var)
+            return val, _descriptor(val, sym.ir_type)
         else:
             vmlinux_result = VmlinuxHandlerRegistry.handle_name(operand.id)
             if vmlinux_result is not None:
@@ -263,13 +264,6 @@ def get_typed_operand(func, compilation_context, operand, builder, local_sym_tab
             val = deref_to_depth(func, builder, val, depth)
         return val, _descriptor(val, ty)
     raise TypeError(f"Unsupported operand type: {type(operand)}")
-
-
-def get_operand_value(func, compilation_context, operand, builder, local_sym_tab):
-    """Extract the value from an operand, handling variables and constants."""
-    return get_typed_operand(
-        func, compilation_context, operand, builder, local_sym_tab
-    )[0]
 
 
 def _handle_binary_op_impl(func, compilation_context, rval, builder, local_sym_tab):

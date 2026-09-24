@@ -66,16 +66,21 @@ def infer_int_type(expr, local_sym_tab, compilation_context):
             return _as_intty(HelperHandlerRegistry.get_return_type(name))
         return None
 
-    if isinstance(expr, ast.Call) and isinstance(expr.func, ast.Attribute):
-        # map.lookup(k) used as a value: the map's declared value type
+    if (
+        isinstance(expr, ast.Call)
+        and isinstance(expr.func, ast.Attribute)
+        and expr.func.attr == "lookup"
+    ):
+        # m.lookup(...) used as a value has the type the map declares for its
+        # values, whatever the key argument looks like. The declaration is a
+        # ctypes name for a scalar map and a struct name otherwise, which is
+        # not an integer, so None.
         map_name = getattr(expr.func.value, "id", None)
         sym = compilation_context.map_sym_tab.get(map_name)
-        value = (sym.params or {}).get("value") if sym else None
-        return (
-            _as_intty(ctypes_to_ir(value))
-            if isinstance(value, str) and is_ctypes(value)
-            else None
-        )
+        value_ctype = (sym.params or {}).get("value") if sym else None
+        if isinstance(value_ctype, str) and is_ctypes(value_ctype):
+            return _as_intty(ctypes_to_ir(value_ctype))
+        return None
 
     if isinstance(expr, ast.Attribute) and isinstance(expr.value, ast.Name):
         base = local_sym_tab.get(expr.value.id)
