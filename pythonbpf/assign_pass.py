@@ -5,7 +5,7 @@ from inspect import isclass
 from llvmlite import ir
 from pythonbpf.expr import eval_expr, convert
 from pythonbpf.helper import emit_probe_read_kernel_str_call
-from pythonbpf.type_deducer import ctypes_to_ir
+from pythonbpf.type_deducer import field_int_type
 from pythonbpf.vmlinux_parser.dependency_node import Field
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,10 @@ def handle_struct_field_assignment(
         return
 
     val, val_type = val_result
+    if isinstance(val_type, Field):
+        field_ty = field_int_type(val_type)
+        if field_ty is not None:
+            val_type = field_ty
 
     # Special case: i8* string to [N x i8] char array
     if _is_char_array(field_type) and _is_i8_ptr(val_type):
@@ -150,6 +154,13 @@ def handle_variable_assignment(
     logger.info(
         f"Evaluated value for {var_name}: {val} of type {val_type}, expected {var_type}"
     )
+    # An integer vmlinux field is, for conversion purposes, its declared IntTy
+    # (width and sign from the ctype), so it takes the same convert() path as
+    # every other integer below instead of a special case.
+    if isinstance(val_type, Field):
+        field_ty = field_int_type(val_type)
+        if field_ty is not None:
+            val_type = field_ty
 
     if isinstance(val_type, ir.IntType) and isinstance(var_type, ir.IntType):
         # The descriptor may be narrower than the constant carrying the value
@@ -194,25 +205,13 @@ def handle_variable_assignment(
                 )
                 return False
         if isinstance(val_type, Field):
-            logger.info("Handling assignment to struct field")
-            field_ir_type = ctypes_to_ir(val_type.type.__name__)
-            # Sub-register-width context fields are zero-extended to i64 by
-            # load_ctx_field, so val may be wider than the field type says
-            # (c_uint for xdp_md, c_ushort for pt_regs.cs/ss). convert()
-            # sizes from the physical value and signs from the field, so it
-            # is a no-op into an i64 slot and a trunc into a narrower one.
-            if isinstance(field_ir_type, ir.IntType) and isinstance(
-                var_type, ir.IntType
-            ):
-                val = convert(builder, val, field_ir_type, var_type)
-                builder.store(val, var_ptr)
-                logger.info(f"Assigned ctype struct field to {var_name}")
-                return True
-            else:
-                logger.error(
-                    f"Failed to assign ctype struct field to {var_name}: {val_type} != {var_type}"
-                )
-                return False
+            # Integer fields were normalised to their IntTy above; what is
+            # left is a pointer, array or struct field, which has no path
+            # into this slot.
+            logger.error(
+                f"Failed to assign ctype struct field to {var_name}: {val_type} != {var_type}"
+            )
+            return False
         elif isinstance(val_type, ir.IntType) and isinstance(var_type, ir.PointerType):
             # NOTE: This is assignment to a PTR_TO_MAP_VALUE_OR_NULL
             logger.info(
