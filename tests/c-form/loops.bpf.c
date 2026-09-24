@@ -19,61 +19,61 @@ __s64 n = 10;
 SEC("tracepoint/syscalls/sys_enter_execve")
 __s64 range_sum(void *ctx)
 {
-	__s64 total = 0;
-	for (__s64 idx = 0; idx < 10; idx += 1) {
-		__s64 i = idx;
-		total = total + 1;
-	}
-	return total;
+    __s64 total = 0;
+    for (__s64 idx = 0; idx < 10; idx += 1) {
+        __s64 i = idx;
+        total = total + 1;
+    }
+    return total;
 }
 
 /* for i in range(0, 10, 2): total = total + i */
 SEC("tracepoint/syscalls/sys_enter_execve")
 __s64 range_step(void *ctx)
 {
-	__s64 total = 0;
-	for (__s64 idx = 0; idx < 10; idx += 2) {
-		__s64 i = idx;
-		total = total + i;
-	}
-	return total;
+    __s64 total = 0;
+    for (__s64 idx = 0; idx < 10; idx += 2) {
+        __s64 i = idx;
+        total = total + i;
+    }
+    return total;
 }
 
 /* while i < 10: i = i + 1 */
 SEC("tracepoint/syscalls/sys_enter_execve")
 __s64 while_basic(void *ctx)
 {
-	__s64 i = 0;
-	while (i < 10)
-		i = i + 1;
-	return i;
+    __s64 i = 0;
+    while (i < 10)
+        i = i + 1;
+    return i;
 }
 
 /* while True: total += 1; if total == 10: break */
 SEC("tracepoint/syscalls/sys_enter_execve")
 __s64 while_true_break(void *ctx)
 {
-	__s64 total = 0;
-	while (1) {
-		total = total + 1;
-		if (total == 10)
-			break;
-	}
-	return total;
+    __s64 total = 0;
+    while (1) {
+        total = total + 1;
+        if (total == 10)
+            break;
+    }
+    return total;
 }
 
 /* for i in range(10): if i % 2 == 0: continue; total = total + i */
 SEC("tracepoint/syscalls/sys_enter_execve")
 __s64 for_continue(void *ctx)
 {
-	__s64 total = 0;
-	for (__s64 idx = 0; idx < 10; idx += 1) {
-		__s64 i = idx;
-		if (i % 2 == 0)
-			continue;
-		total = total + i;
-	}
-	return total;
+    __s64 total = 0;
+    for (__s64 idx = 0; idx < 10; idx += 1) {
+        __s64 i = idx;
+        if (i % 2 == 0)
+            continue;
+        total = total + i;
+    }
+    return total;
 }
 
 static __u32 (*bpf_get_prandom_u32)(void) = (void *)7;
@@ -85,13 +85,13 @@ static __u32 (*bpf_get_prandom_u32)(void) = (void *)7;
 SEC("tracepoint/syscalls/sys_enter_execve")
 __s64 dyn_helper(void *ctx)
 {
-	__s64 total = 0;
-	__s64 stop = n;
-	if (stop > 64)
-		stop = 64;
-	for (__s64 idx = 0; idx < stop; idx += 1) {
-		__s64 i = idx;
-		total = total + bpf_get_prandom_u32();
-	}
-	return total;
+    __s64 total = 0;
+    __s64 stop = n;
+    if (stop > 64)
+        stop = 64;
+    for (__s64 idx = 0; idx < stop; idx += 1) {
+        __s64 i = idx;
+        total = total + bpf_get_prandom_u32();
+    }
+    return total;
 }
