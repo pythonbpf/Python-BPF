@@ -15,15 +15,6 @@
 
 "failing_tests/conditionals/struct_ptr.py" = {reason = "Struct pointer used directly as boolean condition not supported", level = "ir"}
 
-# Compiles cleanly; rejected by the kernel. The `data + 34 < data_end` guard is
-# emitted as a compare over values round-tripped through the stack (an unsigned
-# compare now that c_uint fields carry their sign; recheck at the verifier
-# level), so the verifier never narrows the packet range (it stays r=0) and the later
-# `iph.saddr` read fails with "invalid access to packet, off=26 size=4" /
-# "R1 offset is outside of the packet". Direct packet access needs bounds checks
-# in a form the verifier can follow.
-"failing_tests/xdp/xdp_test_1.py" = {reason = "XDP direct packet access: the data/data_end guard does not establish a packet range the verifier can use", level = "verifier"}
-
 "failing_tests/return_struct.py" = {reason = "Returning a struct value from an integer function is a type error (nothing to dereference to an integer)", level = "ir"}
 
 "failing_tests/license.py" = {reason = "Missing LICENSE global produces IR that llc rejects — should be caught earlier with a clear error message", level = "llc"}
@@ -44,3 +35,28 @@
 "failing_tests/globals_augassign_shadowing.py" = {reason = "`x += 1` on a global name without `global` binds a local and reads it unbound: UnboundLocalError in Python, a compile error here", level = "ir"}
 
 "failing_tests/globals_parameter_and_global.py" = {reason = "A parameter may not be declared global (Python: name is parameter and global)", level = "ir"}
+
+"failing_tests/assign/annotated_assign.py" = {reason = "Annotated assignment (ast.AnnAssign, e.g. `x: c_int64 = 0`) is not handled by process_stmt", level = "ir"}
+
+# Loop constructs: ast.For/ast.While are not handled by the statement dispatcher
+# (pythonbpf/functions/functions_pass.py process_stmt only matches Expr, Assign,
+# AugAssign, If, Return) and the pre-pass variable scan does not descend into
+# loop bodies. A loop is silently skipped rather than erroring, so anything
+# that reads a variable assigned in/around the loop afterward blows up later
+# with "Undefined variable ..." at the `return` statement. These document the
+# intended surface for when loops are implemented.
+"failing_tests/loops/for_range_sum.py" = {reason = "for/while loops not implemented: ast.For is silently skipped by the statement dispatcher", level = "ir"}
+
+"failing_tests/loops/for_range_start_stop_step.py" = {reason = "for/while loops not implemented: range() with start/stop/step is not supported", level = "ir"}
+
+"failing_tests/loops/while_basic.py" = {reason = "for/while loops not implemented: ast.While is silently skipped by the statement dispatcher", level = "ir"}
+
+"failing_tests/loops/while_true_break.py" = {reason = "for/while loops not implemented: while True with a break-based exit is not supported", level = "ir"}
+
+"failing_tests/loops/nested_for.py" = {reason = "for/while loops not implemented: nested for loops are not supported", level = "ir"}
+
+"failing_tests/loops/for_break.py" = {reason = "for/while loops not implemented: break is not supported", level = "ir"}
+
+"failing_tests/loops/for_continue.py" = {reason = "for/while loops not implemented: continue is not supported", level = "ir"}
+
+"failing_tests/loops/for_map_items.py" = {reason = "for/while loops not implemented: no sugar over bpf_for_each_map_elem()-style map iteration exists yet", level = "ir"}

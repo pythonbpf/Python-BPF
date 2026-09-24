@@ -72,6 +72,10 @@ class CompilationContext:
         # Helper management
         self.scratch_pool = ScratchPoolManager()
 
+        # Sequence numbers for llvm.bpf.passthrough barriers; each call needs a
+        # distinct one so the optimizer cannot CSE two barriers together.
+        self.passthrough_seq = 0
+
         # Vmlinux handling (optional, specialized)
         self.vmlinux_handler = None  # Can be VmlinuxHandler instance
 
