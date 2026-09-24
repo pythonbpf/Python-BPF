@@ -61,7 +61,6 @@
 
 "failing_tests/loops/for_map_items.py" = {reason = "for/while loops not implemented: no sugar over bpf_for_each_map_elem()-style map iteration exists yet", level = "ir"}
 
-"kernel_selftest_equivalent/maps/array_map_lookup_update.py" = {reason = "ArrayMap / BPF_MAP_TYPE_ARRAY support is planned but not implemented yet", level = "ir"}
 
 "kernel_selftest_equivalent/ringbuf/reserve_submit_discard.py" = {reason = "RingBuffer reserve/typed record/discard workflow is planned but not implemented yet", level = "ir"}
 

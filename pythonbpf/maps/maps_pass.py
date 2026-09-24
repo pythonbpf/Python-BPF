@@ -145,10 +145,22 @@ def process_hash_map(map_name, rval, compilation_context):
 
 @MapProcessorRegistry.register("ArrayMap")
 def process_array_map(map_name, rval, compilation_context):
-    """Document the planned BPF_ARRAY map support with an explicit failure."""
-    raise NotImplementedError(
-        "ArrayMap is not implemented yet; add BPF_MAP_TYPE_ARRAY metadata support"
+    """Process a BPF_ARRAY map declaration: the same lowering as a hash map
+    with BPF_MAP_TYPE_ARRAY, through the same lookup/update/delete helpers;
+    the kernel requires a 4-byte key (an index)."""
+    logger.info(f"Processing ArrayMap: {map_name}")
+    map_params = _parse_map_params(rval, expected_args=["key", "value", "max_entries"])
+    map_params["type"] = BPFMapType.ARRAY
+
+    logger.info(f"Map parameters: {map_params}")
+    map_global = create_bpf_map(compilation_context, map_name, map_params)
+    create_map_debug_info(
+        compilation_context,
+        map_global.var,
+        map_name,
+        map_params,
     )
+    return map_global
 
 
 @MapProcessorRegistry.register("PerfEventArray")

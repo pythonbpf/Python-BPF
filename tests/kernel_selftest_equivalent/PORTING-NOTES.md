@@ -74,9 +74,9 @@ cursor, which together constrain the design more than anything here does.
 `.bss`, `.data` and `.rodata` become internal array maps at load time. Two consequences:
 
 - A one-element **`ArrayMap`** is the structurally faithful stand-in for a global, not a
-  `HashMap`. `HashMap` is used here only because `ArrayMap` is still a placeholder that
-  raises `NotImplementedError`. Landing `ArrayMap` first would make the eventual migration
-  to real globals close to mechanical.
+  `HashMap`. The `HashMap` stand-ins predate `ArrayMap`, which lowers now
+  (`BPF_MAP_TYPE_ARRAY`, the same helpers as `HashMap`); real `@bpfglobal` scalars have
+  landed since, so the migration is to those.
 - **Most of the ELF work is already done.** `@bpfglobal` is vestigial — a metadata carrier
   for `LICENSE` — but the machinery behind it already emits globals that LLVM places into
   `.bss` and `.data` correctly, and that libbpf already recognises:

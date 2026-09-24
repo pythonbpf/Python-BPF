@@ -208,7 +208,7 @@ def _allocate_for_map_method(
         return
 
     map_params = map_sym_tab[map_name].params
-    if map_params["type"] != BPFMapType.HASH:
+    if map_params["type"] not in (BPFMapType.HASH, BPFMapType.ARRAY):
         logger.warning(
             "Map method lookup used on non-hash map, using fallback allocation"
         )

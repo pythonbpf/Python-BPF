@@ -52,8 +52,8 @@ SUPPORTED_HELPERS = {
     "bpf_skb_store_bytes",
 }
 
-# BPF_MAP_TYPE_* that pythonbpf/maps lowers (ArrayMap is still a stub).
-SUPPORTED_MAP_TYPES = {"HASH", "PERF_EVENT_ARRAY", "RINGBUF"}
+# BPF_MAP_TYPE_* that pythonbpf/maps lowers.
+SUPPORTED_MAP_TYPES = {"ARRAY", "HASH", "PERF_EVENT_ARRAY", "RINGBUF"}
 
 # Things that look like helper calls but are libbpf macros, not helpers.
 NOT_HELPERS = {
