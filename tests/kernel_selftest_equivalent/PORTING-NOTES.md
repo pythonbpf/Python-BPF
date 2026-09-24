@@ -142,7 +142,7 @@ type, never narrowing. It now goes through `convert()` like every other integer 
 ## Third batch: what the re-run audit found
 
 `tools/selftest-audit.py` is the corpus classifier, rebuilt and checked in. Run against
-the current upstream `progs/` it reports 847 real programs, 25 with no hard blocker. All
+the current upstream `progs/` it reports 854 real programs, 25 with no hard blocker. All
 but two of those 25 were already ported or are unportable for a reason a regex cannot see
 (`bpf_nop_bench.c` hides a loop in a macro, `test_pkt_md_access.c` type-puns narrow loads,
 `tracing_struct_int128.c` indexes the raw ctx array and needs bpf_testmod to load). The
@@ -173,23 +173,28 @@ increment loses.
 
 ### The blocker histogram now
 
-Over 847 real programs, hard blockers only; a program usually hits several:
+Over 854 real programs, hard blockers only; a program usually hits several:
 
 | Blocker | Programs | Share |
 |---|---|---|
-| unsupported helper | 496 | 59% |
-| kfuncs | 284 | 34% |
+| unsupported helper | 504 | 59% |
 | unsupported map type | 273 | 32% |
+| kfuncs | 242 | 28% |
 | verifier-test annotations | 238 | 28% |
-| typed program macros (`BPF_PROG`, `BPF_KPROBE`) | 234 | 28% |
-| BPF-to-BPF calls | 176 | 21% |
+| typed program macros (`BPF_PROG`, `BPF_KPROBE`) | 237 | 28% |
 | `goto` | 143 | 17% |
 | inline asm | 142 | 17% |
+| BPF-to-BPF calls | 128 | 15% |
 | struct globals | 126 | 15% |
 | CO-RE reads | 116 | 14% |
-| loops | 109 | 13% |
-| array globals | 105 | 12% |
-| atomics | 86 | 10% |
+| loops | 110 | 13% |
+| array globals | 109 | 13% |
+| atomics | 87 | 10% |
+
+Earlier revisions of this table over-counted kfuncs (the pattern matched every
+`bpf_skb_*`/`bpf_xdp_*` helper) and BPF-to-BPF calls (it matched `SEC("?...")`), and
+under-counted real programs by seven (a `//` inside a section name was stripped as a
+comment). The portable set of 25 was unaffected.
 
 Globals no longer appear as a blocker at all. The next unlocks by count are helpers (a
 long tail, but `bpf_get_current_task`, `bpf_ktime_get_boot_ns` and the `bpf_probe_read_user*`
