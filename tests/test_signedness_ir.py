@@ -50,6 +50,12 @@ CASES = {
         [r"\budiv i64 .*, 4294967294"],
         [r"\bsdiv i64"],
     ),
+    # A bool widens with zext and an integer narrows to it by != 0, never by
+    # trunc; sext of an i1 would return -1 for True.
+    "signedness/bool_int.py": (
+        [r"zext i1 .* to i(32|64)", r"icmp ne i64 .*, 0"],
+        [r"sext i1 ", r"trunc i64 .* to i1"],
+    ),
     # An enum constant is a C `int`, so `XDP_PASS - k` with k a c_uint32 is a
     # u32 operation: the result is cut to 32 bits and zero-extended. Ranked
     # as i64 it would be a signed 64-bit subtraction with no trunc at all.
