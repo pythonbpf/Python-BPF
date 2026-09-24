@@ -6,7 +6,7 @@ import logging
 from pythonbpf.helper import (
     HelperHandlerRegistry,
 )
-from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
+from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes, signedness
 from pythonbpf.expr import (
     eval_expr,
     handle_expr,
@@ -283,7 +283,9 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
     current = to_promoted(builder, current, slot_type, result_ty)
     rhs = to_promoted(builder, rhs, rhs_ty, result_ty)
     result = canonicalise(
-        builder, apply_binop(builder, stmt.op, current, rhs), result_ty
+        builder,
+        apply_binop(builder, stmt.op, current, rhs, signedness(result_ty)),
+        result_ty,
     )
     builder.store(convert(builder, result, result_ty, slot_type), slot)
 
