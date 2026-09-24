@@ -50,6 +50,24 @@ CASES = {
         [r"\budiv i64 .*, 4294967294"],
         [r"\bsdiv i64"],
     ),
+    "signedness/augassign_unsigned.py": (
+        [r"\blshr i64", r"\budiv i64", r"\burem i64"],
+        [r"\bashr i64", r"\bsdiv i64", r"\bsrem i64"],
+    ),
+    "signedness/helper_results.py": (
+        [r"\blshr i64", r"\budiv i64"],
+        [r"\bashr i64", r"\bsdiv i64"],
+    ),
+    "signedness/map_value_sign.py": (
+        [r"\blshr i64 [^,]*, 63"],
+        [r"\bashr i64"],
+    ),
+    # u32 - int is a u32 operation: the result is cut to 32 bits and
+    # zero-extended; ranked as 64-bit there would be no trunc at all.
+    "vmlinux/ctx_field_rank.py": (
+        [r"\bsub i64", r"trunc i64 .* to i32", r"zext i32 .* to i64"],
+        [],
+    ),
     # A bool widens with zext and an integer narrows to it by != 0, never by
     # trunc; sext of an i1 would return -1 for True.
     "signedness/bool_int.py": (
