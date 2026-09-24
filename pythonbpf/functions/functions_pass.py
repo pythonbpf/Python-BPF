@@ -25,6 +25,7 @@ from pythonbpf.assign_pass import (
 )
 from pythonbpf.allocation_pass import (
     handle_assign_allocation,
+    handle_ann_assign_allocation,
     allocate_temp_pool,
     create_targets_and_rvals,
     LocalSymbol,
@@ -146,6 +147,10 @@ def allocate_mem(compilation_context, builder, body, func, ret_type, local_sym_t
             )
         elif isinstance(stmt, ast.Assign):
             handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab)
+        elif isinstance(stmt, ast.AnnAssign):
+            handle_ann_assign_allocation(
+                compilation_context, builder, stmt, local_sym_tab
+            )
 
     allocate_temp_pool(builder, max_temps_needed, local_sym_tab)
 
@@ -193,6 +198,24 @@ def handle_assign(func, compilation_context, builder, stmt, local_sym_tab):
 
         # Unsupported target type
         logger.error(f"Unsupported assignment target: {ast.dump(target)}")
+
+
+def handle_ann_assign(func, compilation_context, builder, stmt, local_sym_tab):
+    """Handle `x: T = v`. The allocation pass already made x's slot with the
+    annotated type, so what is left is an ordinary store of v into it, through
+    the same helper plain assignment uses (which converts v to the slot's type).
+    A bare `x: T` binds nothing and emits nothing."""
+    if stmt.value is None:
+        return
+    if not handle_variable_assignment(
+        func,
+        compilation_context,
+        builder,
+        stmt.target.id,
+        stmt.value,
+        local_sym_tab,
+    ):
+        logger.error(f"Failed to handle annotated assignment to {stmt.target.id}")
 
 
 def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
@@ -383,6 +406,8 @@ def process_stmt(
         )
     elif isinstance(stmt, ast.Assign):
         handle_assign(func, compilation_context, builder, stmt, local_sym_tab)
+    elif isinstance(stmt, ast.AnnAssign):
+        handle_ann_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.AugAssign):
         handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Global):
