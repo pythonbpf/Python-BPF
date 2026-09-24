@@ -92,7 +92,7 @@ PATTERNS = [
         r"jited|xlated|caps_unpriv|load_if_JITed|not_msg|failure_unpriv|success_unpriv)\b",
     ),
     # functions
-    ("subprog_call", "hard", r"\b__noinline\b|\b__weak\b|\bSEC\s*\(\s*\"\?"),
+    ("subprog_call", "hard", r"\b__noinline\b|\b__weak\b"),
     (
         "static_helper",
         "soft",
@@ -106,7 +106,8 @@ PATTERNS = [
         r"task_acquire|task_release|cgroup_acquire|cgroup_release|cpumask_\w+|rbtree_\w+|list_\w+|"
         r"rcu_read_lock|rcu_read_unlock|arena_\w+|key_put|lookup_user_key|dynptr_\w+|iter_\w+|"
         r"wq_\w+|timer_\w+|throw|percpu_obj_\w+|res_spin_\w+|preempt_\w+|local_irq_\w+|"
-        r"session_\w+|get_dentry_xattr|get_file_xattr|kptr_xchg|sk_assign|xdp_\w+|skb_\w+)\s*\(",
+        r"session_\w+|get_dentry_xattr|get_file_xattr|kptr_xchg|sk_assign|"
+        r"xdp_metadata_\w+|xdp_flow_lookup|skb_flow_lookup)\s*\(",
     ),
     ("inline_asm", "hard", r"\basm\s*(volatile)?\s*\(|__asm__"),
     ("atomic", "hard", r"__sync_\w+|__atomic_\w+|\bbpf_spin_(lock|unlock)\b"),
@@ -162,9 +163,13 @@ INCLUDE_C = re.compile(r'^\s*#include\s+"[^"]+\.c"', re.M)
 BTF_DUMP_FIXTURE = re.compile(r"btf_dump|btf__|__attribute__\(\(btf_decl_tag", re.I)
 
 
+_STRING_OR_COMMENT = re.compile(r'("(?:\\.|[^"\\\n])*")|/\*.*?\*/|//[^\n]*', re.S)
+
+
 def strip_comments(src: str) -> str:
-    src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
-    return re.sub(r"//[^\n]*", "", src)
+    """Remove C comments, leaving string literals alone: a // inside a string
+    such as SEC("uprobe//proc/self/exe:func") is part of the section name."""
+    return _STRING_OR_COMMENT.sub(lambda m: m.group(1) or "", src)
 
 
 def classify(path: Path) -> dict | None:
@@ -193,9 +198,6 @@ def classify(path: Path) -> dict | None:
         hard.add("legacy_map_def")
 
     helpers = set(HELPER_CALL.findall(src)) - NOT_HELPERS
-    helpers = {
-        h for h in helpers if not h.startswith("bpf_map_") or h in SUPPORTED_HELPERS
-    }
     unsupported = sorted(
         h
         for h in helpers
