@@ -51,16 +51,18 @@ the features would just produce a large pile of xfails.
 
 ## 2. What real globals must support
 
-Every port that touches a global currently substitutes a one-entry `HashMap`, tagged
-`WORKAROUND(globals)`. Four programs produced four distinct shapes:
+At the time of the spike every port that touched a global substituted a one-entry
+`HashMap`, tagged `WORKAROUND(globals)`. Integer-scalar `@bpfglobal` support has since
+landed and the sweep is done: the three ports below now declare the upstream globals
+directly. Four programs produced four distinct shapes:
 
-| Shape | Example | What globals must support |
-|---|---|---|
-| none | `tracepoint_sched_switch` | — (control case) |
-| scalar in + scalar out | `get_cgroup_id` | read a global, write a different one |
-| flags across programs | `autoattach` | two programs in one object sharing global state |
-| scalar in, compared against ctx | `perf_skip` | read-only input set by userspace before attach |
-| array + cursor *(next increment)* | `cgroup_preorder` | indexed writes and read-modify-write on a global |
+| Shape | Example | What globals must support | Status |
+|---|---|---|---|
+| none | `tracepoint_sched_switch` | — (control case) | passes |
+| scalar in + scalar out | `get_cgroup_id` | read a global, write a different one | passes with `@bpfglobal` |
+| flags across programs | `autoattach` | two programs in one object sharing global state | passes with `@bpfglobal` |
+| scalar in, compared against ctx | `perf_skip` | read-only input set by userspace before attach | global fine; still xfail on `ctx.regs.ip` |
+| array + cursor *(next increment)* | `cgroup_preorder` | indexed writes and read-modify-write on a global | needs array globals |
 
 The last row is not in this spike but is the recommended next port precisely because it is
 the most demanding shape: `result[idx++] = N` needs an array global *and* a read-modify-write

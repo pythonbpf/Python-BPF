@@ -12,6 +12,9 @@
 #             return ip != PT_REGS_IP(&data->regs);
 #     }
 #
+# `ip` is a @bpfglobal the driver sets before attaching; the program only
+# reads it, so no `global` statement is needed.
+#
 # ROADMAP: this is a strict expected failure. `ctx.regs.ip` is two levels of
 # struct field access, and PythonBPF supports only one --
 # `_allocate_for_attribute` in allocation_pass.py bails out unless the
@@ -23,30 +26,23 @@
 # allocation pass declines to allocate and logs at debug level, then the
 # expression pass fails later on the missing symbol. Worth improving alongside
 # nested access support.
-#
-# WORKAROUND(globals): upstream uses `uintptr_t ip` to receive the address to
-# compare against. PythonBPF has no global variable support yet, so it becomes a
-# one-entry HashMap keyed by 0. Replace with a real global once they land.
 
-from pythonbpf import bpf, map, section, bpfglobal, compile
-from pythonbpf.maps import HashMap
+from pythonbpf import bpf, section, bpfglobal, compile
 from vmlinux import struct_bpf_perf_event_data
-from ctypes import c_int64, c_int32, c_uint64
+from ctypes import c_int64, c_uint64
 
 
-# WORKAROUND(globals): stands in for `uintptr_t ip;`
 @bpf
-@map
-def expected_ip() -> HashMap:
-    return HashMap(key=c_int32, value=c_uint64, max_entries=1)
+@bpfglobal
+def ip() -> c_uint64:
+    return c_uint64(0)
 
 
 @bpf
 @section("perf_event")
 def handler(ctx: struct_bpf_perf_event_data) -> c_int64:
-    want = expected_ip.lookup(0)
     actual = ctx.regs.ip
-    if want == actual:
+    if ip == actual:
         return c_int64(0)
     return c_int64(1)
 

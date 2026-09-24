@@ -115,20 +115,13 @@ So a passing test here says PythonBPF emits a loadable, verifiable object for
 that program type and feature mix. It does not say the program behaves the way
 the kernel's version does. Treat it as a compiler assertion, not a semantic one.
 
-### `WORKAROUND(globals)`
+### Globals
 
 The selftest corpus overwhelmingly reports results through global variables: the
-program writes a global and the driver reads it back. PythonBPF has no global
-variable support, so each becomes a one-entry `HashMap` keyed by index, tagged in
-a comment naming the variable it replaces:
-
-```bash
-grep -rn "WORKAROUND(globals)" tests/kernel_selftest_equivalent/
-```
-
-This is deliberate scaffolding, not the intended shape — the tag exists so the
-sweep is mechanical once real globals land. It is not a cosmetic substitution
-either: it changes what a future userspace driver would read.
+program writes a global and the driver reads it back. Ports keep that shape with
+`@bpfglobal` scalars, so a future userspace driver reads the same `.bss`/`.data`
+values the kernel's driver does. Anything a global cannot yet hold (arrays,
+structs, strings) is a roadmap test, not a workaround.
 
 Anything importing from `vmlinux` belongs in `vmlinux/`, which is registered in
 `VMLINUX_TEST_DIRS_PASSING` so it is skipped rather than failed where no
