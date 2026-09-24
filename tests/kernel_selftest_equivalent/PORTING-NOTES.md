@@ -91,6 +91,54 @@ cursor, which together constrain the design more than anything here does.
   enums, then gives up), a Python-level surface for declaring one, and userspace access
   through `pylibbpf`.
 
+## Second batch: everything portable after globals
+
+With scalar globals in, the audit's Tier 1 and Tier 2 lists were re-read against the
+compiler and every program it can express was ported. Sixteen more, fifteen of which
+pass at every level; the sixteenth passes at IR and llc and is rejected by the verifier
+exactly as its upstream driver asserts it must be:
+
+| Port | Upstream | Section | Outcome |
+|---|---|---|---|
+| `xdp/xdp_dummy.py` | `xdp_dummy.c` | `xdp` x2 | passes |
+| `xdp/priv_prog.py` | `priv_prog.c` | `xdp` | passes |
+| `xdp/xdp_link.py` | `test_xdp_link.c` | `xdp`, `tc` | passes |
+| `vmlinux/xdp_tx.py` | `xdp_tx.c` | `xdp` | passes |
+| `tc/tc_dummy.py` | `tc_dummy.c` | `tc` | passes |
+| `vmlinux/tc_bpf.py` | `test_tc_bpf.c` | `tc`, `tcx/ingress` | passes (direct packet access) |
+| `cgroup/cgroup_mprog.py` | `cgroup_mprog.c` | `cgroup/getsockopt` x4 | passes |
+| `vmlinux/cgroup_skb_direct_packet_access.py` | `cgroup_skb_direct_packet_access.c` | `cgroup_skb/ingress` | passes, after a compiler fix |
+| `socket/signed_loader.py` | `test_signed_loader.c` | `socket` | passes |
+| `socket/signed_loader_data.py` | `test_signed_loader_data.c` | `socket` | passes (.data global) |
+| `netfilter/netfilter_link_attach.py` | `test_netfilter_link_attach.c` | `netfilter` | passes |
+| `tracing/kprobe_multi_empty.py` | `kprobe_multi_empty.c` | `kprobe.multi/` | passes |
+| `tracing/uprobe_multi_bench.py` | `uprobe_multi_bench.c` | `uprobe.multi/...` | passes (`count += 1`) |
+| `tracing/uprobe_multi_usdt.py` | `uprobe_multi_usdt.c` | `usdt` | passes |
+| `tracing/link_pinning.py` | `test_link_pinning.c` | `raw_tp/sys_enter`, `tp_btf/sys_enter` | passes |
+| `vmlinux/xdp_devmap_helpers.py` | `test_xdp_devmap_helpers.c` | `xdp` | verifier xfail by design |
+
+**One compiler bug fell out.** `data_end = skb->data_end` into a `__u32` global failed
+with `cannot store i64 to i32*`: context fields are loaded widened to i64, and the
+assignment path only accepted them into 64-bit slots or slots of exactly the field's
+type, never narrowing. It now goes through `convert()` like every other integer store.
+`passing_tests/vmlinux/ctx_field_narrow_store.py` pins it.
+
+**What is still not portable, and why**, from the same two lists:
+
+| Program | Blocker |
+|---|---|
+| `metadata_used.c`, `metadata_unused.c` | `char[]` `.rodata` globals: only integer scalars can be globals |
+| `test_log_buf.c`, `cgroup_preorder.c`, `uprobe_multi_pid_filter.c`, `test_build_id.c` | array globals |
+| `token_kallsyms.c`, `test_btf_ext.c`, `test_static_linked*.c` | BPF-to-BPF calls (`__weak` / `__noinline` subprogs) |
+| `test_trace_ext.c`, `freplace_get_constant.c` | `freplace` needs a target program to load against |
+| `test_subskeleton*.c` | extern symbols, `__kconfig`, static linking |
+| `test_pkt_md_access.c` | narrow type-punned loads of `__sk_buff` fields |
+| `test_xdp_attach_fail.c` | tracepoint `__data_loc` pointer arithmetic on a custom ctx struct |
+| `sockopt_multi.c` | writes to context fields and through `optval` |
+| `tracing_struct_many_args.c` | `BPF_PROG2` multi-argument entry |
+| `bpf_nop_bench.c` | `bpf_loop`-based benchmark macro |
+| `test_tcp_estats.c` | large; inlinable helpers and struct-heavy, not attempted yet |
+
 ## 3. Incidental findings
 
 - **Nested struct field access fails with a misleading error.** `ctx.regs.ip` reports

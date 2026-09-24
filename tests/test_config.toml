@@ -66,3 +66,10 @@
 "kernel_selftest_equivalent/ringbuf/reserve_submit_discard.py" = {reason = "RingBuffer reserve/typed record/discard workflow is planned but not implemented yet", level = "ir"}
 
 "kernel_selftest_equivalent/vmlinux/perf_skip.py" = {reason = "Nested struct field access (ctx.regs.ip) not supported; one level such as ctx.sample_period works", level = "ir"}
+
+# Upstream is a negative fixture: reading xdp_md->egress_ifindex is only legal
+# for programs loaded with expected_attach_type = BPF_XDP_DEVMAP, and the
+# prog_tests driver asserts that a plain load *fails*. The kernel rejects it
+# here with "invalid bpf_context access off=20 size=4", which is the pass
+# condition upstream. PythonBPF has no way to set expected_attach_type yet.
+"kernel_selftest_equivalent/vmlinux/xdp_devmap_helpers.py" = {reason = "Negative fixture: egress_ifindex needs expected_attach_type=BPF_XDP_DEVMAP, which cannot be set yet; the verifier rejection is upstream's pass condition", level = "verifier"}
