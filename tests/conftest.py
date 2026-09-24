@@ -32,9 +32,13 @@ try:
 
     VMLINUX_AVAILABLE = True
     VMLINUX_SKIP_REASON = ""
-except Exception as exc:
+except ImportError as exc:
+    # No vmlinux.py: the tests that need it are skipped. Any other exception
+    # propagates. A vmlinux.py that exists but does not import is a defect in
+    # the generator, and hiding it behind skips would pass CI with no vmlinux
+    # coverage at all.
     VMLINUX_AVAILABLE = False
-    VMLINUX_SKIP_REASON = f"vmlinux.py not usable for current kernel: {exc}"
+    VMLINUX_SKIP_REASON = f"vmlinux.py not importable: {exc}"
 
 
 # ── pytest_generate_tests: parametrize on bpf_test_file ───────────────────
