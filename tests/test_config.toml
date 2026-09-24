@@ -6,6 +6,8 @@
 #     level "ir"       = fails during pythonbpf IR generation (exception or ERROR log)
 #     level "llc"      = IR generates but llc rejects it
 #     level "verifier" = IR and llc both succeed, but the kernel verifier rejects it
+#   A verifier-level entry may add match = "..." : the rejection must contain
+#   that text, otherwise the test fails instead of counting as expected.
 #
 # A failure at one level implies failure at every later one, so the declared
 # level marks that level and all later ones xfail.
@@ -71,4 +73,4 @@
 # prog_tests driver asserts that a plain load *fails*. The kernel rejects it
 # here with "invalid bpf_context access off=20 size=4", which is the pass
 # condition upstream. PythonBPF has no way to set expected_attach_type yet.
-"kernel_selftest_equivalent/vmlinux/xdp_devmap_helpers.py" = {reason = "Negative fixture: egress_ifindex needs expected_attach_type=BPF_XDP_DEVMAP, which cannot be set yet; the verifier rejection is upstream's pass condition", level = "verifier"}
+"kernel_selftest_equivalent/vmlinux/xdp_devmap_helpers.py" = {reason = "Negative fixture: egress_ifindex needs expected_attach_type=BPF_XDP_DEVMAP, which cannot be set yet; the verifier rejection is upstream's pass condition", level = "verifier", match = "invalid bpf_context access"}

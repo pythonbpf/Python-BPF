@@ -49,6 +49,7 @@ def collect_all_test_files() -> list[BpfTestCase]:
             is_expected_fail = xfail_entry is not None
             xfail_reason = xfail_entry.get("reason", "") if xfail_entry else ""
             xfail_level = xfail_entry.get("level", "ir") if xfail_entry else "ir"
+            xfail_match = xfail_entry.get("match", "") if xfail_entry else ""
 
             cases.append(
                 BpfTestCase(
@@ -56,6 +57,7 @@ def collect_all_test_files() -> list[BpfTestCase]:
                     rel_path=rel,
                     is_expected_fail=is_expected_fail,
                     xfail_reason=xfail_reason,
+                    xfail_match=xfail_match,
                     xfail_level=xfail_level,
                     needs_vmlinux=needs_vmlinux,
                 )

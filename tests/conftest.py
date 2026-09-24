@@ -103,6 +103,10 @@ def pytest_collection_modifyitems(items):
                         raises=Exception,
                     )
                 )
+                # A verifier-level xfail may name the rejection it expects;
+                # any other rejection is then a real failure, not an xfail.
+                if item_level == "verifier" and case.xfail_match:
+                    item.add_marker(pytest.mark.verifier_match(case.xfail_match))
 
 
 # ── caplog level fixture: capture ERROR+ from pythonbpf ───────────────────
