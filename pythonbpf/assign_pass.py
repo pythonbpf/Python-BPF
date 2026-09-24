@@ -197,22 +197,14 @@ def handle_variable_assignment(
             logger.info("Handling assignment to struct field")
             field_ir_type = ctypes_to_ir(val_type.type.__name__)
             # Sub-register-width context fields are zero-extended to i64 by
-            # load_ctx_field, so val is already i64 even though the field type
-            # says otherwise (c_uint for xdp_md, c_ushort for pt_regs.cs/ss).
-            if (
-                isinstance(field_ir_type, ir.IntType)
-                and field_ir_type.width < 64
-                and isinstance(var_type, ir.IntType)
-                and var_type.width == 64
+            # load_ctx_field, so val may be wider than the field type says
+            # (c_uint for xdp_md, c_ushort for pt_regs.cs/ss). convert()
+            # sizes from the physical value and signs from the field, so it
+            # is a no-op into an i64 slot and a trunc into a narrower one.
+            if isinstance(field_ir_type, ir.IntType) and isinstance(
+                var_type, ir.IntType
             ):
-                builder.store(val, var_ptr)
-                logger.info(
-                    f"Assigned zero-extended i{field_ir_type.width} context field "
-                    f"to {var_name} (i64)"
-                )
-                return True
-            # TODO: handling only ctype struct fields for now. Handle other stuff too later.
-            elif var_type == field_ir_type:
+                val = convert(builder, val, field_ir_type, var_type)
                 builder.store(val, var_ptr)
                 logger.info(f"Assigned ctype struct field to {var_name}")
                 return True
