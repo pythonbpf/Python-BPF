@@ -6,7 +6,7 @@ from .symbols import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
-from pythonbpf.type_deducer import ctypes_to_ir, IntTy, signedness
+from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes, IntTy, signedness
 from pythonbpf.expr.type_inference import infer_int_type
 from pythonbpf.maps import BPFMapType
 
@@ -49,57 +49,119 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
             )
             continue
 
-        var_name = target.id
-
-        # Already bound in this scope: a parameter, an earlier assignment, or a
-        # `global` declaration (whose slot is the GlobalVariable). No slot needed.
-        if var_name in local_sym_tab:
-            logger.debug(f"'{var_name}' already bound, no allocation needed")
-            continue
-
-        # Not declared `global`, yet named like one: Python creates a local
-        # that shadows the global for the whole function body, and leaves the
-        # global untouched. Do the same.
-        shadows_global = var_name in compilation_context.bpf_globals
-        if shadows_global:
-            logger.info(
-                f"'{var_name}' is assigned without a 'global' declaration, so it "
-                f"is a local shadowing the @bpfglobal of the same name"
-            )
-
-        # Determine type and allocate based on rval
-        if isinstance(rval, ast.Call):
-            _allocate_for_call(
+        _bind_name(
+            compilation_context,
+            stmt,
+            target,
+            local_sym_tab,
+            lambda var_name: _allocate_for_value(
                 builder, var_name, rval, local_sym_tab, compilation_context
-            )
-        elif isinstance(rval, ast.Constant):
-            _allocate_for_constant(builder, var_name, rval, local_sym_tab)
-        elif isinstance(rval, ast.BinOp):
-            _allocate_for_binop(
-                builder, var_name, rval, local_sym_tab, compilation_context
-            )
-        elif isinstance(rval, ast.Name):
-            # Variable-to-variable assignment (b = a)
-            _allocate_for_name(
-                builder, var_name, rval, local_sym_tab, compilation_context
-            )
-        elif isinstance(rval, ast.Attribute):
-            # Struct field-to-variable assignment (a = dat.fld)
-            _allocate_for_attribute(
-                builder, var_name, rval, local_sym_tab, compilation_context
-            )
-        else:
-            logger.warning(
-                f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
-            )
+            ),
+        )
 
-        if shadows_global and var_name in local_sym_tab:
-            # Where the binding ends, so that a read above it is reported the
-            # way Python reports it. end_lineno, not lineno, so a read on a
-            # continuation line of a multi-line binding counts as above it too.
-            local_sym_tab[var_name].shadows_global_from = (
-                getattr(stmt, "end_lineno", None) or target.lineno
-            )
+
+def handle_ann_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
+    """Handle memory allocation for annotated assignment (`x: c_int32 = 0`).
+
+    The annotation, not the value, types the slot: `x: c_int32 = 0` is an i32
+    even though the literal alone would give an i64. With no value
+    (`x: c_int64`) the slot is still made, and the name stays unbound until
+    something assigns it, as in Python.
+    """
+    logger.info(f"Handling annotated assignment for allocation: {ast.dump(stmt)}")
+
+    if not isinstance(stmt.target, ast.Name):
+        raise SyntaxError(
+            f"annotated assignment on line {stmt.lineno} must target a plain "
+            f"name, got {type(stmt.target).__name__}"
+        )
+
+    ir_type = annotation_to_ir(stmt.annotation, stmt.lineno)
+    _bind_name(
+        compilation_context,
+        stmt,
+        stmt.target,
+        local_sym_tab,
+        lambda var_name: local_sym_tab.__setitem__(
+            var_name,
+            LocalSymbol(_allocate_with_type(builder, var_name, ir_type), ir_type),
+        ),
+    )
+
+
+def annotation_to_ir(annotation, lineno):
+    """IR type for a ctypes annotation, written `c_int32` or `ctypes.c_int32`."""
+    if isinstance(annotation, ast.Name):
+        name = annotation.id
+    elif isinstance(annotation, ast.Attribute):
+        name = annotation.attr
+    else:
+        name = None
+    if name is None or not is_ctypes(name):
+        raise SyntaxError(
+            f"unsupported annotation on line {lineno}: {ast.unparse(annotation)} "
+            f"(annotate locals with a ctypes integer type such as c_int64)"
+        )
+    return ctypes_to_ir(name)
+
+
+def _bind_name(compilation_context, stmt, target, local_sym_tab, allocate):
+    """What every statement that binds a bare name shares, around the
+    statement-specific `allocate(var_name)` that makes the slot.
+
+    A name already bound needs no new slot. A name that is also a @bpfglobal
+    but was not declared `global` becomes a local shadowing it, and records
+    where its binding ends so a read above it is reported as Python would.
+    """
+    var_name = target.id
+
+    # Already bound in this scope: a parameter, an earlier assignment, or a
+    # `global` declaration (whose slot is the GlobalVariable). No slot needed.
+    if var_name in local_sym_tab:
+        logger.debug(f"'{var_name}' already bound, no allocation needed")
+        return
+
+    # Not declared `global`, yet named like one: Python creates a local
+    # that shadows the global for the whole function body, and leaves the
+    # global untouched. Do the same.
+    shadows_global = var_name in compilation_context.bpf_globals
+    if shadows_global:
+        logger.info(
+            f"'{var_name}' is assigned without a 'global' declaration, so it "
+            f"is a local shadowing the @bpfglobal of the same name"
+        )
+
+    allocate(var_name)
+
+    if shadows_global and var_name in local_sym_tab:
+        # Where the binding ends, so that a read above it is reported the
+        # way Python reports it. end_lineno, not lineno, so a read on a
+        # continuation line of a multi-line binding counts as above it too.
+        local_sym_tab[var_name].shadows_global_from = (
+            getattr(stmt, "end_lineno", None) or target.lineno
+        )
+
+
+def _allocate_for_value(builder, var_name, rval, local_sym_tab, compilation_context):
+    """Allocate a slot for `var_name = rval`, typed from the value."""
+    if isinstance(rval, ast.Call):
+        _allocate_for_call(builder, var_name, rval, local_sym_tab, compilation_context)
+    elif isinstance(rval, ast.Constant):
+        _allocate_for_constant(builder, var_name, rval, local_sym_tab)
+    elif isinstance(rval, ast.BinOp):
+        _allocate_for_binop(builder, var_name, rval, local_sym_tab, compilation_context)
+    elif isinstance(rval, ast.Name):
+        # Variable-to-variable assignment (b = a)
+        _allocate_for_name(builder, var_name, rval, local_sym_tab, compilation_context)
+    elif isinstance(rval, ast.Attribute):
+        # Struct field-to-variable assignment (a = dat.fld)
+        _allocate_for_attribute(
+            builder, var_name, rval, local_sym_tab, compilation_context
+        )
+    else:
+        logger.warning(
+            f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
+        )
 
 
 def _allocate_for_call(builder, var_name, rval, local_sym_tab, compilation_context):
