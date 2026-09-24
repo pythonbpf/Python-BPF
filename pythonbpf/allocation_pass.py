@@ -2,11 +2,12 @@ import ast
 import logging
 import ctypes
 from llvmlite import ir
-from .local_symbol import LocalSymbol
+from .symbols import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
-from pythonbpf.type_deducer import ctypes_to_ir
+from pythonbpf.type_deducer import ctypes_to_ir, IntTy, signedness
+from pythonbpf.expr.type_inference import infer_int_type
 from pythonbpf.maps import BPFMapType
 
 logger = logging.getLogger(__name__)
@@ -49,10 +50,22 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
             continue
 
         var_name = target.id
-        # Skip if already allocated
+
+        # Already bound in this scope: a parameter, an earlier assignment, or a
+        # `global` declaration (whose slot is the GlobalVariable). No slot needed.
         if var_name in local_sym_tab:
-            logger.debug(f"Variable {var_name} already allocated, skipping")
+            logger.debug(f"'{var_name}' already bound, no allocation needed")
             continue
+
+        # Not declared `global`, yet named like one: Python creates a local
+        # that shadows the global for the whole function body, and leaves the
+        # global untouched. Do the same.
+        shadows_global = var_name in compilation_context.bpf_globals
+        if shadows_global:
+            logger.info(
+                f"'{var_name}' is assigned without a 'global' declaration, so it "
+                f"is a local shadowing the @bpfglobal of the same name"
+            )
 
         # Determine type and allocate based on rval
         if isinstance(rval, ast.Call):
@@ -62,10 +75,14 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
         elif isinstance(rval, ast.Constant):
             _allocate_for_constant(builder, var_name, rval, local_sym_tab)
         elif isinstance(rval, ast.BinOp):
-            _allocate_for_binop(builder, var_name, local_sym_tab)
+            _allocate_for_binop(
+                builder, var_name, rval, local_sym_tab, compilation_context
+            )
         elif isinstance(rval, ast.Name):
             # Variable-to-variable assignment (b = a)
-            _allocate_for_name(builder, var_name, rval, local_sym_tab)
+            _allocate_for_name(
+                builder, var_name, rval, local_sym_tab, compilation_context
+            )
         elif isinstance(rval, ast.Attribute):
             # Struct field-to-variable assignment (a = dat.fld)
             _allocate_for_attribute(
@@ -74,6 +91,14 @@ def handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab):
         else:
             logger.warning(
                 f"Unsupported assignment value type for {var_name}: {type(rval).__name__}"
+            )
+
+        if shadows_global and var_name in local_sym_tab:
+            # Where the binding ends, so that a read above it is reported the
+            # way Python reports it. end_lineno, not lineno, so a read on a
+            # continuation line of a multi-line binding counts as above it too.
+            local_sym_tab[var_name].shadows_global_from = (
+                getattr(stmt, "end_lineno", None) or target.lineno
             )
 
 
@@ -94,7 +119,11 @@ def _allocate_for_call(builder, var_name, rval, local_sym_tab, compilation_conte
 
         # Helper functions
         elif HelperHandlerRegistry.has_handler(call_type):
-            ir_type = ir.IntType(64)  # Assume i64 return type
+            # Undeclared locals are 64-bit; the sign comes from the helper.
+            ret = HelperHandlerRegistry.get_return_type(call_type)
+            ir_type = IntTy(
+                64, signedness(ret) if isinstance(ret, ir.IntType) else True
+            )
             var = builder.alloca(ir_type, name=var_name)
             var.align = 8
             local_sym_tab[var_name] = LocalSymbol(var, ir_type)
@@ -234,7 +263,7 @@ def _allocate_for_constant(builder, var_name, rval, local_sym_tab):
     """Allocate memory for variable assigned from a constant."""
 
     if isinstance(rval.value, bool):
-        ir_type = ir.IntType(1)
+        ir_type = IntTy(1, False)  # a bool widens to 0 or 1, never sign-extends
         var = builder.alloca(ir_type, name=var_name)
         var.align = 1
         local_sym_tab[var_name] = LocalSymbol(var, ir_type)
@@ -260,9 +289,17 @@ def _allocate_for_constant(builder, var_name, rval, local_sym_tab):
         )
 
 
-def _allocate_for_binop(builder, var_name, local_sym_tab):
-    """Allocate memory for variable assigned from a binary operation."""
-    ir_type = ir.IntType(64)  # Assume i64 result
+def _allocate_for_binop(builder, var_name, rval, local_sym_tab, compilation_context):
+    """Allocate memory for variable assigned from a binary operation.
+
+    Undeclared locals are 64-bit; the sign is that of the expression's C type,
+    inferred statically. Falls back to signed when the expression involves
+    something the inference does not know.
+    """
+    inferred = infer_int_type(rval, local_sym_tab, compilation_context)
+    if inferred is None:
+        logger.debug(f"Could not infer a type for {var_name}, assuming signed i64")
+    ir_type = IntTy(64, signedness(inferred) if inferred is not None else True)
     var = builder.alloca(ir_type, name=var_name)
     var.align = 8
     local_sym_tab[var_name] = LocalSymbol(var, ir_type)
@@ -298,21 +335,31 @@ def allocate_temp_pool(builder, max_temps, local_sym_tab):
             logger.debug(f"Allocated temp variable: {temp_name}")
 
 
-def _allocate_for_name(builder, var_name, rval, local_sym_tab):
+def _allocate_for_name(builder, var_name, rval, local_sym_tab, compilation_context):
     """Allocate memory for variable-to-variable assignment (b = a)."""
     source_var = rval.id
 
-    if source_var not in local_sym_tab:
+    # Same resolution order as every other read of a bare name: local, then
+    # BPF global, then vmlinux enum constant. A variable source gives the copy
+    # its type; an enum constant is an immediate with no storage, so the copy
+    # gets the i64 slot a literal gets.
+    if source_var in local_sym_tab:
+        source_symbol = local_sym_tab[source_var]
+    elif source_var in compilation_context.bpf_globals:
+        source_symbol = compilation_context.bpf_globals[source_var]
+    elif VmlinuxHandlerRegistry.handle_name(source_var) is not None:
+        var = _allocate_with_type(builder, var_name, ir.IntType(64))
+        local_sym_tab[var_name] = LocalSymbol(var, ir.IntType(64))
+        logger.info(f"Pre-allocated {var_name} from enum constant {source_var}")
+        return
+    else:
         logger.error(f"Source variable '{source_var}' not found in symbol table")
         return
-
-    # Get type and metadata from source variable
-    source_symbol = local_sym_tab[source_var]
 
     # Allocate with same type and alignment
     var = _allocate_with_type(builder, var_name, source_symbol.ir_type)
     local_sym_tab[var_name] = LocalSymbol(
-        var, source_symbol.ir_type, source_symbol.metadata
+        var, source_symbol.ir_type, getattr(source_symbol, "metadata", None)
     )
 
     logger.info(

@@ -2,7 +2,7 @@ import ast
 import logging
 
 from llvmlite import ir
-from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth
+from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth, convert
 from pythonbpf.expr.vmlinux_registry import VmlinuxHandlerRegistry
 from pythonbpf.helper.helper_utils import get_char_array_ptr_and_size
 
@@ -41,7 +41,7 @@ def handle_fstring_print(
                 fmt_parts,
                 exprs,
                 local_sym_tab,
-                compilation_context.structs_sym_tab,
+                compilation_context,
             )
         else:
             raise NotImplementedError(f"Unsupported f-string value type: {type(value)}")
@@ -80,19 +80,21 @@ def _process_constant_in_fstring(cst, fmt_parts, exprs):
         )
 
 
-def _process_fval(fval, fmt_parts, exprs, local_sym_tab, struct_sym_tab):
+def _process_fval(fval, fmt_parts, exprs, local_sym_tab, compilation_context):
     """Process formatted values in f-string."""
     logger.debug(f"Processing formatted value: {ast.dump(fval)}")
 
     if isinstance(fval.value, ast.Name):
-        _process_name_in_fval(fval.value, fmt_parts, exprs, local_sym_tab)
+        _process_name_in_fval(
+            fval.value, fmt_parts, exprs, local_sym_tab, compilation_context
+        )
     elif isinstance(fval.value, ast.Attribute):
         _process_attr_in_fval(
             fval.value,
             fmt_parts,
             exprs,
             local_sym_tab,
-            struct_sym_tab,
+            compilation_context.structs_sym_tab,
         )
     else:
         raise NotImplementedError(
@@ -100,10 +102,15 @@ def _process_fval(fval, fmt_parts, exprs, local_sym_tab, struct_sym_tab):
         )
 
 
-def _process_name_in_fval(name_node, fmt_parts, exprs, local_sym_tab):
+def _process_name_in_fval(
+    name_node, fmt_parts, exprs, local_sym_tab, compilation_context
+):
     """Process name nodes in formatted values."""
     if local_sym_tab and name_node.id in local_sym_tab:
         _, var_type, tmp = local_sym_tab[name_node.id]
+        _populate_fval(var_type, name_node, fmt_parts, exprs)
+    elif name_node.id in compilation_context.bpf_globals:
+        var_type = compilation_context.bpf_globals[name_node.id].ir_type
         _populate_fval(var_type, name_node, fmt_parts, exprs)
     else:
         # Try to resolve through vmlinux registry if not in local symbol table
@@ -260,8 +267,6 @@ def _handle_pointer_arg(val, func, builder):
     return ir.Constant(ir.IntType(64), 0)
 
 
-def _handle_int_arg(val, builder):
-    """Convert integer type for bpf_printk (sign-extend to i64)."""
-    if val.type.width < 64:
-        return builder.sext(val, ir.IntType(64))
-    return val
+def _handle_int_arg(val, builder, ty=None):
+    """Widen an integer for bpf_printk to i64, per the value's sign."""
+    return convert(builder, val, ty if ty is not None else val.type, ir.IntType(64))

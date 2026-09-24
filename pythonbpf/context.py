@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pythonbpf.structs.struct_type import StructType
     from pythonbpf.maps.maps_utils import MapSymbol
+    from pythonbpf.symbols import BpfGlobalSymbol
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +67,14 @@ class CompilationContext:
         self.global_sym_tab: list[ir.GlobalVariable] = []
         self.structs_sym_tab: dict[str, "StructType"] = {}
         self.map_sym_tab: dict[str, "MapSymbol"] = {}
+        self.bpf_globals: dict[str, "BpfGlobalSymbol"] = {}
 
         # Helper management
         self.scratch_pool = ScratchPoolManager()
+
+        # Sequence numbers for llvm.bpf.passthrough barriers; each call needs a
+        # distinct one so the optimizer cannot CSE two barriers together.
+        self.passthrough_seq = 0
 
         # Vmlinux handling (optional, specialized)
         self.vmlinux_handler = None  # Can be VmlinuxHandler instance
