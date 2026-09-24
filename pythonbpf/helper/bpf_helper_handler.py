@@ -1076,7 +1076,7 @@ def handle_helper_call(
             raise NotImplementedError(
                 f"Helper function '{method_name}' is not implemented."
             )
-        return handler(
+        result = handler(
             call,
             map_ptr,
             compilation_context,
@@ -1084,6 +1084,19 @@ def handle_helper_call(
             func,
             local_sym_tab,
         )
+        # Emitters return (value, plain LLVM type); the registry entry is the
+        # descriptor that knows the sign. Substitute it once, here, rather
+        # than in every emitter.
+        declared = HelperHandlerRegistry.get_return_type(method_name)
+        if (
+            isinstance(result, tuple)
+            and len(result) == 2
+            and isinstance(declared, ir.IntType)
+            and isinstance(result[1], ir.IntType)
+            and declared.width == result[1].width
+        ):
+            return result[0], declared
+        return result
 
     map_sym_tab = compilation_context.map_sym_tab
 
