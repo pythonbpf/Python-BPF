@@ -318,7 +318,7 @@ def handle_cond(func, compilation_context, builder, cond, local_sym_tab):
     return convert_to_bool(builder, val)
 
 
-def handle_if(func, compilation_context, builder, stmt, local_sym_tab):
+def handle_if(func, compilation_context, builder, stmt, local_sym_tab, ret_type):
     """Handle if statements in the function body."""
     logger.info("Handling if statement")
     # start = builder.block.parent
@@ -336,22 +336,17 @@ def handle_if(func, compilation_context, builder, stmt, local_sym_tab):
         builder.cbranch(cond, then_block, merge_block)
 
     builder.position_at_end(then_block)
-    for s in stmt.body:
-        process_stmt(func, compilation_context, builder, s, local_sym_tab, False)
+    process_block(
+        func, compilation_context, builder, stmt.body, local_sym_tab, ret_type
+    )
     if not builder.block.is_terminated:
         builder.branch(merge_block)
 
     if else_block:
         builder.position_at_end(else_block)
-        for s in stmt.orelse:
-            process_stmt(
-                func,
-                compilation_context,
-                builder,
-                s,
-                local_sym_tab,
-                False,
-            )
+        process_block(
+            func, compilation_context, builder, stmt.orelse, local_sym_tab, ret_type
+        )
         if not builder.block.is_terminated:
             builder.branch(merge_block)
 
@@ -413,7 +408,7 @@ def process_stmt(
     elif isinstance(stmt, ast.Global):
         logger.debug(f"global declaration of {', '.join(stmt.names)} already bound")
     elif isinstance(stmt, ast.If):
-        handle_if(func, compilation_context, builder, stmt, local_sym_tab)
+        handle_if(func, compilation_context, builder, stmt, local_sym_tab, ret_type)
     elif isinstance(stmt, ast.Return):
         did_return = handle_return(
             func, builder, stmt, local_sym_tab, ret_type, compilation_context
@@ -426,6 +421,19 @@ def process_stmt(
             f"{type(stmt).__name__}"
         )
     return did_return
+
+
+def process_block(func, compilation_context, builder, stmts, local_sym_tab, ret_type):
+    """Process a nested statement list, such as an if-branch, in the
+    enclosing function's return type. Stops at the first statement that ends
+    the block (a return), because whatever follows it in the same list can
+    never run, and would otherwise be emitted after a terminator."""
+    for s in stmts:
+        if builder.block.is_terminated:
+            break
+        process_stmt(
+            func, compilation_context, builder, s, local_sym_tab, False, ret_type
+        )
 
 
 # ============================================================================
