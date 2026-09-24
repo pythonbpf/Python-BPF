@@ -150,11 +150,10 @@ def allocate_mem(compilation_context, builder, body, func, ret_type, local_sym_t
     # TODO: allocate_mem is re-entered for every if body (handle_if_allocation),
     # and each level allocates a pool of its own even though the top-level count
     # already covers nested statements. Only the last-allocated pool stays in
-    # local_sym_tab; the others are unreferenced, but llc does not delete
-    # unreferenced allocas before frame layout (opt -O2 would, and the pipeline
-    # is llc only), so each duplicated temp slot costs its size in BPF stack:
-    # measured 8 bytes per i64 temp per nesting level. Fix: count recursively,
-    # allocate once at the top level.
+    # local_sym_tab; the others are unreferenced. The opt -O2 step (#104)
+    # deletes them, so with opt on PATH this costs nothing; on the no-opt
+    # fallback llc keeps them through frame layout, measured 8 bytes per i64
+    # temp per nesting level. Fix: count recursively, allocate once at the top.
     allocate_temp_pool(builder, max_temps_needed, local_sym_tab)
 
     return local_sym_tab
