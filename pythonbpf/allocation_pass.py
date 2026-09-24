@@ -8,6 +8,7 @@ from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
 from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes, IntTy, signedness
 from pythonbpf.expr.type_inference import infer_int_type
+from pythonbpf.expr.operators import usual_arithmetic_conversions
 from pythonbpf.maps import BPFMapType
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,110 @@ def handle_ann_assign_allocation(compilation_context, builder, stmt, local_sym_t
             LocalSymbol(_allocate_with_type(builder, var_name, ir_type), ir_type),
         ),
     )
+
+
+def handle_for_allocation(compilation_context, builder, stmt, local_sym_tab):
+    """Handle memory allocation for `for <name> in range(...)`.
+
+    Two slots, both in the entry block so a loop never grows the stack: the
+    loop variable, and a hidden induction counter the loop actually steps.
+    Keeping them apart is what makes rebinding the loop variable in the body
+    leave the trip count alone, as in Python -- and a counter the body cannot
+    touch is what keeps the loop visibly bounded for the verifier.
+    """
+    start, stop, step = parse_range(stmt)
+
+    # range() yields Python ints; like any undeclared local they are 64-bit,
+    # signed unless the bounds make C's arithmetic unsigned.
+    bound_types = [
+        infer_int_type(bound, local_sym_tab, compilation_context)
+        for bound in (start, stop)
+        if bound is not None
+    ]
+    signed = True
+    if all(ty is not None for ty in bound_types):
+        common = bound_types[0]
+        for ty in bound_types[1:]:
+            common = usual_arithmetic_conversions(common, ty)
+        signed = signedness(common)
+    if not signed and step < 0:
+        raise SyntaxError(
+            f"range() on line {stmt.lineno} counts down over unsigned bounds; "
+            f"the counter would wrap instead of stopping"
+        )
+    loop_ty = IntTy(64, signed)
+
+    counter = range_counter_name(stmt)
+    local_sym_tab[counter] = LocalSymbol(
+        _allocate_with_type(builder, counter, loop_ty), loop_ty
+    )
+    _bind_name(
+        compilation_context,
+        stmt,
+        stmt.target,
+        local_sym_tab,
+        lambda var_name: local_sym_tab.__setitem__(
+            var_name,
+            LocalSymbol(_allocate_with_type(builder, var_name, loop_ty), loop_ty),
+        ),
+    )
+
+
+def range_counter_name(stmt):
+    """Symbol-table name of a range loop's hidden induction counter, unique per
+    loop so nested loops each get their own."""
+    return f"__range_idx_{stmt.lineno}_{stmt.col_offset}"
+
+
+def parse_range(stmt):
+    """Split `for <name> in range(...)` into (start, stop, step): start is an
+    expression or None (meaning 0), stop an expression, step a nonzero int.
+
+    step has to be known at compile time, because its sign decides whether the
+    loop runs while the counter is below stop or above it.
+    """
+    it = stmt.iter
+    if not (
+        isinstance(it, ast.Call)
+        and isinstance(it.func, ast.Name)
+        and it.func.id == "range"
+    ):
+        raise NotImplementedError(
+            f"for loop on line {stmt.lineno}: only range(...) can be iterated "
+            f"so far, got {ast.unparse(it)}"
+        )
+    if not isinstance(stmt.target, ast.Name):
+        raise NotImplementedError(
+            f"for loop on line {stmt.lineno}: only a plain name can be the loop "
+            f"variable, got {ast.unparse(stmt.target)}"
+        )
+    if it.keywords or not 1 <= len(it.args) <= 3:
+        raise SyntaxError(
+            f"range() on line {stmt.lineno} takes 1 to 3 positional arguments"
+        )
+
+    if len(it.args) == 1:
+        return None, it.args[0], 1
+    start, stop = it.args[0], it.args[1]
+    if len(it.args) == 2:
+        return start, stop, 1
+
+    step_node = it.args[2]
+    negate = isinstance(step_node, ast.UnaryOp) and isinstance(step_node.op, ast.USub)
+    literal = step_node.operand if negate else step_node
+    if not (
+        isinstance(literal, ast.Constant)
+        and isinstance(literal.value, int)
+        and not isinstance(literal.value, bool)
+    ):
+        raise SyntaxError(
+            f"range() step on line {stmt.lineno} must be an integer literal, "
+            f"got {ast.unparse(step_node)}"
+        )
+    step = -literal.value if negate else literal.value
+    if step == 0:
+        raise ValueError(f"range() arg 3 must not be zero (line {stmt.lineno})")
+    return start, stop, step
 
 
 def annotation_to_ir(annotation, lineno):
