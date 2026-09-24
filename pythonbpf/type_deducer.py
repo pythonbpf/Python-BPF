@@ -1,30 +1,132 @@
 from llvmlite import ir
 
+
+class IntTy(ir.IntType):
+    """An LLVM integer type that also remembers its signedness.
+
+    LLVM integer types are sign-agnostic by design: `i32` is just 32 bits, and
+    the sign lives in the operations (sdiv/udiv, sext/zext, icmp s*/u*). The
+    frontend therefore has to carry it. IntTy is a plain ir.IntType for every
+    purpose LLVM cares about -- it renders as `i32`, compares and hashes equal
+    to ir.IntType(32), and passes every isinstance check -- with one extra
+    attribute the compiler reads when choosing between signed and unsigned
+    forms of an operation.
+
+    Invariant: the sign is read only from a *descriptor* -- a Symbol.ir_type
+    or the type half of an eval_expr result -- never from `value.type`. Values
+    produced by the IRBuilder (loads, arithmetic, extensions) come back with a
+    plain ir.IntType, so a sign on a value's own type is lost at the first
+    operation. Descriptors are constructed by the compiler; that is where the
+    sign lives.
+    """
+
+    def __new__(cls, bits: int, signed: bool = True):
+        # ir.IntType.__new__ memoises one instance per width in a cache shared
+        # with subclasses. Going through it would (a) merge the signed and
+        # unsigned flavours of a width into one object and (b) plant an IntTy
+        # in the cache so that ir.IntType(32) itself started returning one.
+        # Construct directly instead; equality and hashing are inherited and
+        # depend only on the width, so an IntTy still compares equal to i32.
+        self = object.__new__(cls)
+        self.width = bits
+        return self
+
+    def __init__(self, bits: int, signed: bool = True):
+        self.signed = signed
+
+    def __getnewargs__(self):
+        return self.width, self.signed
+
+    def describe(self) -> str:
+        return f"{'i' if self.signed else 'u'}{self.width}"
+
+
+def int_literal_type(value: int) -> IntTy:
+    """C's type for an integer constant: `int` if the value fits, else
+    `long long`. Literals and enum constants alike; an enum constant is an
+    `int` whatever the enum's underlying type is (that type belongs to
+    variables of the enum type, such as struct fields)."""
+    return IntTy(32, True) if -(1 << 31) <= value < (1 << 31) else IntTy(64, True)
+
+
+def field_int_type(ty) -> "IntTy | None":
+    """The declared integer type behind a vmlinux Field descriptor (its ctypes
+    class), or None if the descriptor is not a Field with an integer ctype.
+    The loaded value may already be wider; C ranks it by the declared width."""
+    ctype = getattr(getattr(ty, "type", None), "__name__", None)
+    if ctype in _INT_CTYPE_WIDTHS:
+        return IntTy(_INT_CTYPE_WIDTHS[ctype], is_signed_ctype(ctype))
+    return None
+
+
+def signedness(ty) -> bool:
+    """Sign of a descriptor. An IntTy carries it directly; a vmlinux Field
+    carries a ctypes class in .type, whose name decides; a 1-bit integer is a
+    bool and never negative, whatever it is wrapped in; a plain ir.IntType, a
+    site not yet taught to carry a sign, reads as signed, the compiler's
+    historical behaviour."""
+    if isinstance(ty, ir.IntType) and ty.width == 1:
+        return False
+    if hasattr(ty, "signed"):
+        return ty.signed
+    ctype = getattr(getattr(ty, "type", None), "__name__", None)
+    if ctype in _INT_CTYPE_WIDTHS:
+        return is_signed_ctype(ctype)
+    return True
+
+
+_SIGNED_CTYPES = {
+    "c_int8",
+    "c_int16",
+    "c_int32",
+    "c_int64",
+    "c_int",
+    "c_short",
+    "c_long",
+    "c_longlong",
+    "c_byte",
+}
+
+_INT_CTYPE_WIDTHS = {
+    "c_int8": 8,
+    "c_uint8": 8,
+    "c_byte": 8,
+    "c_ubyte": 8,
+    "c_int16": 16,
+    "c_uint16": 16,
+    "c_short": 16,
+    "c_ushort": 16,
+    "c_int32": 32,
+    "c_uint32": 32,
+    "c_int": 32,
+    "c_uint": 32,
+    "c_int64": 64,
+    "c_uint64": 64,
+    "c_long": 64,
+    "c_ulong": 64,
+    "c_longlong": 64,
+    # A pointer-sized integer; treated as unsigned like uintptr_t.
+    "c_void_p": 64,
+}
+
+
+def is_signed_ctype(ctype: str) -> bool:
+    return ctype in _SIGNED_CTYPES
+
+
 # TODO: THIS IS NOT SUPPOSED TO MATCH STRINGS :skull:
 mapping = {
-    "c_int8": ir.IntType(8),
-    "c_uint8": ir.IntType(8),
-    "c_int16": ir.IntType(16),
-    "c_uint16": ir.IntType(16),
-    "c_int32": ir.IntType(32),
-    "c_uint32": ir.IntType(32),
-    "c_int64": ir.IntType(64),
-    "c_uint64": ir.IntType(64),
-    "c_float": ir.FloatType(),
-    "c_double": ir.DoubleType(),
-    "c_void_p": ir.IntType(64),
-    "c_long": ir.IntType(64),
-    "c_ulong": ir.IntType(64),
-    "c_longlong": ir.IntType(64),
-    "c_uint": ir.IntType(32),
-    "c_int": ir.IntType(32),
-    "c_ushort": ir.IntType(16),
-    "c_short": ir.IntType(16),
-    "c_ubyte": ir.IntType(8),
-    "c_byte": ir.IntType(8),
-    # Not so sure about this one
-    "str": ir.PointerType(ir.IntType(8)),
+    name: IntTy(width, is_signed_ctype(name))
+    for name, width in _INT_CTYPE_WIDTHS.items()
 }
+mapping.update(
+    {
+        "c_float": ir.FloatType(),
+        "c_double": ir.DoubleType(),
+        # Not so sure about this one
+        "str": ir.PointerType(ir.IntType(8)),
+    }
+)
 
 
 def ctypes_to_ir(ctype: str):

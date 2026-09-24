@@ -15,6 +15,8 @@
 
 "failing_tests/conditionals/struct_ptr.py" = {reason = "Struct pointer used directly as boolean condition not supported", level = "ir"}
 
+"failing_tests/return_struct.py" = {reason = "Returning a struct value from an integer function is a type error (nothing to dereference to an integer)", level = "ir"}
+
 "failing_tests/license.py" = {reason = "Missing LICENSE global produces IR that llc rejects — should be caught earlier with a clear error message", level = "llc"}
 
 "failing_tests/undeclared_values.py" = {reason = "Undeclared variable used in f-string — should raise SyntaxError (correct behaviour, test documents it)", level = "ir"}

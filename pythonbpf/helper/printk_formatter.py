@@ -2,7 +2,7 @@ import ast
 import logging
 
 from llvmlite import ir
-from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth
+from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth, convert
 from pythonbpf.expr.vmlinux_registry import VmlinuxHandlerRegistry
 from pythonbpf.helper.helper_utils import get_char_array_ptr_and_size
 
@@ -267,8 +267,6 @@ def _handle_pointer_arg(val, func, builder):
     return ir.Constant(ir.IntType(64), 0)
 
 
-def _handle_int_arg(val, builder):
-    """Convert integer type for bpf_printk (sign-extend to i64)."""
-    if val.type.width < 64:
-        return builder.sext(val, ir.IntType(64))
-    return val
+def _handle_int_arg(val, builder, ty=None):
+    """Widen an integer for bpf_printk to i64, per the value's sign."""
+    return convert(builder, val, ty if ty is not None else val.type, ir.IntType(64))

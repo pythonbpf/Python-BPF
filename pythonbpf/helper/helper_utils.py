@@ -3,6 +3,7 @@ import logging
 
 from llvmlite import ir
 from pythonbpf.expr import (
+    convert,
     eval_expr,
     access_struct_field,
 )
@@ -134,12 +135,8 @@ def get_or_create_ptr_from_arg(
             local_sym_tab, expected_type
         )
         logger.info(f"Using temp variable '{temp_name}' for expression result")
-        if (
-            isinstance(val.type, ir.IntType)
-            and expected_type
-            and val.type.width > expected_type.width
-        ):
-            val = builder.trunc(val, expected_type)
+        if expected_type is not None and isinstance(expected_type, ir.IntType):
+            val = convert(builder, val, val.type, expected_type)
         builder.store(val, ptr)
 
     # NOTE: For char arrays, also return size

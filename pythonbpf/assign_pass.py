@@ -3,7 +3,7 @@ import logging
 from inspect import isclass
 
 from llvmlite import ir
-from pythonbpf.expr import eval_expr
+from pythonbpf.expr import eval_expr, convert
 from pythonbpf.helper import emit_probe_read_kernel_str_call
 from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.vmlinux_parser.dependency_node import Field
@@ -57,10 +57,7 @@ def handle_struct_field_assignment(
     # Same implicit widening/truncation as assignment to a local: expressions
     # evaluate in i64, but a field may be narrower.
     if isinstance(val_type, ir.IntType) and isinstance(field_type, ir.IntType):
-        if val_type.width < field_type.width:
-            val = builder.sext(val, field_type)
-        elif val_type.width > field_type.width:
-            val = builder.trunc(val, field_type)
+        val = convert(builder, val, val_type, field_type)
 
     # Regular assignment
     builder.store(val, field_ptr)
@@ -154,7 +151,12 @@ def handle_variable_assignment(
         f"Evaluated value for {var_name}: {val} of type {val_type}, expected {var_type}"
     )
 
-    if val_type != var_type:
+    if isinstance(val_type, ir.IntType) and isinstance(var_type, ir.IntType):
+        # The descriptor may be narrower than the constant carrying the value
+        # (a literal is a 64-bit constant typed as C int), so never decide
+        # from descriptor equality: convert is a no-op when widths match.
+        val = convert(builder, val, val_type, var_type)
+    elif val_type != var_type:
         # Handle vmlinux struct pointers - they're represented as Python classes but are i64 pointers
         if isclass(val_type) and (val_type.__module__ == "vmlinux"):
             logger.info("Handling vmlinux struct pointer assignment")
@@ -219,14 +221,6 @@ def handle_variable_assignment(
                     f"Failed to assign ctype struct field to {var_name}: {val_type} != {var_type}"
                 )
                 return False
-        elif isinstance(val_type, ir.IntType) and isinstance(var_type, ir.IntType):
-            # Allow implicit int widening
-            if val_type.width < var_type.width:
-                val = builder.sext(val, var_type)
-                logger.info(f"Implicitly widened int for variable {var_name}")
-            elif val_type.width > var_type.width:
-                val = builder.trunc(val, var_type)
-                logger.info(f"Implicitly truncated int for variable {var_name}")
         elif isinstance(val_type, ir.IntType) and isinstance(var_type, ir.PointerType):
             # NOTE: This is assignment to a PTR_TO_MAP_VALUE_OR_NULL
             logger.info(
