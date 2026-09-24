@@ -49,18 +49,24 @@ def int_literal_type(value: int) -> IntTy:
     return IntTy(32, True) if -(1 << 31) <= value < (1 << 31) else IntTy(64, True)
 
 
+def field_int_type(ty) -> "IntTy | None":
+    """The declared integer type behind a vmlinux Field descriptor (its ctypes
+    class), or None if the descriptor is not a Field with an integer ctype.
+    The loaded value may already be wider; C ranks it by the declared width."""
+    ctype = getattr(getattr(ty, "type", None), "__name__", None)
+    if ctype in _INT_CTYPE_WIDTHS:
+        return IntTy(_INT_CTYPE_WIDTHS[ctype], is_signed_ctype(ctype))
+    return None
+
+
 def signedness(ty) -> bool:
-    """Sign of a descriptor: an IntTy says; a vmlinux Field says through its
-    ctype; a 1-bit integer is a bool and never negative, whatever it is
-    wrapped in; anything else is signed, the pre-signedness default."""
+    """Sign of a descriptor. An IntTy carries it directly; a vmlinux Field
+    carries a ctypes class in .type, whose name decides; a 1-bit integer is a
+    bool and never negative, whatever it is wrapped in; a plain ir.IntType, a
+    site not yet taught to carry a sign, reads as signed, the compiler's
+    historical behaviour."""
     if isinstance(ty, ir.IntType) and ty.width == 1:
         return False
-    """Sign of an integer type descriptor.
-
-    IntTy carries it directly. A vmlinux Field carries a ctypes class in .type,
-    whose name decides. A plain ir.IntType -- a site that has not been taught to
-    carry a sign yet -- reads as signed, the compiler's historical behaviour.
-    """
     if hasattr(ty, "signed"):
         return ty.signed
     ctype = getattr(getattr(ty, "type", None), "__name__", None)

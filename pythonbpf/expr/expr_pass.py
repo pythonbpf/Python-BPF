@@ -6,6 +6,7 @@ from typing import Dict
 
 from pythonbpf.type_deducer import (
     ctypes_to_ir,
+    field_int_type,
     is_ctypes,
     IntTy,
     int_literal_type,
@@ -200,6 +201,11 @@ def _descriptor(val, ty):
     value is not an integer at all."""
     if isinstance(ty, ir.IntType):
         return IntTy(ty.width, signedness(ty))
+    field = field_int_type(ty)
+    if field is not None:
+        # A vmlinux field: load_ctx_field already widened the value, but C
+        # ranks it by its declared width (a c_uint32 field is unsigned int).
+        return field
     if val is not None and isinstance(val.type, ir.IntType):
         return IntTy(val.type.width, signedness(ty))
     return None
@@ -214,12 +220,21 @@ def get_typed_operand(func, compilation_context, operand, builder, local_sym_tab
             sym = local_sym_tab[operand.id]
             var = sym.var
             base_type, depth = get_base_type_and_depth(var.type)
-            val = (
-                builder.load(var)
-                if depth == 1
-                else deref_to_depth(func, builder, var, depth)
+            if depth == 1:
+                val = builder.load(var)
+                return val, _descriptor(val, sym.ir_type)
+            val = deref_to_depth(func, builder, var, depth)
+            # A map-lookup local: the slot points at the value, and the map's
+            # declared value ctype is the symbol's metadata. That, not the
+            # physical pointee, carries the sign (a c_uint64 value is unsigned).
+            declared = (
+                ctypes_to_ir(sym.metadata)
+                if isinstance(sym.metadata, str) and is_ctypes(sym.metadata)
+                else None
             )
-            return val, _descriptor(val, sym.ir_type if depth == 1 else base_type)
+            return val, _descriptor(
+                val, declared if declared is not None else base_type
+            )
         elif operand.id in compilation_context.bpf_globals:
             sym = compilation_context.bpf_globals[operand.id]
             return builder.load(sym.var), _descriptor(None, sym.ir_type)
