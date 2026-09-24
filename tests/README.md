@@ -123,6 +123,12 @@ program writes a global and the driver reads it back. Ports keep that shape with
 values the kernel's driver does. Anything a global cannot yet hold (arrays,
 structs, strings) is a roadmap test, not a workaround.
 
+The one substitution still in use is `WORKAROUND(atomics)`: upstream counters
+incremented with `__sync_fetch_and_add` are plain `x += 1` here, tagged on the
+line so the sweep is mechanical once atomics land. `PORTING-NOTES.md` in that
+directory records every port, its rewrite if any, and why the rest of the
+corpus is out of reach; `tools/selftest-audit.py` regenerates that scoring.
+
 Anything importing from `vmlinux` belongs in `vmlinux/`, which is registered in
 `VMLINUX_TEST_DIRS_PASSING` so it is skipped rather than failed where no
 `vmlinux.py` has been generated.

@@ -139,6 +139,62 @@ type, never narrowing. It now goes through `convert()` like every other integer 
 | `bpf_nop_bench.c` | `bpf_loop`-based benchmark macro |
 | `test_tcp_estats.c` | large; inlinable helpers and struct-heavy, not attempted yet |
 
+## Third batch: what the re-run audit found
+
+`tools/selftest-audit.py` is the corpus classifier, rebuilt and checked in. Run against
+the current upstream `progs/` it reports 847 real programs, 25 with no hard blocker. All
+but two of those 25 were already ported or are unportable for a reason a regex cannot see
+(`bpf_nop_bench.c` hides a loop in a macro, `test_pkt_md_access.c` type-puns narrow loads,
+`tracing_struct_int128.c` indexes the raw ctx array and needs bpf_testmod to load). The
+programs with exactly one blocker were read by hand for anything a documented rewrite
+could absorb. Five more ports, all passing at every level:
+
+| Port | Upstream | Section | Rewrite |
+|---|---|---|---|
+| `socket/veristat_foo.py` | `veristat_foo.c` | `socket` x3 | none |
+| `tracing/perf_link.py` | `test_perf_link.c` | `perf_event` | `WORKAROUND(atomics)` |
+| `tracing/enable_stats.py` | `test_enable_stats.c` | `raw_tracepoint/sys_enter` | `WORKAROUND(atomics)` |
+| `cgroup/cgroup_link.py` | `test_cgroup_link.c` | `cgroup_skb/egress` x2 | `WORKAROUND(atomics)` |
+| `vmlinux/connect4_dropper.py` | `connect4_dropper.c` | `cgroup/connect4` | `bpf_htons` written as shifts |
+
+### `WORKAROUND(atomics)`
+
+Three upstream programs count with `__sync_fetch_and_add(&x, 1)`. PythonBPF has no atomic
+operations, so the ports do `x += 1`, a plain read-modify-write, and tag the line. As with
+the earlier globals tag this is scaffolding for a mechanical sweep once atomics land:
+
+```bash
+grep -rn "WORKAROUND(atomics)" tests/kernel_selftest_equivalent/
+```
+
+It is not a cosmetic substitution: the upstream drivers run these programs from many
+CPUs at once and the exact count matters there, which is precisely what a non-atomic
+increment loses.
+
+### The blocker histogram now
+
+Over 847 real programs, hard blockers only; a program usually hits several:
+
+| Blocker | Programs | Share |
+|---|---|---|
+| unsupported helper | 496 | 59% |
+| kfuncs | 284 | 34% |
+| unsupported map type | 273 | 32% |
+| verifier-test annotations | 238 | 28% |
+| typed program macros (`BPF_PROG`, `BPF_KPROBE`) | 234 | 28% |
+| BPF-to-BPF calls | 176 | 21% |
+| `goto` | 143 | 17% |
+| inline asm | 142 | 17% |
+| struct globals | 126 | 15% |
+| CO-RE reads | 116 | 14% |
+| loops | 109 | 13% |
+| array globals | 105 | 12% |
+| atomics | 86 | 10% |
+
+Globals no longer appear as a blocker at all. The next unlocks by count are helpers (a
+long tail, but `bpf_get_current_task`, `bpf_ktime_get_boot_ns` and the `bpf_probe_read_user*`
+family recur), array maps, and typed program arguments.
+
 ## 3. Incidental findings
 
 - **Nested struct field access fails with a misleading error.** `ctx.regs.ip` reports
@@ -155,7 +211,11 @@ type, never narrowing. It now goes through `convert()` like every other integer 
 
 ## Re-running the corpus scoring
 
-The audit behind this spike scored all 976 programs against the compiler's envelope. It is
-worth re-running after each feature lands, to see what the change unlocked. The blocker
-histogram at the time of writing, over 820 real programs: globals 52%, verifier-test
-annotations 27%, typed program macros 26%, kfuncs 20%, inline asm 16%, loops 12%.
+```bash
+git clone --depth 1 --filter=blob:none --sparse https://github.com/torvalds/linux
+git -C linux sparse-checkout set --no-cone tools/testing/selftests/bpf/progs
+python3 tools/selftest-audit.py linux/tools/testing/selftests/bpf/progs --histogram --max-hard 1
+```
+
+Re-run it after each feature lands. The envelope it encodes (helper, map and construct
+lists at the top of the script) is maintained by hand and must move with the compiler.
