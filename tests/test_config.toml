@@ -60,3 +60,7 @@
 "failing_tests/loops/for_continue.py" = {reason = "for/while loops not implemented: continue is not supported", level = "ir"}
 
 "failing_tests/loops/for_map_items.py" = {reason = "for/while loops not implemented: no sugar over bpf_for_each_map_elem()-style map iteration exists yet", level = "ir"}
+
+# 32-bit arithmetic on a packet-pointer context field. IR and llc succeed; the
+# verifier rejects it with "R0 32-bit pointer arithmetic prohibited".
+"failing_tests/vmlinux/ctx_data_arith.py" = {reason = "xdp_md.data is u32 in C but a packet pointer to the verifier; 32-bit arithmetic on it is prohibited until packet-pointer fields get 64-bit pointer rank", level = "verifier"}
