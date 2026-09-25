@@ -93,6 +93,18 @@ CASES = {
         [r"deref_0_not_null", r"ret i64 %"],
         [r"ret i64\*"],
     ),
+    # One byte, sized from the c_int8 destination, read from the address in
+    # a register field.
+    "vmlinux/probe_read_kernel_scalar.py": (
+        [r'%"byte" = alloca i8', r"inttoptr i64 .* to i8\*", r"i32 1, i8\*"],
+        [],
+    ),
+    # Both sides of each comparison are loaded before the compare; the
+    # pointers into the map are never compared themselves.
+    "assign/map_value_compare.py": (
+        [r"icmp eq i64 %"],
+        [r"icmp (eq|ne) i64\* %\S+, %"],
+    ),
 }
 
 
