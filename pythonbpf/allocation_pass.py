@@ -6,7 +6,7 @@ from .symbols import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
-from pythonbpf.type_deducer import ctypes_to_ir, IntTy, signedness
+from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes, IntTy, signedness
 from pythonbpf.expr.type_inference import infer_int_type
 from pythonbpf.maps import BPFMapType
 
@@ -110,7 +110,9 @@ def _allocate_for_call(builder, var_name, rval, local_sym_tab, compilation_conte
         call_type = rval.func.id
 
         # C type constructors
-        if call_type in ("c_int32", "c_int64", "c_uint32", "c_uint64", "c_void_p"):
+        if is_ctypes(call_type) and isinstance(ctypes_to_ir(call_type), ir.IntType):
+            # Any integer ctypes constructor, c_uint16 included, declares a
+            # slot of that width; the value is converted into it at the store.
             ir_type = ctypes_to_ir(call_type)
             var = builder.alloca(ir_type, name=var_name)
             var.align = ir_type.width // 8
@@ -206,7 +208,7 @@ def _allocate_for_map_method(
         return
 
     map_params = map_sym_tab[map_name].params
-    if map_params["type"] != BPFMapType.HASH:
+    if map_params["type"] not in (BPFMapType.HASH, BPFMapType.ARRAY):
         logger.warning(
             "Map method lookup used on non-hash map, using fallback allocation"
         )

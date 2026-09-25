@@ -18,8 +18,6 @@ from .helpers import (
     skb_store_bytes,
     get_current_cgroup_id,
     get_stack,
-    XDP_DROP,
-    XDP_PASS,
 )
 
 
@@ -86,6 +84,4 @@ __all__ = [
     "uid",
     "skb_store_bytes",
     "get_stack",
-    "XDP_DROP",
-    "XDP_PASS",
 ]

@@ -290,7 +290,8 @@ class MyStruct:
 ```python
 from pythonbpf import bpf, struct, map, section
 from pythonbpf.maps import RingBuffer
-from pythonbpf.helper import ktime, XDP_PASS
+from pythonbpf.helper import ktime
+from vmlinux import XDP_PASS
 from ctypes import c_void_p, c_int64, c_uint8, c_uint16, c_uint32, c_uint64
 
 @bpf

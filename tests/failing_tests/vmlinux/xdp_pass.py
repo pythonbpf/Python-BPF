@@ -1,6 +1,6 @@
 from pythonbpf import bpf, map, section, bpfglobal, compile_to_ir
 from pythonbpf.maps import HashMap
-from pythonbpf.helper import XDP_PASS
+from vmlinux import XDP_PASS
 from vmlinux import TASK_COMM_LEN  # noqa: F401
 
 from vmlinux import struct_qspinlock  # noqa: F401

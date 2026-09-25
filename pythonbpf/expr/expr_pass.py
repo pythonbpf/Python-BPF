@@ -254,6 +254,7 @@ def get_typed_operand(func, compilation_context, operand, builder, local_sym_tab
             vmlinux_result = VmlinuxHandlerRegistry.handle_name(operand.id)
             if vmlinux_result is not None:
                 return vmlinux_result  # (i64 constant, its C rank)
+            raise SyntaxError(f"Undefined variable {operand.id}")
     elif isinstance(operand, ast.Constant):
         if isinstance(operand.value, (int, bool)):
             v = int(operand.value)
