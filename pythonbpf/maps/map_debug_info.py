@@ -1,3 +1,4 @@
+from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes
 import logging
 from llvmlite import ir
 from pythonbpf.debuginfo import DebugInfoGenerator
@@ -122,11 +123,12 @@ def _get_key_val_dbg_type(name, generator, structs_sym_tab):
     # Fallback to basic types
     logger.info(f"No struct named {name}, falling back to basic type")
 
-    # NOTE: Only handling int and long for now
-    if name in ["c_int32", "c_uint32"]:
-        return generator.get_uint32_type()
+    # A ctypes integer: its real width and sign, so the map's key or value
+    # size in BTF matches what the program stores (a c_uint8 value is 1 byte).
+    if is_ctypes(name):
+        return generator.get_int_type(ctypes_to_ir(name))
 
-    # Default fallback for now
+    logger.warning(f"No debug type for map key/value {name}, defaulting to u64")
     return generator.get_uint64_type()
 
 
@@ -136,11 +138,7 @@ def _get_struct_debug_type(struct_obj, generator, structs_sym_tab):
     for fld in struct_obj.fields.keys():
         fld_type = struct_obj.field_type(fld)
         if isinstance(fld_type, ir.IntType):
-            if fld_type.width == 32:
-                fld_dbg_type = generator.get_uint32_type()
-            else:
-                # NOTE: Assuming 64-bit for all other int types
-                fld_dbg_type = generator.get_uint64_type()
+            fld_dbg_type = generator.get_int_type(fld_type)
         elif isinstance(fld_type, ir.ArrayType):
             # NOTE: Array types have u8 elements only for now
             # Debug info generation should fail for other types

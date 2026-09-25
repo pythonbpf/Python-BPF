@@ -49,6 +49,27 @@ class DebugInfoGenerator:
             )
         return self._type_cache[key]
 
+    def get_int_type(self, ty) -> Any:
+        """Debug type for an integer IR type, by width and sign (read from the
+        IntTy descriptor, signed for a plain ir.IntType). A 1-bit type is C's
+        _Bool, which occupies one byte. BTF, and so a map's key and value
+        sizes, come from this, so the width must be the real one."""
+        from pythonbpf.type_deducer import signedness
+
+        width, signed = ty.width, signedness(ty)
+        if width == 1:
+            return self.get_basic_type("_Bool", 8, dc.DW_ATE_boolean)
+        base = {8: "char", 16: "short", 32: "int", 64: "long long"}.get(width)
+        if base is None:
+            raise ValueError(f"no debug type for a {width}-bit integer")
+        if width == 8:
+            encoding = dc.DW_ATE_signed_char if signed else dc.DW_ATE_unsigned_char
+        else:
+            encoding = dc.DW_ATE_signed if signed else dc.DW_ATE_unsigned
+        return self.get_basic_type(
+            base if signed else f"unsigned {base}", width, encoding
+        )
+
     def get_uint8_type(self) -> Any:
         """Get debug info for signed 8-bit integer"""
         return self.get_basic_type("char", 8, dc.DW_ATE_unsigned)

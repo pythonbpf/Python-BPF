@@ -23,6 +23,7 @@ class BpfTestCase:
     is_expected_fail: bool = False
     xfail_reason: str = ""
     xfail_level: str = "ir"  # one of LEVELS
+    xfail_match: str = ""  # verifier level: substring the rejection must contain
     needs_vmlinux: bool = False
     skip_reason: str = ""
 

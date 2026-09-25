@@ -54,7 +54,7 @@ def _get_rejection_reason(verifier_test_file: Path, output) -> str:
     _verifier_test_files(),
     ids=_verifier_test_ids(),
 )
-def test_kernel_verifier(verifier_test_file: Path, tmp_path, caplog):
+def test_kernel_verifier(verifier_test_file: Path, tmp_path, caplog, request):
     """Compile the BPF test and verify it passes the kernel verifier."""
     ll_path = tmp_path / "output.ll"
     obj_path = tmp_path / "output.o"
@@ -70,4 +70,13 @@ def test_kernel_verifier(verifier_test_file: Path, tmp_path, caplog):
     assert obj_path.exists() and obj_path.stat().st_size > 0
 
     ok, output = verify_object(obj_path)
+    expected = request.node.get_closest_marker("verifier_match")
+    if not ok and expected is not None and expected.args[0] not in output.stderr:
+        # pytest.fail raises an OutcomeException, which the xfail marker's
+        # raises=Exception does not swallow: a rejection for the wrong
+        # reason is a failure, not the expected one.
+        pytest.fail(
+            f"{verifier_test_file.name}: rejected, but not for the expected reason "
+            f"{expected.args[0]!r}:\n{output.stderr}"
+        )
     assert ok, _get_rejection_reason(verifier_test_file, output)

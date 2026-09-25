@@ -143,6 +143,26 @@ def process_hash_map(map_name, rval, compilation_context):
     return map_global
 
 
+@MapProcessorRegistry.register("ArrayMap")
+def process_array_map(map_name, rval, compilation_context):
+    """Process a BPF_ARRAY map declaration: the same lowering as a hash map
+    with BPF_MAP_TYPE_ARRAY, through the same lookup/update/delete helpers;
+    the kernel requires a 4-byte key (an index)."""
+    logger.info(f"Processing ArrayMap: {map_name}")
+    map_params = _parse_map_params(rval, expected_args=["key", "value", "max_entries"])
+    map_params["type"] = BPFMapType.ARRAY
+
+    logger.info(f"Map parameters: {map_params}")
+    map_global = create_bpf_map(compilation_context, map_name, map_params)
+    create_map_debug_info(
+        compilation_context,
+        map_global.var,
+        map_name,
+        map_params,
+    )
+    return map_global
+
+
 @MapProcessorRegistry.register("PerfEventArray")
 def process_perf_event_map(map_name, rval, compilation_context):
     """Process a BPF_PERF_EVENT_ARRAY map declaration"""

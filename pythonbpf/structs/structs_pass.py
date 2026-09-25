@@ -1,7 +1,7 @@
 import ast
 import logging
 from llvmlite import ir
-from pythonbpf.type_deducer import ctypes_to_ir
+from pythonbpf.type_deducer import ctypes_to_ir, byte_size
 from .struct_type import StructType
 
 logger = logging.getLogger(__name__)
@@ -79,11 +79,11 @@ def calc_struct_size(field_types):
     curr_offset = 0
     for ftype in field_types:
         if isinstance(ftype, ir.IntType):
-            fsize = ftype.width // 8
+            fsize = byte_size(ftype)
             alignment = fsize
         elif isinstance(ftype, ir.ArrayType):
-            fsize = ftype.count * (ftype.element.width // 8)
-            alignment = ftype.element.width // 8
+            fsize = ftype.count * byte_size(ftype.element)
+            alignment = byte_size(ftype.element)
         elif isinstance(ftype, ir.PointerType):
             # We won't encounter this rn, but for the future
             fsize = 8

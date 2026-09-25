@@ -1,7 +1,9 @@
-# A local named after an XDP action must shadow the helper constant table,
-# in return position too. clang agrees: a local legally shadows an enum
-# constant, and the local's value is what returns (tests/c-form reference).
-# Before the fix this returned the hardcoded 2 while XDP_PASS held 55.
+# A local named after an XDP action is just a local: it shadows the vmlinux
+# enum constant of that name (when vmlinux is imported) exactly as a local
+# shadows an enum constant in C, and its value is what returns. This once
+# went through a special-cased return path that ignored the local and
+# returned the hardcoded 2 while XDP_PASS held 55; that path is gone, and
+# return resolves names like every other expression.
 from pythonbpf import bpf, section, bpfglobal, compile
 from ctypes import c_void_p, c_int64
 
