@@ -491,7 +491,22 @@ def handle_for(func, compilation_context, builder, stmt, local_sym_tab, ret_type
     )
 
     builder.position_at_end(inc_block)
-    next_idx = builder.add(builder.load(counter.var), ir.Constant(loop_ty, step))
+    idx = builder.load(counter.var)
+    if abs(step) > 1:
+        # The body only runs with the counter strictly inside the range, so
+        # the distance left to stop is exact as an unsigned number. A step no
+        # shorter than that distance ends the loop here, before the add can
+        # wrap the counter back inside the range (a step of 1 cannot
+        # overshoot stop, so it keeps the plain loop).
+        left = builder.sub(stop_val, idx) if step > 0 else builder.sub(idx, stop_val)
+        step_in_range = func.append_basic_block(name="for.step")
+        builder.cbranch(
+            builder.icmp_unsigned(">", left, ir.Constant(loop_ty, _wrap64(abs(step)))),
+            step_in_range,
+            else_block or end_block,
+        )
+        builder.position_at_end(step_in_range)
+    next_idx = builder.add(idx, ir.Constant(loop_ty, _wrap64(step)))
     builder.store(next_idx, counter.var)
     builder.branch(cond_block)
 
@@ -507,6 +522,13 @@ def handle_for(func, compilation_context, builder, stmt, local_sym_tab, ret_type
         end_block,
         else_block,
     )
+
+
+def _wrap64(value):
+    """`value` modulo 2**64, as the signed Python int LLVM parses for an i64:
+    a step of 2**63 or more (or its negation) is written by its bits."""
+    value %= 1 << 64
+    return value - (1 << 64) if value >= 1 << 63 else value
 
 
 def handle_loop_jump(compilation_context, builder, stmt):
@@ -581,6 +603,8 @@ def process_stmt(
         handle_for(func, compilation_context, builder, stmt, local_sym_tab, ret_type)
     elif isinstance(stmt, (ast.Break, ast.Continue)):
         handle_loop_jump(compilation_context, builder, stmt)
+    elif isinstance(stmt, ast.Pass):
+        pass
     elif isinstance(stmt, ast.Return):
         did_return = handle_return(
             func, builder, stmt, local_sym_tab, ret_type, compilation_context
@@ -720,7 +744,11 @@ def process_func_body(
         )
 
     if not did_return:
-        builder.ret(ir.Constant(ir.IntType(64), 0))
+        # Falling off the end returns 0, in the function's own return type:
+        # after `while True` this block is unreachable, but it still has to
+        # type-check.
+        default_ty = ret_type if isinstance(ret_type, ir.IntType) else ir.IntType(64)
+        builder.ret(ir.Constant(default_ty, 0))
 
 
 def process_bpf_chunk(func_node, compilation_context, return_type):

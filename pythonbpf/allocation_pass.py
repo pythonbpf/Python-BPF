@@ -102,7 +102,10 @@ def handle_for_allocation(compilation_context, builder, stmt, local_sym_tab):
     start, stop, step = parse_range(stmt)
 
     # range() yields Python ints; like any undeclared local they are 64-bit,
-    # signed unless the bounds make C's arithmetic unsigned.
+    # signed unless the bounds make C's arithmetic unsigned. That arithmetic
+    # is the counter's against each bound, so it starts from a signed 64-bit
+    # counter, and only an unsigned 64-bit bound turns it unsigned: every
+    # narrower unsigned bound fits in the signed counter, as in C.
     bound_types = [
         infer_int_type(bound, local_sym_tab, compilation_context)
         for bound in (start, stop)
@@ -110,8 +113,8 @@ def handle_for_allocation(compilation_context, builder, stmt, local_sym_tab):
     ]
     signed = True
     if all(ty is not None for ty in bound_types):
-        common = bound_types[0]
-        for ty in bound_types[1:]:
+        common = IntTy(64, True)
+        for ty in bound_types:
             common = usual_arithmetic_conversions(common, ty)
         signed = signedness(common)
     if not signed and step < 0:
@@ -191,6 +194,11 @@ def parse_range(stmt):
     step = -literal.value if negate else literal.value
     if step == 0:
         raise ValueError(f"range() arg 3 must not be zero (line {stmt.lineno})")
+    if abs(step) >= 1 << 64:
+        raise ValueError(
+            f"range() step on line {stmt.lineno} does not fit the 64-bit "
+            f"loop counter: {ast.unparse(step_node)}"
+        )
     return start, stop, step
 
 
