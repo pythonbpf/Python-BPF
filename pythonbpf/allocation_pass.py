@@ -6,7 +6,7 @@ from .symbols import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
-from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes, IntTy, signedness
+from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes, IntTy, signedness, byte_size
 from pythonbpf.expr.type_inference import infer_int_type
 from pythonbpf.maps import BPFMapType
 
@@ -115,7 +115,7 @@ def _allocate_for_call(builder, var_name, rval, local_sym_tab, compilation_conte
             # slot of that width; the value is converted into it at the store.
             ir_type = ctypes_to_ir(call_type)
             var = builder.alloca(ir_type, name=var_name)
-            var.align = ir_type.width // 8
+            var.align = byte_size(ir_type)
             local_sym_tab[var_name] = LocalSymbol(var, ir_type)
             logger.info(f"Pre-allocated {var_name} as {call_type}")
 
@@ -472,7 +472,7 @@ def _allocate_for_attribute(
             tmp_name = f"{struct_var}_{field_name}_tmp"
             tmp_ir_type = ir.IntType(field_size_bits)
             tmp_var = builder.alloca(tmp_ir_type, name=tmp_name)
-            tmp_var.align = tmp_ir_type.width // 8
+            tmp_var.align = byte_size(tmp_ir_type)
             local_sym_tab[tmp_name] = LocalSymbol(tmp_var, tmp_ir_type)
             logger.info(
                 f"Pre-allocated temp {tmp_name} (i{field_size_bits}) for vmlinux field read {vmlinux_struct_name}.{field_name}"
@@ -527,8 +527,8 @@ def _allocate_with_type(builder, var_name, ir_type):
 def _get_alignment(ir_type):
     """Get appropriate alignment for IR type."""
     if isinstance(ir_type, ir.IntType):
-        return ir_type.width // 8
+        return byte_size(ir_type)
     elif isinstance(ir_type, ir.ArrayType) and isinstance(ir_type.element, ir.IntType):
-        return ir_type.element.width // 8
+        return byte_size(ir_type.element)
     else:
         return 8  # Default: pointer size

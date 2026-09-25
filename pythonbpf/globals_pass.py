@@ -3,15 +3,12 @@ import ast
 
 from logging import Logger
 import logging
-from .type_deducer import ctypes_to_ir, is_signed_ctype
+from .type_deducer import ctypes_to_ir, byte_size
 from .symbols import BpfGlobalSymbol
 from .debuginfo import DebugInfoGenerator
 from .expr import VmlinuxHandlerRegistry
-from .debuginfo import dwarf_constants as dc
 
 logger: Logger = logging.getLogger(__name__)
-
-_C_NAME_BY_WIDTH = {8: "char", 16: "short", 32: "int", 64: "long long"}
 
 
 def populate_global_symbol_table(tree, compilation_context):
@@ -78,7 +75,7 @@ def _emit_global(module: ir.Module, node, name):
     # (align 4 for i32, align 8 for i64). llc derives the BTF DATASEC layout
     # from these symbols, so the alignment should mirror the C reference in
     # tests/c-form/global_vars.bpf.c.
-    gvar.align = ty.width // 8 if isinstance(ty, ir.IntType) else 8
+    gvar.align = byte_size(ty) if isinstance(ty, ir.IntType) else 8
     gvar.linkage = "dso_local"
     gvar.global_constant = False
     return gvar
@@ -93,15 +90,7 @@ def _emit_global_debug_info(compilation_context, gvar, name, ctype_name):
     future skeleton can tell which variable lives at which offset.
     """
     generator = DebugInfoGenerator(compilation_context.module)
-    width = gvar.value_type.width
-    signed = is_signed_ctype(ctype_name)
-    base = _C_NAME_BY_WIDTH[width]
-    if width == 8:
-        encoding = dc.DW_ATE_signed_char if signed else dc.DW_ATE_unsigned_char
-    else:
-        encoding = dc.DW_ATE_signed if signed else dc.DW_ATE_unsigned
-    cname = base if signed else f"unsigned {base}"
-    di_type = generator.get_basic_type(cname, width, encoding)
+    di_type = generator.get_int_type(ctypes_to_ir(ctype_name))
     dv = generator.create_global_var_debug_info(name, di_type, is_local=False)
     gvar.set_metadata("dbg", dv)
 
