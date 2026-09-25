@@ -222,6 +222,28 @@ def _descriptor(val, ty):
     return None
 
 
+def deref_to_value(func, builder, expr, val, val_ty, local_sym_tab):
+    """Load through a pointer to an integer (a map-lookup result), with the
+    null check every dereference gets, so a consumer that wants a number gets
+    one. Anything else is returned unchanged. The descriptor comes from the
+    map's declared value ctype when expr names a lookup local (a c_uint64 value
+    is unsigned), else from the pointee."""
+    if val is None or not isinstance(val.type, ir.PointerType):
+        return val, val_ty
+    if not hasattr(val.type, "pointee"):
+        return val, val_ty  # an opaque pointer says nothing about a pointee
+    base_type, depth = get_base_type_and_depth(val.type)
+    if not isinstance(base_type, ir.IntType):
+        return val, val_ty  # a struct or char pointer is not a number
+    val = deref_to_depth(func, builder, val, depth)
+    declared = None
+    if isinstance(expr, ast.Name) and expr.id in local_sym_tab:
+        meta = local_sym_tab[expr.id].metadata
+        if isinstance(meta, str) and is_ctypes(meta):
+            declared = ctypes_to_ir(meta)
+    return val, _descriptor(val, declared if declared is not None else base_type)
+
+
 def get_typed_operand(func, compilation_context, operand, builder, local_sym_tab):
     """Evaluate an operand to (value, IntTy). Pointers (map-lookup results) are
     dereferenced to the scalar they point at."""
@@ -270,9 +292,8 @@ def get_typed_operand(func, compilation_context, operand, builder, local_sym_tab
             raise ValueError(f"Failed to evaluate call expression: {operand}")
         val, ty = res
         logger.info(f"Evaluated expr to {val} of type {val.type}")
-        base_type, depth = get_base_type_and_depth(val.type)
-        if depth > 0:
-            val = deref_to_depth(func, builder, val, depth)
+        if isinstance(val.type, ir.PointerType):
+            return deref_to_value(func, builder, operand, val, ty, local_sym_tab)
         return val, _descriptor(val, ty)
     raise TypeError(f"Unsupported operand type: {type(operand)}")
 
@@ -353,6 +374,12 @@ def _handle_ctypes_call(
     # Extract the actual IR value and type
     # val could be (value, ir_type) or (value, Field)
     value, val_type = val
+    if isinstance(expected_type, ir.IntType) and call_type != "c_void_p":
+        # c_int64(p) on a map lookup is the value, as p + 0 already is;
+        # c_void_p(p) keeps the pointer.
+        value, val_type = deref_to_value(
+            func, builder, arg, value, val_type, local_sym_tab
+        )
 
     # If val_type is a Field object (from vmlinux struct), get the actual IR type of the value
     if isinstance(val_type, Field):

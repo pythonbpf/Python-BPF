@@ -3,7 +3,7 @@ import logging
 from inspect import isclass
 
 from llvmlite import ir
-from pythonbpf.expr import eval_expr, convert
+from pythonbpf.expr import eval_expr, convert, deref_to_value
 from pythonbpf.helper import emit_probe_read_kernel_str_call
 from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.vmlinux_parser.dependency_node import Field
@@ -40,6 +40,11 @@ def handle_struct_field_assignment(
         return
 
     val, val_type = val_result
+    if isinstance(field_type, ir.IntType):
+        # An integer field takes the value a pointer points at (r.val = p).
+        val, val_type = deref_to_value(
+            func, builder, rval, val, val_type, local_sym_tab
+        )
 
     # Special case: i8* string to [N x i8] char array
     if _is_char_array(field_type) and _is_i8_ptr(val_type):
@@ -147,6 +152,12 @@ def handle_variable_assignment(
         return False
 
     val, val_type = val_result
+    if isinstance(var_type, ir.IntType):
+        # An integer slot takes the value a pointer points at (x = p); a
+        # pointer slot keeps the pointer, below.
+        val, val_type = deref_to_value(
+            func, builder, rval, val, val_type, local_sym_tab
+        )
     logger.info(
         f"Evaluated value for {var_name}: {val} of type {val_type}, expected {var_type}"
     )
