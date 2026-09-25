@@ -6,7 +6,15 @@ from .symbols import LocalSymbol
 from pythonbpf.helper import HelperHandlerRegistry
 from pythonbpf.vmlinux_parser.dependency_node import Field
 from .expr import VmlinuxHandlerRegistry
-from pythonbpf.type_deducer import ctypes_to_ir, is_ctypes, IntTy, signedness, byte_size
+from pythonbpf.type_deducer import (
+    ctypes_to_ir,
+    is_ctypes,
+    IntTy,
+    signedness,
+    byte_size,
+    PktPtrTy,
+)
+from pythonbpf.expr.packet_pointer import packet_type
 from pythonbpf.expr.type_inference import infer_int_type
 from pythonbpf.maps import BPFMapType
 
@@ -301,7 +309,10 @@ def _allocate_for_binop(builder, var_name, rval, local_sym_tab, compilation_cont
     inferred = infer_int_type(rval, local_sym_tab, compilation_context)
     if inferred is None:
         logger.debug(f"Could not infer a type for {var_name}, assuming signed i64")
-    ir_type = IntTy(64, signedness(inferred) if inferred is not None else True)
+    if isinstance(inferred, PktPtrTy):
+        ir_type = inferred  # data + 14 is still a packet pointer
+    else:
+        ir_type = IntTy(64, signedness(inferred) if inferred is not None else True)
     var = builder.alloca(ir_type, name=var_name)
     var.align = 8
     local_sym_tab[var_name] = LocalSymbol(var, ir_type)
@@ -401,6 +412,13 @@ def _allocate_for_attribute(
             # Same discriminator handle_vmlinux_struct_field uses: a context
             # argument has no alloca of its own.
             is_context_field = local_sym_tab[struct_var].var is None
+            pkt_ty = packet_type(rval, local_sym_tab)
+            if pkt_ty is not None:
+                # A packet-pointer field: a 64-bit slot that carries the kind.
+                var = _allocate_with_type(builder, var_name, pkt_ty)
+                local_sym_tab[var_name] = LocalSymbol(var, pkt_ty)
+                logger.info(f"Pre-allocated {var_name} as {pkt_ty.describe()}")
+                return
             if not VmlinuxHandlerRegistry.has_field(vmlinux_struct_name, field_name):
                 logger.error(
                     f"Field '{field_name}' not found in vmlinux struct '{vmlinux_struct_name}'"

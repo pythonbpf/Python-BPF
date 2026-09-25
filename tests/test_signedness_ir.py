@@ -68,6 +68,38 @@ CASES = {
         [r"\bsub i64", r"trunc i64 .* to i32", r"zext i32 .* to i64"],
         [],
     ),
+    # Packet-pointer fields: 64-bit arithmetic, never the field's u32 rank,
+    # offsets as u16 (trunc to i16, zext); pointer - pointer is a plain sub.
+    # No computed value is cut to 32 bits (constant stores such as
+    # k = c_int32(1) legitimately are).
+    "vmlinux/ctx_data_arith.py": (
+        [r"\bsub i64"],
+        [r"trunc i64 %.* to i32"],
+    ),
+    "vmlinux/ctx_data_plus_one.py": (
+        [r"\badd i64"],
+        [r"trunc i64 %.* to i32"],
+    ),
+    "vmlinux/ctx_data_runtime_offset.py": (
+        [r"trunc i64 .* to i16", r"zext i16 .* to i64", r"\badd i64"],
+        [r"trunc i64 %.* to i32"],
+    ),
+    "vmlinux/ctx_data_length.py": (
+        [r"\bsub i64"],
+        [r"to i16", r"trunc i64 %.* to i32"],
+    ),
+    "vmlinux/ctx_bounds_check.py": (
+        [r"icmp ugt i64", r"\badd i64"],
+        [r"trunc i64 %.* to i32", r"icmp \w+ i32"],
+    ),
+    "vmlinux/ctx_bounds_check_direct.py": (
+        [r"icmp ugt i64"],
+        [r"trunc i64 %.* to i32", r"icmp \w+ i32"],
+    ),
+    "vmlinux/ctx_data_via_local.py": (
+        [r"\badd i64"],
+        [r"trunc i64 %.* to i32"],
+    ),
     # c_uint16(0) declares a 16-bit slot, so a u32 ctx field stored into it
     # is truncated to 16 bits (C: __u16 queue = ctx->rx_queue_index).
     "vmlinux/ctx_field_narrow_store.py": (

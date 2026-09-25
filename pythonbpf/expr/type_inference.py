@@ -13,6 +13,7 @@ import ctypes
 from llvmlite import ir
 
 from pythonbpf.type_deducer import (
+    PktPtrTy,
     IntTy,
     ctypes_to_ir,
     is_ctypes,
@@ -21,9 +22,12 @@ from pythonbpf.type_deducer import (
 )
 from .operators import usual_arithmetic_conversions
 from .vmlinux_registry import VmlinuxHandlerRegistry
+from .packet_pointer import packet_type
 
 
 def _as_intty(ty):
+    if isinstance(ty, PktPtrTy):
+        return ty
     if isinstance(ty, ir.IntType):
         return IntTy(ty.width, signedness(ty))
     return None
@@ -48,6 +52,10 @@ def infer_int_type(expr, local_sym_tab, compilation_context):
     if isinstance(expr, ast.BinOp):
         left = infer_int_type(expr.left, local_sym_tab, compilation_context)
         right = infer_int_type(expr.right, local_sym_tab, compilation_context)
+        if isinstance(left, PktPtrTy) and isinstance(right, PktPtrTy):
+            return IntTy(64, False)  # pointer - pointer: a length
+        if isinstance(left, PktPtrTy) or isinstance(right, PktPtrTy):
+            return left if isinstance(left, PktPtrTy) else right
         if left is None or right is None:
             return None
         return usual_arithmetic_conversions(left, right)
@@ -83,6 +91,9 @@ def infer_int_type(expr, local_sym_tab, compilation_context):
         return None
 
     if isinstance(expr, ast.Attribute) and isinstance(expr.value, ast.Name):
+        pkt_ty = packet_type(expr, local_sym_tab)
+        if pkt_ty is not None:
+            return pkt_ty
         base = local_sym_tab.get(expr.value.id)
         if base is None:
             return None

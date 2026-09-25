@@ -64,6 +64,11 @@
 "failing_tests/loops/for_map_items.py" = {reason = "for/while loops not implemented: no sugar over bpf_for_each_map_elem()-style map iteration exists yet", level = "ir"}
 
 
+# A packet offset has to fit the verifier's 16-bit packet range.
+"failing_tests/vmlinux/ctx_data_offset_too_big.py" = {reason = "A constant packet offset outside 0..65535 is a compile error (the verifier tracks packet ranges up to MAX_PACKET_OFF)", level = "ir"}
+"failing_tests/vmlinux/ctx_data_end_offset.py" = {reason = "A packet-end pointer can only be compared, not offset (the verifier rejects arithmetic on it)", level = "ir"}
+
+
 "kernel_selftest_equivalent/ringbuf/reserve_submit_discard.py" = {reason = "RingBuffer reserve/typed record/discard workflow is planned but not implemented yet", level = "ir"}
 
 "kernel_selftest_equivalent/vmlinux/perf_skip.py" = {reason = "Nested struct field access (ctx.regs.ip) not supported; one level such as ctx.sample_period works", level = "ir"}
