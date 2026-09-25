@@ -22,6 +22,8 @@ from pythonbpf.expr import (
 from pythonbpf.assign_pass import (
     handle_variable_assignment,
     handle_struct_field_assignment,
+    is_map_value_local,
+    rebind_map_value_local,
 )
 from pythonbpf.allocation_pass import (
     handle_assign_allocation,
@@ -207,6 +209,9 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
     read, and the operator table is apply_binop, the same one binary-op
     evaluation uses.
     """
+    # A map-lookup local reads through its pointer and is rebound, not
+    # written through, exactly as `v = v + 1` does it.
+    map_value_local = None
     if isinstance(stmt.target, ast.Name):
         name = stmt.target.id
         # One table: a declared global is a local_sym_tab entry whose slot is
@@ -220,6 +225,13 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
                 raise SyntaxError(
                     f"cannot assign to '{name}': it is the context parameter"
                 )
+            if is_map_value_local(local_sym_tab, name):
+                if local_sym_tab[name].metadata in compilation_context.structs_sym_tab:
+                    raise SyntaxError(
+                        f"augmented assignment to '{name}', a struct map value; "
+                        f"update one of its fields instead ({name}.field += ...)"
+                    )
+                map_value_local = name
         elif name in compilation_context.bpf_globals:
             # `x += v` binds x as a local and reads it unbound: UnboundLocalError.
             raise SyntaxError(
@@ -263,13 +275,20 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
             f"Unsupported augmented-assignment target: {ast.dump(stmt.target)}"
         )
 
-    if not isinstance(slot_type, ir.IntType):
+    # Python evaluates the target's current value before the right-hand side.
+    if map_value_local is not None:
+        # The null-checked read every other use of the local gets; its
+        # descriptor is the map's declared value type, which is also the
+        # type the result is stored back as.
+        current, slot_type = get_typed_operand(
+            func, compilation_context, stmt.target, builder, local_sym_tab
+        )
+    elif isinstance(slot_type, ir.IntType):
+        current = builder.load(slot)
+    else:
         raise SyntaxError(
             f"augmented assignment needs an integer target, got {slot_type}"
         )
-
-    # Python evaluates the target's current value before the right-hand side.
-    current = builder.load(slot)
     rhs, rhs_ty = get_typed_operand(
         func, compilation_context, stmt.value, builder, local_sym_tab
     )
@@ -287,7 +306,11 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
         apply_binop(builder, stmt.op, current, rhs, signedness(result_ty)),
         result_ty,
     )
-    builder.store(convert(builder, result, result_ty, slot_type), slot)
+    result = convert(builder, result, result_ty, slot_type)
+    if map_value_local is not None:
+        rebind_map_value_local(builder, local_sym_tab, map_value_local, result)
+    else:
+        builder.store(result, slot)
 
 
 def handle_cond(func, compilation_context, builder, cond, local_sym_tab):

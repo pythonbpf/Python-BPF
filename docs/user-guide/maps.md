@@ -60,6 +60,10 @@ def trace_open(ctx: c_void_p) -> c_int64:
     return 0
 ```
 
+An integer value behaves like a Python `int`: `value += 1`, like
+`value = value + 1`, rebinds the local to the new number and leaves the map
+unchanged. To store it, call `update`.
+
 ##### update(key, value, flags=None)
 
 Update or insert a key-value pair.

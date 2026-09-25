@@ -87,6 +87,24 @@ def _copy_string_to_char_array(
     emit_probe_read_kernel_str_call(builder, dst_i8_ptr, array_size, src_ptr)
 
 
+def is_map_value_local(local_sym_tab, var_name):
+    """Whether `var_name` holds a map-lookup result: a pointer to the value,
+    allocated with a spare `<name>_tmp` slot for values computed from it."""
+    return (
+        isinstance(local_sym_tab[var_name].ir_type, ir.PointerType)
+        and f"{var_name}_tmp" in local_sym_tab
+    )
+
+
+def rebind_map_value_local(builder, local_sym_tab, var_name, val):
+    """Bind a map-lookup local to a computed value, the way Python rebinds a
+    name: the value goes into the local's `<name>_tmp` slot and the local is
+    pointed at it. The map itself is not written."""
+    tmp = local_sym_tab[f"{var_name}_tmp"].var
+    builder.store(val, tmp)
+    builder.store(tmp, local_sym_tab[var_name].var)
+
+
 def _is_char_array(ir_type):
     """Check if type is [N x i8]."""
     return (
@@ -223,12 +241,9 @@ def handle_variable_assignment(
                 return False
         elif isinstance(val_type, ir.IntType) and isinstance(var_type, ir.PointerType):
             # NOTE: This is assignment to a PTR_TO_MAP_VALUE_OR_NULL
-            logger.info(
-                f"Creating temporary variable for pointer assignment to {var_name}"
-            )
-            var_ptr_tmp = local_sym_tab[f"{var_name}_tmp"].var
-            builder.store(val, var_ptr_tmp)
-            val = var_ptr_tmp
+            rebind_map_value_local(builder, local_sym_tab, var_name, val)
+            logger.info(f"Rebound map-lookup local {var_name} to a computed value")
+            return True
         else:
             logger.error(
                 f"Type mismatch for variable {var_name}: {val_type} vs {var_type}"

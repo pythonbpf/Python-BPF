@@ -81,6 +81,12 @@ CASES = {
         [r"trunc i64 .* to i32", r"zext i32 .* to i64"],
         [r"sext i32 .* to i64"],
     ),
+    # `v += 1; v >>= 1` on a c_uint64 map value: read through the pointer,
+    # operate unsigned, rebind v to the lookup local's spare slot.
+    "assign/augassign_map_value.py": (
+        [r"deref_1_not_null", r"\blshr i64", r"store i64\* %\"v_tmp\", i64\*\* %\"v\""],
+        [r"\bashr i64"],
+    ),
     # `return p` on a map lookup dereferences through a null check and returns
     # the i64, never the pointer.
     "return/map_value.py": (
