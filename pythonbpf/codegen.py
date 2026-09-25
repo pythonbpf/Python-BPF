@@ -27,7 +27,7 @@ import re
 
 logger: Logger = logging.getLogger(__name__)
 
-VERSION = "v0.1.9"
+VERSION = "v0.2.0"
 
 
 def finalize_module(original_str):
