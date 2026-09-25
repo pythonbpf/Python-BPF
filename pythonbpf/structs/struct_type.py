@@ -1,3 +1,4 @@
+from pythonbpf.type_deducer import byte_size
 from llvmlite import ir
 
 
@@ -24,9 +25,9 @@ class StructType:
     def field_size(self, field_name):
         fld = self.fields[field_name]
         if isinstance(fld, ir.ArrayType):
-            return fld.count * (fld.element.width // 8)
+            return fld.count * byte_size(fld.element)
         elif isinstance(fld, ir.IntType):
-            return fld.width // 8
+            return byte_size(fld)
         elif isinstance(fld, ir.PointerType):
             return 8
 

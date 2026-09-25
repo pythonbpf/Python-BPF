@@ -1,5 +1,6 @@
 import ast
 import logging
+from pythonbpf.type_deducer import signedness
 
 from llvmlite import ir
 from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth, convert
@@ -155,17 +156,10 @@ def _process_attr_in_fval(attr_node, fmt_parts, exprs, local_sym_tab, struct_sym
 def _populate_fval(ftype, node, fmt_parts, exprs):
     """Populate format parts and expressions based on field type."""
     if isinstance(ftype, ir.IntType):
-        # TODO: We print as signed integers only for now
-        if ftype.width == 64:
-            fmt_parts.append("%lld")
-            exprs.append(node)
-        elif ftype.width == 32:
-            fmt_parts.append("%d")
-            exprs.append(node)
-        else:
-            raise NotImplementedError(
-                f"Unsupported integer width in f-string: {ftype.width}"
-            )
+        # Every integer argument is widened to 64 bits (per its sign) before
+        # the call, so the 64-bit format fits any width; the sign picks it.
+        fmt_parts.append("%lld" if signedness(ftype) else "%llu")
+        exprs.append(node)
     elif isinstance(ftype, ir.PointerType):
         target, depth = get_base_type_and_depth(ftype)
         if isinstance(target, ir.IntType):

@@ -41,6 +41,12 @@ class IntTy(ir.IntType):
         return f"{'i' if self.signed else 'u'}{self.width}"
 
 
+def byte_size(ty) -> int:
+    """Bytes an integer type occupies in memory: its width rounded up to whole
+    bytes, so a 1-bit bool still takes one byte, as C's _Bool does."""
+    return (ty.width + 7) // 8
+
+
 def int_literal_type(value: int) -> IntTy:
     """C's type for an integer constant: `int` if the value fits, else
     `long long`. Literals and enum constants alike; an enum constant is an
@@ -107,6 +113,9 @@ _INT_CTYPE_WIDTHS = {
     "c_longlong": 64,
     # A pointer-sized integer; treated as unsigned like uintptr_t.
     "c_void_p": 64,
+    # C's _Bool: one bit to LLVM (as True/False locals already are). It is
+    # never negative, and a value narrows to it by comparing with zero.
+    "c_bool": 1,
 }
 
 

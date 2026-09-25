@@ -88,6 +88,51 @@ All xfails use `strict = True`: if a test starts **passing** it shows up as **XP
 2. Run `make test` — the file is discovered and tested automatically at all levels.
 3. If the test is expected to fail, add it to `tests/test_config.toml` instead of `passing_tests/`.
 
+## Kernel selftest equivalents
+
+`tests/kernel_selftest_equivalent/` contains PythonBPF versions of important
+kernel BPF selftests from `bpf-next/tools/testing/selftests/bpf`. Each file names
+its upstream original in a header comment.
+
+The directory holds two kinds of test, and both are useful:
+
+- **Ports that pass.** A program PythonBPF can already express. These widen the
+  range of program types under test — `raw_tp`, `perf_event`,
+  `tracepoint/sched/*` and others that nothing else exercises.
+- **Roadmap tests that fail.** A program describing a feature PythonBPF should
+  grow next. These must be listed as **strict** expected failures in
+  `tests/test_config.toml` until the feature lands, at which point they turn up
+  as XPASS and should be promoted.
+
+### What a passing port proves — and does not
+
+A kernel selftest is two halves: the BPF program under `progs/`, and a userspace
+driver under `prog_tests/` that loads it through a skeleton, triggers it and
+asserts on the result. **Only the BPF half is ported**, because this framework
+compiles and verifies programs but never runs them.
+
+So a passing test here says PythonBPF emits a loadable, verifiable object for
+that program type and feature mix. It does not say the program behaves the way
+the kernel's version does. Treat it as a compiler assertion, not a semantic one.
+
+### Globals
+
+The selftest corpus overwhelmingly reports results through global variables: the
+program writes a global and the driver reads it back. Ports keep that shape with
+`@bpfglobal` scalars, so a future userspace driver reads the same `.bss`/`.data`
+values the kernel's driver does. Anything a global cannot yet hold (arrays,
+structs, strings) is a roadmap test, not a workaround.
+
+The one substitution still in use is `WORKAROUND(atomics)`: upstream counters
+incremented with `__sync_fetch_and_add` are plain `x += 1` here, tagged on the
+line so the sweep is mechanical once atomics land. `PORTING-NOTES.md` in that
+directory records every port, its rewrite if any, and why the rest of the
+corpus is out of reach; `tools/selftest-audit.py` regenerates that scoring.
+
+Anything importing from `vmlinux` belongs in `vmlinux/`, which is registered in
+`VMLINUX_TEST_DIRS_PASSING` so it is skipped rather than failed where no
+`vmlinux.py` has been generated.
+
 ## Directory structure
 
 ```
@@ -104,5 +149,6 @@ tests/
 │   ├── compiler.py            ← wrappers around compile_to_ir() + _run_llc()
 │   └── verifier.py            ← bpftool subprocess wrapper
 ├── passing_tests/             ← programs that should compile and verify cleanly
-└── failing_tests/             ← programs with known issues (declared in test_config.toml)
+├── failing_tests/             ← programs with known issues (declared in test_config.toml)
+└── kernel_selftest_equivalent/ ← ports of kernel selftests + feature roadmap tests
 ```

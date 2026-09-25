@@ -188,7 +188,7 @@ def trace_open(ctx: c_void_p) -> c_int64:
 For network packet processing:
 
 ```python
-from pythonbpf.helper import XDP_PASS
+from vmlinux import XDP_PASS
 
 @section("xdp")
 def xdp_pass(ctx: c_void_p) -> c_int64:

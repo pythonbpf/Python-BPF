@@ -30,7 +30,7 @@ from pythonbpf.allocation_pass import (
     LocalSymbol,
 )
 from .function_debug_info import generate_function_debug_info
-from .return_utils import handle_none_return, handle_xdp_return, is_xdp_name
+from .return_utils import handle_none_return
 from .function_metadata import get_probe_string, is_global_function, infer_return_type
 
 
@@ -341,20 +341,6 @@ def handle_return(
     logger.info(f"Handling return statement: {ast.dump(stmt)}")
     if stmt.value is None:
         return handle_none_return(builder)
-    elif (
-        isinstance(stmt.value, ast.Name)
-        and is_xdp_name(stmt.value.id)
-        and stmt.value.id not in local_sym_tab
-        and (
-            compilation_context is None
-            or stmt.value.id not in compilation_context.bpf_globals
-        )
-    ):
-        # The XDP fast path resolves names like XDP_PASS from the helper
-        # constant table, but only as a fallback: a local or @bpfglobal of the
-        # same name shadows it, mirroring C (a local shadows an enum constant)
-        # and the resolution order everywhere else in the compiler.
-        return handle_xdp_return(stmt, builder, ret_type)
     else:
         # Fallback for now if ctx not passed, but caller should pass it
         if compilation_context is None:
