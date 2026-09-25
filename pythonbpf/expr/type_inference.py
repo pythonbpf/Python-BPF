@@ -21,6 +21,7 @@ from pythonbpf.type_deducer import (
 )
 from .operators import usual_arithmetic_conversions
 from .vmlinux_registry import VmlinuxHandlerRegistry
+from .packet_pointer import is_packet_pointer
 
 
 def _as_intty(ty):
@@ -46,6 +47,10 @@ def infer_int_type(expr, local_sym_tab, compilation_context):
         return None
 
     if isinstance(expr, ast.BinOp):
+        if is_packet_pointer(expr.left, local_sym_tab) or is_packet_pointer(
+            expr.right, local_sym_tab
+        ):
+            return IntTy(64, False)  # packet-pointer arithmetic is 64-bit
         left = infer_int_type(expr.left, local_sym_tab, compilation_context)
         right = infer_int_type(expr.right, local_sym_tab, compilation_context)
         if left is None or right is None:

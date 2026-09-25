@@ -24,6 +24,7 @@ from .type_normalization import (
     get_base_type_and_depth,
 )
 from .vmlinux_registry import VmlinuxHandlerRegistry
+from .packet_pointer import MAX_PACKET_OFF, is_packet_pointer
 from ..vmlinux_parser.dependency_node import Field
 
 logger: Logger = logging.getLogger(__name__)
@@ -284,12 +285,18 @@ def _handle_binary_op_impl(func, compilation_context, rval, builder, local_sym_t
     narrowed to it -- so u32 * u32 wraps at 32 bits even though the arithmetic
     itself runs in an i64 register. Returns (value, IntTy)."""
     op = rval.op
+    left_pkt = is_packet_pointer(rval.left, local_sym_tab)
+    right_pkt = is_packet_pointer(rval.right, local_sym_tab)
     left, left_ty = get_typed_operand(
         func, compilation_context, rval.left, builder, local_sym_tab
     )
     right, right_ty = get_typed_operand(
         func, compilation_context, rval.right, builder, local_sym_tab
     )
+    if left_pkt or right_pkt:
+        return _packet_pointer_binop(
+            builder, rval, left, left_ty, left_pkt, right, right_ty, right_pkt
+        )
     result_ty = usual_arithmetic_conversions(left_ty, right_ty)
     logger.info(
         f"binop {type(op).__name__}: {left_ty.describe()} x {right_ty.describe()} "
@@ -299,6 +306,51 @@ def _handle_binary_op_impl(func, compilation_context, rval, builder, local_sym_t
     right = to_promoted(builder, right, right_ty, result_ty)
     result = apply_binop(builder, op, left, right, signedness(result_ty))
     return canonicalise(builder, result, result_ty), result_ty
+
+
+def _packet_pointer_binop(
+    builder, rval, left, left_ty, left_pkt, right, right_ty, right_pkt
+):
+    """A binary operation with a packet-pointer operand (see packet_pointer.py):
+    64-bit, never ranked as the field's declared u32, with the offset taken as
+    an unsigned 16-bit value so the verifier can track the packet range."""
+    op = rval.op
+    where = f"line {rval.lineno}: {ast.unparse(rval)}"
+    ptr_ty = IntTy(64, False)
+    if left_pkt and right_pkt:
+        if isinstance(op, ast.Sub):
+            # data_end - data: a length, an ordinary 64-bit scalar.
+            left = convert(builder, left, left_ty, ptr_ty)
+            right = convert(builder, right, right_ty, ptr_ty)
+            return builder.sub(left, right), ptr_ty
+        raise SyntaxError(
+            f"only subtraction is defined between packet pointers ({where})"
+        )
+    if not isinstance(op, (ast.Add, ast.Sub)):
+        raise SyntaxError(
+            f"only + and - with an offset are allowed on a packet pointer ({where})"
+        )
+    if right_pkt and isinstance(op, ast.Sub):
+        raise SyntaxError(f"cannot subtract a packet pointer from an offset ({where})")
+
+    ptr, ptr_src_ty, off, off_ty = (
+        (left, left_ty, right, right_ty)
+        if left_pkt
+        else (right, right_ty, left, left_ty)
+    )
+    if isinstance(off, ir.Constant) and isinstance(off.constant, int):
+        if not 0 <= off.constant <= MAX_PACKET_OFF:
+            raise SyntaxError(
+                f"packet offset {off.constant} is outside 0..{MAX_PACKET_OFF} "
+                f"({where}); subtract instead of adding a negative offset"
+            )
+    ptr = convert(builder, ptr, ptr_src_ty, ptr_ty)
+    # The offset as u16, widened with zero-extension: a value the verifier can
+    # bound to [0, 0xffff].
+    off = builder.trunc(off, ir.IntType(16)) if off.type.width > 16 else off
+    off = builder.zext(off, ir.IntType(64)) if off.type.width < 64 else off
+    result = builder.add(ptr, off) if isinstance(op, ast.Add) else builder.sub(ptr, off)
+    return result, ptr_ty
 
 
 def _handle_binary_op(

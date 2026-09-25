@@ -68,6 +68,26 @@ CASES = {
         [r"\bsub i64", r"trunc i64 .* to i32", r"zext i32 .* to i64"],
         [],
     ),
+    # Packet-pointer fields: 64-bit arithmetic, never the field's u32 rank,
+    # offsets as u16 (trunc to i16, zext); pointer - pointer is a plain sub.
+    # No computed value is cut to 32 bits (constant stores such as
+    # k = c_int32(1) legitimately are).
+    "vmlinux/ctx_data_arith.py": (
+        [r"\bsub i64"],
+        [r"trunc i64 %.* to i32"],
+    ),
+    "vmlinux/ctx_data_plus_one.py": (
+        [r"\badd i64"],
+        [r"trunc i64 %.* to i32"],
+    ),
+    "vmlinux/ctx_data_runtime_offset.py": (
+        [r"trunc i64 .* to i16", r"zext i16 .* to i64", r"\badd i64"],
+        [r"trunc i64 %.* to i32"],
+    ),
+    "vmlinux/ctx_data_length.py": (
+        [r"\bsub i64"],
+        [r"to i16", r"trunc i64 %.* to i32"],
+    ),
     # A bool widens with zext and an integer narrows to it by != 0, never by
     # trunc; sext of an i1 would return -1 for True.
     "signedness/bool_int.py": (
