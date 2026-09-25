@@ -74,6 +74,25 @@ CASES = {
         [r'%"queue" = alloca i16', r"trunc i64 .* to i16"],
         [r'%"queue" = alloca i64'],
     ),
+    # A context field into slots of every width: loaded, zero-extended,
+    # truncated to the slot; nothing sign-extended on the way in.
+    "vmlinux/ctx_field_into_slots.py": (
+        [
+            r'%"a8" = alloca i8',
+            r'%"b16" = alloca i16',
+            r'%"c32" = alloca i32',
+            r'%"d64" = alloca i64',
+            r'trunc i64 %[^\n]* to i8\n\s*store i8 [^\n]*%"a8"',
+            r'trunc i64 %[^\n]* to i16\n\s*store i16 [^\n]*%"b16"',
+            r'trunc i64 %[^\n]* to i32\n\s*store i32 [^\n]*%"c32"',
+        ],
+        [r'alloca i64[^\n]*\n[^\n]*%"a8"'],
+    ),
+    # c_bool: narrowing is != 0, widening is zext; never trunc to i1 or sext.
+    "signedness/c_bool.py": (
+        [r"icmp ne i64 5, 0", r"icmp ne i64 2, 0", r"icmp ne i64 7, 0", r"zext i1"],
+        [r"sext i1 ", r"trunc i64 [^\n]* to i1"],
+    ),
     # A bool widens with zext and an integer narrows to it by != 0, never by
     # trunc; sext of an i1 would return -1 for True.
     "signedness/bool_int.py": (
