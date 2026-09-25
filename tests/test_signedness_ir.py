@@ -68,6 +68,17 @@ CASES = {
         [r"\bsub i64", r"trunc i64 .* to i32", r"zext i32 .* to i64"],
         [],
     ),
+    # A pointer consumed as a number is dereferenced (null-checked) first; no
+    # pointer is ever stored into an integer slot.
+    "deref/struct_field.py": ([r"deref_\d_not_null"], [r"store i64\* [^,]*, i64\* "]),
+    "deref/int_local.py": (
+        [r"deref_\d_not_null"],
+        [r'store i64\* [^,]*, i64\*\* %"x"'],
+    ),
+    "deref/cast.py": ([r"deref_\d_not_null"], [r'store i64\* [^,]*, i64\*\* %"y"']),
+    "deref/return_cast.py": ([r"deref_\d_not_null"], [r"ret i64\*"]),
+    # Control: pointer into a pointer slot stays a pointer, no dereference.
+    "deref/alias.py": ([r'store i64\* [^,]*, i64\*\* %"q"'], [r"deref_\d_not_null"]),
     # A bool widens with zext and an integer narrows to it by != 0, never by
     # trunc; sext of an i1 would return -1 for True.
     "signedness/bool_int.py": (

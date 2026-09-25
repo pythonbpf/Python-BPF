@@ -1,0 +1,36 @@
+# Control: a pointer local assigned a pointer keeps the pointer (aliasing).
+from pythonbpf import bpf, map, struct, section, bpfglobal, compile
+from pythonbpf.maps import HashMap
+from ctypes import c_void_p, c_int64, c_uint32, c_uint64
+
+
+@bpf
+@map
+def m() -> HashMap:
+    return HashMap(key=c_uint32, value=c_uint64, max_entries=4)
+
+
+@bpf
+@struct
+class rec:
+    val: c_uint64
+
+
+@bpf
+@section("tracepoint/raw_syscalls/sys_enter")
+def prog(ctx: c_void_p) -> c_int64:
+    k = c_uint32(1)
+    p = m.lookup(k)
+    q = m.lookup(k)
+    if p:
+        q = p  # noqa: F841
+    return c_int64(0)
+
+
+@bpf
+@bpfglobal
+def LICENSE() -> str:
+    return "GPL"
+
+
+compile()
