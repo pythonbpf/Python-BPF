@@ -68,7 +68,6 @@
 "failing_tests/vmlinux/ctx_data_offset_too_big.py" = {reason = "A constant packet offset outside 0..65535 is a compile error (the verifier tracks packet ranges up to MAX_PACKET_OFF)", level = "ir"}
 "failing_tests/vmlinux/ctx_data_end_offset.py" = {reason = "A packet-end pointer can only be compared, not offset (the verifier rejects arithmetic on it)", level = "ir"}
 
-"failing_tests/vmlinux/ctx_data_narrow_store.py" = {reason = "A packet pointer cannot be narrowed below 64 bits", level = "ir"}
 
 "kernel_selftest_equivalent/ringbuf/reserve_submit_discard.py" = {reason = "RingBuffer reserve/typed record/discard workflow is planned but not implemented yet", level = "ir"}
 

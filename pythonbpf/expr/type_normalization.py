@@ -1,7 +1,7 @@
 import logging
 from llvmlite import ir
 from .ir_ops import deref_to_depth
-from pythonbpf.type_deducer import IntTy, PktPtrTy, signedness
+from pythonbpf.type_deducer import IntTy, signedness
 from .operators import COMPARISON_OPS
 
 logger = logging.getLogger(__name__)
@@ -52,15 +52,6 @@ def convert(builder, val, from_ty, to_ty):
     descriptors (see type_deducer.IntTy); the physical width comes from the
     value itself, which may already be wider than its descriptor says.
     """
-    if (
-        isinstance(from_ty, PktPtrTy)
-        and isinstance(to_ty, ir.IntType)
-        and to_ty.width < 64
-    ):
-        raise TypeError(
-            f"a packet pointer ({from_ty.describe()}) cannot be narrowed to "
-            f"i{to_ty.width}; the verifier only accepts it at 64 bits"
-        )
     if not (isinstance(to_ty, ir.IntType) and isinstance(val.type, ir.IntType)):
         # Every caller either checks both sides are integers or sits on a path
         # that only carries integers, so reaching here is a type error that

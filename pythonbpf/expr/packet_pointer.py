@@ -17,8 +17,14 @@ The field read gives its value a PktPtrTy descriptor (a 64-bit unsigned
 IntTy tagged with the verifier's kind), and the rules key on that descriptor,
 so they follow the pointer through locals (`d = ctx.data`), through
 `d + 14`, and into comparisons (`ctx.data + 34 > ctx.data_end` is a 64-bit
-unsigned compare). packet-end pointers take no offset at all, and nothing
-narrows a packet pointer below 64 bits.
+unsigned compare). packet-end pointers take no offset at all.
+
+Storing a packet pointer into a narrower slot truncates it, as C does, and the
+result is an ordinary integer: the verifier forbids 32-bit *arithmetic* on a
+packet pointer, not a 32-bit store of one (upstream's
+cgroup_skb_direct_packet_access stores data_end into a __u32 global). Keeping
+the pointer when a local is declared narrower is a job for allocation, which
+could give such a slot the widest type ever stored into it.
 """
 
 import ast
