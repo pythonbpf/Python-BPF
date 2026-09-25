@@ -44,6 +44,8 @@
 
 "failing_tests/loops/range_variable_step.py" = {reason = "range() step must be an integer literal: its sign decides the loop test", level = "ir"}
 
+"failing_tests/loops/range_step_too_wide.py" = {reason = "range() step must fit the 64-bit counter: 2**64 truncates to 0 and never terminates", level = "ir"}
+
 "kernel_selftest_equivalent/ringbuf/reserve_submit_discard.py" = {reason = "RingBuffer reserve/typed record/discard workflow is planned but not implemented yet", level = "ir"}
 
 "kernel_selftest_equivalent/vmlinux/perf_skip.py" = {reason = "Nested struct field access (ctx.regs.ip) not supported; one level such as ctx.sample_period works", level = "ir"}
