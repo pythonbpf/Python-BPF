@@ -113,6 +113,9 @@ _INT_CTYPE_WIDTHS = {
     "c_longlong": 64,
     # A pointer-sized integer; treated as unsigned like uintptr_t.
     "c_void_p": 64,
+    # C's _Bool: one bit to LLVM (as True/False locals already are). It is
+    # never negative, and a value narrows to it by comparing with zero.
+    "c_bool": 1,
 }
 
 
