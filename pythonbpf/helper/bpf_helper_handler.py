@@ -651,10 +651,21 @@ def bpf_probe_read_kernel_emitter(
             f"probe_read_kernel expects 2 args (dst, src), got {len(call.args)}"
         )
 
-    # Get destination buffer (char array -> i8*)
-    dst_ptr, dst_size = get_or_create_ptr_from_arg(
+    # Destination: a char array reads its length, a scalar reads its width
+    dst = get_or_create_ptr_from_arg(
         func, compilation_context, call.args[0], builder, local_sym_tab
     )
+    if isinstance(dst, tuple):
+        dst_ptr, dst_size = dst
+    else:
+        dst_ptr = dst
+        pointee = dst_ptr.type.pointee
+        if not isinstance(pointee, ir.IntType):
+            raise ValueError(
+                f"probe_read_kernel destination must be a char array or an "
+                f"integer, got {pointee}"
+            )
+        dst_size = pointee.width // 8
 
     # Get source pointer (evaluate expression)
     src_ptr, src_type = get_ptr_from_arg(

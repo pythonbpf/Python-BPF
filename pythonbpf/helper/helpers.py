@@ -27,6 +27,11 @@ def probe_read_str(dst, src):
     return ctypes.c_int64(0)
 
 
+def probe_read_kernel(dst, src):
+    """Safely read sizeof(dst) bytes from kernel memory"""
+    return ctypes.c_int64(0)
+
+
 def random():
     """get a pseudorandom u32 number"""
     return ctypes.c_int32(0)

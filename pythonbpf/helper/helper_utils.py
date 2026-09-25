@@ -341,6 +341,12 @@ def get_ptr_from_arg(arg, func, compilation_context, builder, local_sym_tab):
 
     val, val_type = result
 
+    # An address held in a 64-bit integer, such as a pt_regs register field:
+    # the C spelling is (void *)ctx->si
+    if isinstance(val.type, ir.IntType) and val.type.width == 64:
+        ptr_type = ir.PointerType(ir.IntType(8))
+        return builder.inttoptr(val, ptr_type), ptr_type
+
     if not isinstance(val_type, ir.PointerType):
         raise ValueError(f"Expected pointer type, got {val_type}")
 
