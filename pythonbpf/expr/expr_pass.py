@@ -383,12 +383,57 @@ def _handle_ctypes_call(
     return value, expected_type
 
 
+def _is_map_int_value(operand, compilation_context, local_sym_tab):
+    """Whether the operand is an integer held in a map: a `m.lookup(k)` call on
+    a map with an integer value, or a local bound to one. Both evaluate to a
+    pointer into the map, and comparing one means comparing the value."""
+    if isinstance(operand, ast.Name):
+        sym = local_sym_tab.get(operand.id)
+        if sym is None or not isinstance(sym.var.type, ir.PointerType):
+            return False
+        _, depth = get_base_type_and_depth(sym.var.type)
+        return depth == 2 and isinstance(sym.metadata, str) and is_ctypes(sym.metadata)
+    if (
+        isinstance(operand, ast.Call)
+        and isinstance(operand.func, ast.Attribute)
+        and operand.func.attr == "lookup"
+        and isinstance(operand.func.value, ast.Name)
+    ):
+        map_sym = compilation_context.map_sym_tab.get(operand.func.value.id)
+        if map_sym is None:
+            return False
+        value_type = map_sym.params.get("value")
+        return isinstance(value_type, str) and is_ctypes(value_type)
+    return False
+
+
 def _handle_compare(func, compilation_context, builder, cond, local_sym_tab):
     """Handle ast.Compare expressions."""
 
     if len(cond.ops) != 1 or len(cond.comparators) != 1:
         logger.error("Only single comparisons are supported")
         return None
+
+    if any(
+        _is_map_int_value(operand, compilation_context, local_sym_tab)
+        for operand in (cond.left, cond.comparators[0])
+    ):
+        # A map value compares by what it holds (null-checked, 0 when the key
+        # is absent), never by address: `x == m.lookup(i)` with both sides
+        # pointers would otherwise compare two map slots' addresses.
+        lhs, lhs_ty = get_typed_operand(
+            func, compilation_context, cond.left, builder, local_sym_tab
+        )
+        rhs, rhs_ty = get_typed_operand(
+            func, compilation_context, cond.comparators[0], builder, local_sym_tab
+        )
+        cmp_ty = usual_arithmetic_conversions(lhs_ty, rhs_ty)
+        lhs = to_promoted(builder, lhs, lhs_ty, cmp_ty)
+        rhs = to_promoted(builder, rhs, rhs_ty, cmp_ty)
+        return handle_comparator(
+            func, builder, cond.ops[0], lhs, rhs, signed=signedness(cmp_ty)
+        )
+
     lhs = eval_expr(
         func,
         compilation_context,
