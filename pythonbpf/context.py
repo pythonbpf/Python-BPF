@@ -82,7 +82,12 @@ class CompilationContext:
         # Current function context (optional, if needed globally during function processing)
         self.current_func = None
 
+        # Enclosing loops of the statement being lowered, innermost last, as
+        # (continue target, break target) blocks.
+        self.loop_stack: list[tuple[ir.Block, ir.Block]] = []
+
     def reset(self):
         """Reset state between functions if necessary, though new context per compile is preferred."""
         self.scratch_pool.reset()
         self.current_func = None
+        self.loop_stack = []

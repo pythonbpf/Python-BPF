@@ -25,6 +25,10 @@ from pythonbpf.assign_pass import (
 )
 from pythonbpf.allocation_pass import (
     handle_assign_allocation,
+    handle_ann_assign_allocation,
+    handle_for_allocation,
+    parse_range,
+    range_counter_name,
     allocate_temp_pool,
     create_targets_and_rvals,
     LocalSymbol,
@@ -81,10 +85,11 @@ def count_temps_in_call(call_node, local_sym_tab):
     return count
 
 
-def handle_if_allocation(
+def handle_block_allocation(
     compilation_context, builder, stmt, func, ret_type, local_sym_tab
 ):
-    """Recursively handle allocations in if/else branches."""
+    """Recursively handle allocations in the body and else-branch of an
+    if, for or while statement."""
     if stmt.body:
         allocate_mem(
             compilation_context,
@@ -116,15 +121,23 @@ def allocate_mem(compilation_context, builder, body, func, ret_type, local_sym_t
     def update_max_temps_for_stmt(stmt):
         nonlocal max_temps_needed
 
-        if isinstance(stmt, ast.If):
+        if isinstance(stmt, (ast.If, ast.For, ast.While)):
+            # A loop header is evaluated like a statement of its own: range()
+            # bounds once before the loop, a while test on every iteration.
+            header = {ast.For: "iter", ast.While: "test"}.get(type(stmt))
+            if header is not None:
+                count_temps_in_tree(getattr(stmt, header))
             for s in stmt.body:
                 update_max_temps_for_stmt(s)
             for s in stmt.orelse:
                 update_max_temps_for_stmt(s)
             return
 
+        count_temps_in_tree(stmt)
+
+    def count_temps_in_tree(tree):
         stmt_temps = {}
-        for node in ast.walk(stmt):
+        for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 call_temps = count_temps_in_call(node, local_sym_tab)
                 for typ, cnt in call_temps.items():
@@ -135,8 +148,10 @@ def allocate_mem(compilation_context, builder, body, func, ret_type, local_sym_t
         update_max_temps_for_stmt(stmt)
 
         # Handle allocations
-        if isinstance(stmt, ast.If):
-            handle_if_allocation(
+        if isinstance(stmt, ast.For):
+            handle_for_allocation(compilation_context, builder, stmt, local_sym_tab)
+        if isinstance(stmt, (ast.If, ast.For, ast.While)):
+            handle_block_allocation(
                 compilation_context,
                 builder,
                 stmt,
@@ -146,6 +161,10 @@ def allocate_mem(compilation_context, builder, body, func, ret_type, local_sym_t
             )
         elif isinstance(stmt, ast.Assign):
             handle_assign_allocation(compilation_context, builder, stmt, local_sym_tab)
+        elif isinstance(stmt, ast.AnnAssign):
+            handle_ann_assign_allocation(
+                compilation_context, builder, stmt, local_sym_tab
+            )
 
     allocate_temp_pool(builder, max_temps_needed, local_sym_tab)
 
@@ -193,6 +212,24 @@ def handle_assign(func, compilation_context, builder, stmt, local_sym_tab):
 
         # Unsupported target type
         logger.error(f"Unsupported assignment target: {ast.dump(target)}")
+
+
+def handle_ann_assign(func, compilation_context, builder, stmt, local_sym_tab):
+    """Handle `x: T = v`. The allocation pass already made x's slot with the
+    annotated type, so what is left is an ordinary store of v into it, through
+    the same helper plain assignment uses (which converts v to the slot's type).
+    A bare `x: T` binds nothing and emits nothing."""
+    if stmt.value is None:
+        return
+    if not handle_variable_assignment(
+        func,
+        compilation_context,
+        builder,
+        stmt.target.id,
+        stmt.value,
+        local_sym_tab,
+    ):
+        logger.error(f"Failed to handle annotated assignment to {stmt.target.id}")
 
 
 def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
@@ -295,7 +332,7 @@ def handle_cond(func, compilation_context, builder, cond, local_sym_tab):
     return convert_to_bool(builder, val)
 
 
-def handle_if(func, compilation_context, builder, stmt, local_sym_tab):
+def handle_if(func, compilation_context, builder, stmt, local_sym_tab, ret_type):
     """Handle if statements in the function body."""
     logger.info("Handling if statement")
     # start = builder.block.parent
@@ -313,26 +350,173 @@ def handle_if(func, compilation_context, builder, stmt, local_sym_tab):
         builder.cbranch(cond, then_block, merge_block)
 
     builder.position_at_end(then_block)
-    for s in stmt.body:
-        process_stmt(func, compilation_context, builder, s, local_sym_tab, False)
+    process_block(
+        func, compilation_context, builder, stmt.body, local_sym_tab, ret_type
+    )
     if not builder.block.is_terminated:
         builder.branch(merge_block)
 
     if else_block:
         builder.position_at_end(else_block)
-        for s in stmt.orelse:
-            process_stmt(
-                func,
-                compilation_context,
-                builder,
-                s,
-                local_sym_tab,
-                False,
-            )
+        process_block(
+            func, compilation_context, builder, stmt.orelse, local_sym_tab, ret_type
+        )
         if not builder.block.is_terminated:
             builder.branch(merge_block)
 
     builder.position_at_end(merge_block)
+
+
+def _lower_loop(
+    func,
+    compilation_context,
+    builder,
+    stmt,
+    local_sym_tab,
+    ret_type,
+    body_block,
+    continue_block,
+    end_block,
+    else_block,
+):
+    """What for and while share once their header is emitted: the body, with
+    `continue` and `break` bound to this loop, falling through to
+    continue_block; then the else-branch, which runs only when the loop ends
+    without a break, so it sits between the exit test and end_block."""
+    builder.position_at_end(body_block)
+    compilation_context.loop_stack.append((continue_block, end_block))
+    try:
+        process_block(
+            func, compilation_context, builder, stmt.body, local_sym_tab, ret_type
+        )
+    finally:
+        compilation_context.loop_stack.pop()
+    if not builder.block.is_terminated:
+        builder.branch(continue_block)
+
+    if else_block is not None:
+        # Outside this loop's scope: a break here leaves the enclosing loop.
+        builder.position_at_end(else_block)
+        process_block(
+            func, compilation_context, builder, stmt.orelse, local_sym_tab, ret_type
+        )
+        if not builder.block.is_terminated:
+            builder.branch(end_block)
+
+    builder.position_at_end(end_block)
+
+
+def handle_while(func, compilation_context, builder, stmt, local_sym_tab, ret_type):
+    """Handle `while test: body [else: orelse]`. The test is re-evaluated at
+    the top of every iteration, and is where `continue` goes."""
+    cond_block = func.append_basic_block(name="while.cond")
+    body_block = func.append_basic_block(name="while.body")
+    else_block = func.append_basic_block(name="while.else") if stmt.orelse else None
+    end_block = func.append_basic_block(name="while.end")
+
+    builder.branch(cond_block)
+    builder.position_at_end(cond_block)
+    cond = handle_cond(func, compilation_context, builder, stmt.test, local_sym_tab)
+    builder.cbranch(cond, body_block, else_block or end_block)
+
+    _lower_loop(
+        func,
+        compilation_context,
+        builder,
+        stmt,
+        local_sym_tab,
+        ret_type,
+        body_block,
+        cond_block,
+        end_block,
+        else_block,
+    )
+
+
+def handle_for(func, compilation_context, builder, stmt, local_sym_tab, ret_type):
+    """Handle `for name in range(...): body [else: orelse]`.
+
+    The allocation pass made a hidden induction counter (typed from the
+    bounds) next to the loop variable. The bounds are evaluated once, before
+    the loop, as Python does; each iteration copies the counter into the loop
+    variable, and `continue` goes to the step, not straight back to the test.
+    """
+    start, stop, step = parse_range(stmt)
+    counter = local_sym_tab[range_counter_name(stmt)]
+    loop_ty = counter.ir_type
+
+    def bound(expr):
+        val, ty = get_typed_operand(
+            func, compilation_context, expr, builder, local_sym_tab
+        )
+        if val is None or not isinstance(ty, ir.IntType):
+            raise SyntaxError(
+                f"range() bound on line {stmt.lineno} must be an integer: "
+                f"{ast.unparse(expr)}"
+            )
+        return convert(builder, val, ty, loop_ty)
+
+    start_val = ir.Constant(loop_ty, 0) if start is None else bound(start)
+    stop_val = bound(stop)
+    builder.store(start_val, counter.var)
+
+    target = local_sym_tab[stmt.target.id]
+    if target.var is None:
+        raise SyntaxError(
+            f"cannot use '{stmt.target.id}' as a loop variable: it is the "
+            f"context parameter"
+        )
+
+    cond_block = func.append_basic_block(name="for.cond")
+    body_block = func.append_basic_block(name="for.body")
+    inc_block = func.append_basic_block(name="for.inc")
+    else_block = func.append_basic_block(name="for.else") if stmt.orelse else None
+    end_block = func.append_basic_block(name="for.end")
+
+    builder.branch(cond_block)
+    builder.position_at_end(cond_block)
+    idx = builder.load(counter.var)
+    # Counting up runs while below stop, counting down while above it.
+    predicate = "<" if step > 0 else ">"
+    compare = builder.icmp_signed if signedness(loop_ty) else builder.icmp_unsigned
+    builder.cbranch(
+        compare(predicate, idx, stop_val), body_block, else_block or end_block
+    )
+
+    # The loop variable is bound to the counter's value, per iteration.
+    builder.position_at_end(body_block)
+    builder.store(
+        convert(builder, builder.load(counter.var), loop_ty, target.ir_type),
+        target.var,
+    )
+
+    builder.position_at_end(inc_block)
+    next_idx = builder.add(builder.load(counter.var), ir.Constant(loop_ty, step))
+    builder.store(next_idx, counter.var)
+    builder.branch(cond_block)
+
+    _lower_loop(
+        func,
+        compilation_context,
+        builder,
+        stmt,
+        local_sym_tab,
+        ret_type,
+        body_block,
+        inc_block,
+        end_block,
+        else_block,
+    )
+
+
+def handle_loop_jump(compilation_context, builder, stmt):
+    """Handle `break` and `continue`: branch to the innermost loop's exit or
+    next-iteration block."""
+    keyword = "break" if isinstance(stmt, ast.Break) else "continue"
+    if not compilation_context.loop_stack:
+        raise SyntaxError(f"'{keyword}' outside loop (line {stmt.lineno})")
+    continue_block, break_block = compilation_context.loop_stack[-1]
+    builder.branch(break_block if keyword == "break" else continue_block)
 
 
 def handle_return(
@@ -383,12 +567,20 @@ def process_stmt(
         )
     elif isinstance(stmt, ast.Assign):
         handle_assign(func, compilation_context, builder, stmt, local_sym_tab)
+    elif isinstance(stmt, ast.AnnAssign):
+        handle_ann_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.AugAssign):
         handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab)
     elif isinstance(stmt, ast.Global):
         logger.debug(f"global declaration of {', '.join(stmt.names)} already bound")
     elif isinstance(stmt, ast.If):
-        handle_if(func, compilation_context, builder, stmt, local_sym_tab)
+        handle_if(func, compilation_context, builder, stmt, local_sym_tab, ret_type)
+    elif isinstance(stmt, ast.While):
+        handle_while(func, compilation_context, builder, stmt, local_sym_tab, ret_type)
+    elif isinstance(stmt, ast.For):
+        handle_for(func, compilation_context, builder, stmt, local_sym_tab, ret_type)
+    elif isinstance(stmt, (ast.Break, ast.Continue)):
+        handle_loop_jump(compilation_context, builder, stmt)
     elif isinstance(stmt, ast.Return):
         did_return = handle_return(
             func, builder, stmt, local_sym_tab, ret_type, compilation_context
@@ -401,6 +593,19 @@ def process_stmt(
             f"{type(stmt).__name__}"
         )
     return did_return
+
+
+def process_block(func, compilation_context, builder, stmts, local_sym_tab, ret_type):
+    """Process a nested statement list (an if-branch or loop body). Stops at
+    the first statement that ends the block -- break, continue or return --
+    because whatever follows it in the same list can never run, and would
+    otherwise be emitted after a terminator."""
+    for s in stmts:
+        if builder.block.is_terminated:
+            break
+        process_stmt(
+            func, compilation_context, builder, s, local_sym_tab, False, ret_type
+        )
 
 
 # ============================================================================

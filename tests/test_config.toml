@@ -38,31 +38,11 @@
 
 "failing_tests/globals_parameter_and_global.py" = {reason = "A parameter may not be declared global (Python: name is parameter and global)", level = "ir"}
 
-"failing_tests/assign/annotated_assign.py" = {reason = "Annotated assignment (ast.AnnAssign, e.g. `x: c_int64 = 0`) is not handled by process_stmt", level = "ir"}
+"failing_tests/loops/for_map_items.py" = {reason = "Loops iterate range() only: no sugar over bpf_for_each_map_elem() (a callback subprogram plus a way to capture outer locals) exists yet", level = "ir"}
 
-# Loop constructs: ast.For/ast.While are not handled by the statement dispatcher
-# (pythonbpf/functions/functions_pass.py process_stmt only matches Expr, Assign,
-# AugAssign, If, Return) and the pre-pass variable scan does not descend into
-# loop bodies. A loop is silently skipped rather than erroring, so anything
-# that reads a variable assigned in/around the loop afterward blows up later
-# with "Undefined variable ..." at the `return` statement. These document the
-# intended surface for when loops are implemented.
-"failing_tests/loops/for_range_sum.py" = {reason = "for/while loops not implemented: ast.For is silently skipped by the statement dispatcher", level = "ir"}
+"failing_tests/loops/break_outside_loop.py" = {reason = "`break` outside a loop is a SyntaxError in Python, and a compile error here", level = "ir"}
 
-"failing_tests/loops/for_range_start_stop_step.py" = {reason = "for/while loops not implemented: range() with start/stop/step is not supported", level = "ir"}
-
-"failing_tests/loops/while_basic.py" = {reason = "for/while loops not implemented: ast.While is silently skipped by the statement dispatcher", level = "ir"}
-
-"failing_tests/loops/while_true_break.py" = {reason = "for/while loops not implemented: while True with a break-based exit is not supported", level = "ir"}
-
-"failing_tests/loops/nested_for.py" = {reason = "for/while loops not implemented: nested for loops are not supported", level = "ir"}
-
-"failing_tests/loops/for_break.py" = {reason = "for/while loops not implemented: break is not supported", level = "ir"}
-
-"failing_tests/loops/for_continue.py" = {reason = "for/while loops not implemented: continue is not supported", level = "ir"}
-
-"failing_tests/loops/for_map_items.py" = {reason = "for/while loops not implemented: no sugar over bpf_for_each_map_elem()-style map iteration exists yet", level = "ir"}
-
+"failing_tests/loops/range_variable_step.py" = {reason = "range() step must be an integer literal: its sign decides the loop test", level = "ir"}
 
 "kernel_selftest_equivalent/ringbuf/reserve_submit_discard.py" = {reason = "RingBuffer reserve/typed record/discard workflow is planned but not implemented yet", level = "ir"}
 
