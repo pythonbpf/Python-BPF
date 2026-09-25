@@ -3,7 +3,8 @@
 # A port of bpfsnake (github.com/amiremohamadi/bpfsnake), a bpftrace script.
 # The eBPF side keeps the whole game state in maps and runs the game logic:
 # steering, moving, collisions, eating and growing. Python only feeds it the
-# arrow key and draws what the kernel left in the maps, with pygame.
+# arrow key and draws what the kernel left in the maps, in a pygame window or,
+# with --terminal, in the terminal.
 #
 # bpftrace's `interval:ms:120` would be a perf_event program, which pylibbpf
 # cannot attach yet. Instead Python drives the clock: every tick it calls
@@ -11,22 +12,28 @@
 # the game one step.
 #
 # The original steered from a kprobe on pty_write, reading the byte a terminal
-# echoes for each key. A pygame window has the keyboard instead of the
-# terminal, so Python writes the key's code into the `state` map, using the
-# same codes: 'A' up, 'B' down, 'C' right, 'D' left.
+# echoes for each key. That cannot see keys typed into a pygame window, so
+# Python writes the key's code into the `state` map instead, in both modes,
+# using the original's codes: 'A' up, 'B' down, 'C' right, 'D' left.
 #
-# Needs pygame (pip install pygame). Run from the repository root, keeping
-# your display in the environment:
-#   sudo -E env PYTHONPATH=. /path/to/python examples/snake.py
-# Arrows or WASD steer, Space pauses, R restarts, Esc quits.
+# Run from the repository root:
+#   sudo -E env PYTHONPATH=. /path/to/python examples/snake.py     # pygame
+#   sudo env PYTHONPATH=. /path/to/python examples/snake.py --terminal
+# The pygame window needs pygame (pip install pygame), and -E keeps your display
+# in the environment. The terminal needs 64 columns and 26 rows.
+# Arrows or WASD steer, Space pauses, R restarts, Esc or Q quits.
 # x86_64 only (the syscall name in the kprobe).
 
+import argparse
 import math
 import os
+import select
+import sys
+import termios
+import time
+import tty
 from collections import deque
 from ctypes import c_int64, c_uint64, c_void_p
-
-import pygame
 
 from pythonbpf import BPF, bpf, bpfglobal, map, section
 from pythonbpf.helper import pid, random
@@ -127,19 +134,192 @@ def LICENSE() -> str:
 
 # ---------------------------------------------------------------- userspace
 
+OPPOSITE = {UP: DOWN, DOWN: UP, LEFT: RIGHT, RIGHT: LEFT}
+
+
+def read(m, k):
+    return m.lookup(k) or 0
+
+
+class Game:
+    """The userspace half: queue turns, drive the kernel's tick, read it back."""
+
+    def __init__(self, b):
+        self.b = b
+        self.restart()
+
+    def restart(self):
+        b = self.b
+        for i in range(MAX_LENGTH):
+            for m in (b["snakex"], b["snakey"]):
+                try:
+                    m.delete_elem(i)
+                except Exception:
+                    pass  # the key was never set
+        mid = HEIGHT // 2
+        b["snakex"][0], b["snakey"][0] = mid, 4
+        b["snakex"][1], b["snakey"][1] = mid, 3
+        b["state"][FOODX] = mid
+        b["state"][FOODY] = WIDTH // 2
+        b["state"][GAME_OVER] = 0
+        b["state"][KEY] = RIGHT
+        b["state"][PLAYER] = os.getpid()
+        self.heading, self.turns = RIGHT, deque(maxlen=3)
+        self.ticks, self.paused = 0, False
+        self.last_tick = time.monotonic()
+        self.snapshot()
+
+    def turn(self, code):
+        self.turns.append(code)
+
+    def toggle_pause(self):
+        if not self.over:
+            self.paused = not self.paused
+
+    def due(self):
+        return time.monotonic() - self.last_tick >= TICK_MS / 1000
+
+    def tick(self):
+        """One step of the game, run by the kernel."""
+        self.last_tick = time.monotonic()
+        if self.over or self.paused:
+            return
+        # One queued turn per tick; reversing onto your own neck is ignored
+        while self.turns:
+            turn = self.turns.popleft()
+            if turn not in (self.heading, OPPOSITE[self.heading]):
+                self.heading = turn
+                break
+        self.b["state"][KEY] = self.heading
+        os.getppid()  # interval:ms:120
+        self.ticks += 1
+        self.snapshot()
+
+    def snapshot(self):
+        b, body = self.b, []
+        for i in range(MAX_LENGTH):
+            x, y = read(b["snakex"], i), read(b["snakey"], i)
+            if x == 0 or y == 0:
+                break
+            if not body or body[-1] != (x, y):  # a fresh tail sits on the last one
+                body.append((x, y))
+        self.body = body
+        self.food = (read(b["state"], FOODX), read(b["state"], FOODY))
+        self.over = bool(read(b["state"], GAME_OVER))
+
+    def status(self):
+        n = len(self.body)
+        return f"length {n}/{MAX_LENGTH}   score {n - 2}   ticks {self.ticks}"
+
+
+# ----------------------------------------------------------------- terminal
+
+
+def esc(code):
+    return f"\033[{code}m"
+
+
+T_WALL = esc("48;5;240")
+T_TILES = (esc("48;5;234"), esc("48;5;235"))
+T_HEAD = esc("48;5;120") + esc("38;5;16")
+T_BODY = (esc("48;5;41"), esc("48;5;35"), esc("48;5;29"))
+T_FOOD = esc("38;5;203")
+T_TEXT, T_MUTED, T_ACCENT = esc("1;38;5;255"), esc("38;5;245"), esc("38;5;81")
+T_RESET = esc("0")
+
+# Bytes a terminal sends: an arrow is ESC [ A..D (or ESC O A..D), and its last
+# byte happens to be the code the kernel expects.
+T_KEYS = {b"w": UP, b"s": DOWN, b"a": LEFT, b"d": RIGHT}
+
+
+def terminal_frame(game):
+    body = {cell: i for i, cell in reversed(list(enumerate(game.body)))}
+    n = max(len(game.body) - 1, 1)
+    lines = [
+        f"  {T_TEXT}bpfsnake{T_RESET}  {T_MUTED}game logic runs in eBPF{T_RESET}",
+        "",
+    ]
+    for x in range(HEIGHT):
+        row = ["  "]
+        for y in range(WIDTH):
+            tile = T_TILES[(x + y) % 2]
+            if x in (0, HEIGHT - 1) or y in (0, WIDTH - 1):
+                row.append(T_WALL + "  ")
+            elif (x, y) == game.food:
+                row.append(tile + T_FOOD + "● ")
+            elif (x, y) in body:
+                i = body[(x, y)]
+                if i == 0:
+                    row.append(T_HEAD + "••")
+                else:
+                    row.append(T_BODY[min(i * 3 // (n + 1), 2)] + "  ")
+            else:
+                row.append(tile + "  ")
+        lines.append("".join(row) + T_RESET)
+    lines.append("")
+    if game.over:
+        note = f"{T_TEXT}game over{T_RESET}  {T_MUTED}r restart · q quit{T_RESET}"
+    elif game.paused:
+        note = f"{T_TEXT}paused{T_RESET}  {T_MUTED}space resume{T_RESET}"
+    else:
+        note = f"{T_MUTED}arrows/wasd steer · space pause · q quit{T_RESET}"
+    lines.append(f"  {T_ACCENT}{game.status()}{T_RESET}")
+    lines.append(f"  {note}")
+    # Clear to the end of each line so a shorter status leaves nothing behind
+    return "\033[H" + "\033[K\n".join(lines) + "\033[K"
+
+
+def terminal_keys(data, game):
+    """Apply a burst of bytes read from the terminal. False means quit."""
+    i = 0
+    while i < len(data):
+        ch = data[i : i + 1]
+        if ch == b"\x1b" and data[i + 1 : i + 2] in (b"[", b"O"):
+            code = data[i + 2 : i + 3]
+            if code in (b"A", b"B", b"C", b"D"):
+                game.turn(code[0])
+            i += 3
+            continue
+        ch = ch.lower()
+        if ch in (b"q", b"\x03"):
+            return False
+        if ch == b" ":
+            game.toggle_pause()
+        elif ch == b"r":
+            game.restart()
+        elif ch in T_KEYS:
+            game.turn(T_KEYS[ch])
+        i += 1
+    return True
+
+
+def run_terminal(game):
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    out = sys.stdout
+    try:
+        tty.setcbreak(fd)  # keys arrive at once and are not echoed
+        out.write("\033[?1049h\033[?25l\033[2J")  # alternate screen, no cursor
+        while True:
+            out.write(terminal_frame(game))
+            out.flush()
+            wait = max(0.0, TICK_MS / 1000 - (time.monotonic() - game.last_tick))
+            if select.select([fd], [], [], wait)[0]:
+                if not terminal_keys(os.read(fd, 64), game):
+                    return
+            if game.due():
+                game.tick()
+    finally:
+        termios.tcsetattr(fd, termios.TCSAFLUSH, saved)
+        out.write("\033[?25h\033[?1049l")
+        out.flush()
+        print(f"bpfsnake: {game.status()}")
+
+
+# ------------------------------------------------------------------- pygame
+
 CELL = 28
 HUD = 56
-OPPOSITE = {UP: DOWN, DOWN: UP, LEFT: RIGHT, RIGHT: LEFT}
-KEYS = {
-    pygame.K_UP: UP,
-    pygame.K_w: UP,
-    pygame.K_DOWN: DOWN,
-    pygame.K_s: DOWN,
-    pygame.K_LEFT: LEFT,
-    pygame.K_a: LEFT,
-    pygame.K_RIGHT: RIGHT,
-    pygame.K_d: RIGHT,
-}
 
 BG = (15, 23, 42)
 TILE = (22, 32, 54)
@@ -152,39 +332,6 @@ LEAF = (132, 204, 22)
 TEXT = (226, 232, 240)
 MUTED = (148, 163, 184)
 ACCENT = (56, 189, 248)
-
-
-def read(m, k):
-    return m.lookup(k) or 0
-
-
-def reset(b):
-    for i in range(MAX_LENGTH):
-        for m in (b["snakex"], b["snakey"]):
-            try:
-                m.delete_elem(i)
-            except Exception:
-                pass  # the key was never set
-    mid = HEIGHT // 2
-    b["snakex"][0], b["snakey"][0] = mid, 4
-    b["snakex"][1], b["snakey"][1] = mid, 3
-    b["state"][FOODX] = mid
-    b["state"][FOODY] = WIDTH // 2
-    b["state"][GAME_OVER] = 0
-    b["state"][KEY] = RIGHT
-    b["state"][PLAYER] = os.getpid()
-
-
-def snapshot(b):
-    body = []
-    for i in range(MAX_LENGTH):
-        x, y = read(b["snakex"], i), read(b["snakey"], i)
-        if x == 0 or y == 0:
-            break
-        if not body or body[-1] != (x, y):  # a fresh tail sits on the last one
-            body.append((x, y))
-    food = (read(b["state"], FOODX), read(b["state"], FOODY))
-    return body, food, bool(read(b["state"], GAME_OVER))
 
 
 def cell_rect(x, y, inset=0):
@@ -248,12 +395,11 @@ def draw_snake(screen, body):
         pygame.draw.circle(screen, BG, (ex + dy, ey + dx), 2)
 
 
-def draw_hud(screen, fonts, body, ticks, paused):
+def draw_hud(screen, fonts, game):
     big, small = fonts
     screen.blit(big.render("bpfsnake", True, TEXT), (16, 12))
     screen.blit(small.render("game logic runs in eBPF", True, MUTED), (160, 22))
-    stats = f"length {len(body)}/{MAX_LENGTH}   score {len(body) - 2}   ticks {ticks}"
-    s = small.render(stats + ("   paused" if paused else ""), True, ACCENT)
+    s = small.render(game.status(), True, ACCENT)
     screen.blit(s, (WIDTH * CELL - s.get_width() - 16, 22))
 
 
@@ -269,12 +415,7 @@ def draw_overlay(screen, fonts, title, hint):
     screen.blit(h, (cx - h.get_width() // 2, cy + 12))
 
 
-b = BPF()
-b.load()
-b.attach_all()
-
-
-def main():
+def run_pygame(game):
     pygame.init()
     pygame.display.set_caption("bpfsnake")
     screen = pygame.display.set_mode((WIDTH * CELL, HUD + HEIGHT * CELL))
@@ -282,59 +423,71 @@ def main():
         pygame.font.SysFont("dejavusansmono,monospace", 26, bold=True),
         pygame.font.SysFont("dejavusansmono,monospace", 15),
     )
+    keys = {
+        pygame.K_UP: UP,
+        pygame.K_w: UP,
+        pygame.K_DOWN: DOWN,
+        pygame.K_s: DOWN,
+        pygame.K_LEFT: LEFT,
+        pygame.K_a: LEFT,
+        pygame.K_RIGHT: RIGHT,
+        pygame.K_d: RIGHT,
+    }
     clock = pygame.time.Clock()
+    try:
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
+                if event.type != pygame.KEYDOWN:
+                    continue
+                if event.key in (pygame.K_ESCAPE, pygame.K_q):
+                    return
+                if event.key == pygame.K_SPACE:
+                    game.toggle_pause()
+                elif event.key == pygame.K_r:
+                    game.restart()
+                elif event.key in keys:
+                    game.turn(keys[event.key])
+            if game.due():
+                game.tick()
 
-    reset(b)
-    heading, turns = RIGHT, deque(maxlen=3)
-    body, food, over = snapshot(b)
-    ticks, paused, last_tick = 0, False, pygame.time.get_ticks()
+            draw_board(screen)
+            draw_food(screen, game.food, pygame.time.get_ticks())
+            draw_snake(screen, game.body)
+            draw_hud(screen, fonts, game)
+            if game.over:
+                hint = f"length {len(game.body)}  ·  R restart  ·  Esc quit"
+                draw_overlay(screen, fonts, "game over", hint)
+            elif game.paused:
+                draw_overlay(screen, fonts, "paused", "Space resume")
+            pygame.display.flip()
+            clock.tick(60)
+    finally:
+        pygame.quit()
 
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return
-            if event.type != pygame.KEYDOWN:
-                continue
-            if event.key == pygame.K_ESCAPE:
-                return
-            if event.key == pygame.K_SPACE and not over:
-                paused = not paused
-            elif event.key == pygame.K_r:
-                reset(b)
-                heading, ticks, paused = RIGHT, 0, False
-                turns.clear()
-                body, food, over = snapshot(b)
-            elif event.key in KEYS:
-                turns.append(KEYS[event.key])
 
-        now = pygame.time.get_ticks()
-        if not over and not paused and now - last_tick >= TICK_MS:
-            last_tick = now
-            # One queued turn per tick; reversing onto your own neck is ignored
-            while turns:
-                turn = turns.popleft()
-                if turn not in (heading, OPPOSITE[heading]):
-                    heading = turn
-                    break
-            b["state"][KEY] = heading
-            os.getppid()  # interval:ms:120
-            ticks += 1
-            body, food, over = snapshot(b)
+parser = argparse.ArgumentParser(description="Snake, with the game in eBPF.")
+parser.add_argument(
+    "--terminal",
+    action="store_true",
+    help="draw in this terminal instead of a pygame window (no pygame needed)",
+)
+args = parser.parse_args()
+if not args.terminal:
+    try:
+        import pygame
+    except ImportError:
+        sys.exit("snake.py: pygame is not installed; pip install pygame, or --terminal")
 
-        draw_board(screen)
-        draw_food(screen, food, now)
-        draw_snake(screen, body)
-        draw_hud(screen, fonts, body, ticks, paused)
-        if over:
-            hint = f"length {len(body)}  ·  R restart  ·  Esc quit"
-            draw_overlay(screen, fonts, "game over", hint)
-        elif paused:
-            draw_overlay(screen, fonts, "paused", "Space resume")
-        pygame.display.flip()
-        clock.tick(60)
-
+b = BPF()
+b.load()
+b.attach_all()
 
 try:
-    main()
-finally:
-    pygame.quit()
+    if args.terminal:
+        run_terminal(Game(b))
+    else:
+        run_pygame(Game(b))
+except KeyboardInterrupt:
+    pass
