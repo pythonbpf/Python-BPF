@@ -228,8 +228,14 @@ def _allocate_for_map_method(
         _allocate_for_map_method_fallback(builder, var_name, local_sym_tab)
         return
 
-    # Main variable (pointer to pointer)
-    ir_type = ir.PointerType(ir.IntType(64))
+    # Main variable (pointer to pointer). An integer value is pointed at with
+    # its own width, so that reads and writes through it are value-sized: the
+    # verifier rejects an 8-byte access to a 4-byte map value. A struct value
+    # keeps the generic i64*; field access casts it to the struct type.
+    if isinstance(value_ir_type, ir.IntType):
+        ir_type = ir.PointerType(ir.IntType(value_ir_type.width))
+    else:
+        ir_type = ir.PointerType(ir.IntType(64))
     var = builder.alloca(ir_type, name=var_name)
     local_sym_tab[var_name] = LocalSymbol(var, ir_type, value_type)
     # Temporary variable for computed values

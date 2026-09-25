@@ -2,7 +2,15 @@ import ast
 import logging
 
 from llvmlite import ir
-from pythonbpf.expr import eval_expr, get_base_type_and_depth, deref_to_depth, convert
+from pythonbpf.expr import (
+    eval_expr,
+    get_base_type_and_depth,
+    deref_to_depth,
+    convert,
+    get_typed_operand,
+    holds_map_int_value,
+)
+from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.expr.vmlinux_registry import VmlinuxHandlerRegistry
 from pythonbpf.helper.helper_utils import get_char_array_ptr_and_size
 
@@ -107,7 +115,13 @@ def _process_name_in_fval(
 ):
     """Process name nodes in formatted values."""
     if local_sym_tab and name_node.id in local_sym_tab:
-        _, var_type, tmp = local_sym_tab[name_node.id]
+        sym = local_sym_tab[name_node.id]
+        # A map-lookup local prints as its value, of the map's value type;
+        # its pointer type alone would make a c_uint8 value look like a string.
+        if holds_map_int_value(sym):
+            var_type = ctypes_to_ir(sym.metadata)
+        else:
+            var_type = sym.ir_type
         _populate_fval(var_type, name_node, fmt_parts, exprs)
     elif name_node.id in compilation_context.bpf_globals:
         var_type = compilation_context.bpf_globals[name_node.id].ir_type
@@ -159,7 +173,8 @@ def _populate_fval(ftype, node, fmt_parts, exprs):
         if ftype.width == 64:
             fmt_parts.append("%lld")
             exprs.append(node)
-        elif ftype.width == 32:
+        elif ftype.width <= 32:
+            # Narrower integers are promoted to int, as C varargs do.
             fmt_parts.append("%d")
             exprs.append(node)
         else:
@@ -228,6 +243,18 @@ def _prepare_expr_args(expr, func, compilation_context, builder, local_sym_tab):
         )
         if char_array_ptr:
             return char_array_ptr
+
+    # A map-lookup local: its value, widened per the map's value type
+    if (
+        isinstance(expr, ast.Name)
+        and local_sym_tab
+        and expr.id in local_sym_tab
+        and holds_map_int_value(local_sym_tab[expr.id])
+    ):
+        val, ty = get_typed_operand(
+            func, compilation_context, expr, builder, local_sym_tab
+        )
+        return _handle_int_arg(val, builder, ty)
 
     # Regular expression evaluation
     val, _ = eval_expr(func, compilation_context, builder, expr, local_sym_tab)

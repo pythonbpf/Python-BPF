@@ -81,6 +81,19 @@ CASES = {
         [r"trunc i64 .* to i32", r"zext i32 .* to i64"],
         [r"sext i32 .* to i64"],
     ),
+    # A narrow map value is loaded at its width, widened per its sign, and
+    # never read with an 8-byte load; a c_uint8 value is printed by value.
+    "signedness/map_value_narrow.py": (
+        [
+            r"load i32, i32\* %\"deref",
+            r"load i8, i8\* %\"deref",
+            r"zext i32 %\"deref",
+            r"sext i32 %\"deref",
+            r"zext i8 %\"deref",
+            r"store i8 .*, i8\* %\"b_tmp\"",
+        ],
+        [r"load i64, i64\* %\"deref", r"i8\* %\"deref[^\"]*\"\)$"],
+    ),
     # `return p` on a map lookup dereferences through a null check and returns
     # the i64, never the pointer.
     "return/map_value.py": (

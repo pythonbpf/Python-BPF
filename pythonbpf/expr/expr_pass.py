@@ -382,25 +382,41 @@ def _handle_ctypes_call(
     return value, expected_type
 
 
+def holds_map_int_value(sym):
+    """Whether a local is a lookup result on a map with an integer value: a
+    pointer to the value, with the value's ctype as its metadata. Such a local
+    is used by value, read through the pointer (see get_typed_operand)."""
+    return (
+        isinstance(sym.ir_type, ir.PointerType)
+        and isinstance(sym.metadata, str)
+        and is_ctypes(sym.metadata)
+    )
+
+
+def _compare_operand(func, compilation_context, builder, operand, local_sym_tab):
+    """Evaluate one side of a comparison. A map-lookup local compares by its
+    value, read at the map value's width and typed by its declared ctype,
+    exactly as it is read as an arithmetic operand."""
+    if (
+        isinstance(operand, ast.Name)
+        and operand.id in local_sym_tab
+        and holds_map_int_value(local_sym_tab[operand.id])
+    ):
+        return get_typed_operand(
+            func, compilation_context, operand, builder, local_sym_tab
+        )
+    return eval_expr(func, compilation_context, builder, operand, local_sym_tab)
+
+
 def _handle_compare(func, compilation_context, builder, cond, local_sym_tab):
     """Handle ast.Compare expressions."""
 
     if len(cond.ops) != 1 or len(cond.comparators) != 1:
         logger.error("Only single comparisons are supported")
         return None
-    lhs = eval_expr(
-        func,
-        compilation_context,
-        builder,
-        cond.left,
-        local_sym_tab,
-    )
-    rhs = eval_expr(
-        func,
-        compilation_context,
-        builder,
-        cond.comparators[0],
-        local_sym_tab,
+    lhs = _compare_operand(func, compilation_context, builder, cond.left, local_sym_tab)
+    rhs = _compare_operand(
+        func, compilation_context, builder, cond.comparators[0], local_sym_tab
     )
 
     if lhs is None or rhs is None:

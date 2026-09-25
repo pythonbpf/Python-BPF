@@ -226,15 +226,24 @@ def handle_variable_assignment(
             logger.info(
                 f"Creating temporary variable for pointer assignment to {var_name}"
             )
-            var_ptr_tmp = local_sym_tab[f"{var_name}_tmp"].var
-            builder.store(val, var_ptr_tmp)
-            val = var_ptr_tmp
+            tmp = local_sym_tab[f"{var_name}_tmp"]
+            # The spare slot has the map value's width; expressions are i64.
+            builder.store(convert(builder, val, val_type, tmp.ir_type), tmp.var)
+            val = tmp.var
         else:
             logger.error(
                 f"Type mismatch for variable {var_name}: {val_type} vs {var_type}"
             )
             return False
 
+    if (
+        isinstance(val.type, ir.PointerType)
+        and isinstance(var_type, ir.PointerType)
+        and val.type != var_type
+    ):
+        # A map lookup returns a generic pointer; the local is typed by the
+        # map's value, so the pointer is cast to it (no instruction in BPF).
+        val = builder.bitcast(val, var_type)
     builder.store(val, var_ptr)
     logger.info(f"Assigned value to variable {var_name}")
     return True

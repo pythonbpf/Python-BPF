@@ -1,4 +1,4 @@
-from .expr_pass import eval_expr, handle_expr, get_typed_operand
+from .expr_pass import eval_expr, handle_expr, get_typed_operand, holds_map_int_value
 from .type_normalization import (
     convert_to_bool,
     get_base_type_and_depth,
@@ -20,6 +20,7 @@ __all__ = [
     "canonicalise",
     "to_promoted",
     "get_typed_operand",
+    "holds_map_int_value",
     "usual_arithmetic_conversions",
     "get_base_type_and_depth",
     "deref_to_depth",
