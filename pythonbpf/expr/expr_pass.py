@@ -9,6 +9,7 @@ from pythonbpf.type_deducer import (
     field_int_type,
     is_ctypes,
     IntTy,
+    PktPtrTy,
     int_literal_type,
     signedness,
 )
@@ -24,7 +25,7 @@ from .type_normalization import (
     get_base_type_and_depth,
 )
 from .vmlinux_registry import VmlinuxHandlerRegistry
-from .packet_pointer import MAX_PACKET_OFF, is_packet_pointer
+from .packet_pointer import MAX_PACKET_OFF, packet_type
 from ..vmlinux_parser.dependency_node import Field
 
 logger: Logger = logging.getLogger(__name__)
@@ -123,6 +124,11 @@ def _handle_attribute_expr(
                     expr, local_sym_tab, None, builder
                 )
                 if vmlinux_result is not None:
+                    pkt_ty = packet_type(expr, local_sym_tab)
+                    if pkt_ty is not None:
+                        # A packet-pointer field: the value is the loaded
+                        # pointer, and the descriptor says so from here on.
+                        return vmlinux_result[0], pkt_ty
                     return vmlinux_result
                 else:
                     raise RuntimeError("Vmlinux struct did not process successfully")
@@ -200,6 +206,8 @@ def _descriptor(val, ty):
     value unless the descriptor is itself an integer type, sign from the
     descriptor (an IntTy, a vmlinux Field, or plain -> signed). None when the
     value is not an integer at all."""
+    if isinstance(ty, PktPtrTy):
+        return ty  # a packet pointer keeps its kind, never re-ranked
     if isinstance(ty, ir.IntType):
         return IntTy(ty.width, signedness(ty))
     field = field_int_type(ty)
@@ -285,18 +293,16 @@ def _handle_binary_op_impl(func, compilation_context, rval, builder, local_sym_t
     narrowed to it -- so u32 * u32 wraps at 32 bits even though the arithmetic
     itself runs in an i64 register. Returns (value, IntTy)."""
     op = rval.op
-    left_pkt = is_packet_pointer(rval.left, local_sym_tab)
-    right_pkt = is_packet_pointer(rval.right, local_sym_tab)
     left, left_ty = get_typed_operand(
         func, compilation_context, rval.left, builder, local_sym_tab
     )
     right, right_ty = get_typed_operand(
         func, compilation_context, rval.right, builder, local_sym_tab
     )
-    if left_pkt or right_pkt:
-        return _packet_pointer_binop(
-            builder, rval, left, left_ty, left_pkt, right, right_ty, right_pkt
-        )
+    if isinstance(left_ty, PktPtrTy) or isinstance(right_ty, PktPtrTy):
+        # Before the usual arithmetic conversions, which would re-rank the
+        # pointer as an ordinary integer and drop its kind.
+        return _packet_pointer_binop(builder, rval, left, left_ty, right, right_ty)
     result_ty = usual_arithmetic_conversions(left_ty, right_ty)
     logger.info(
         f"binop {type(op).__name__}: {left_ty.describe()} x {right_ty.describe()} "
@@ -308,21 +314,20 @@ def _handle_binary_op_impl(func, compilation_context, rval, builder, local_sym_t
     return canonicalise(builder, result, result_ty), result_ty
 
 
-def _packet_pointer_binop(
-    builder, rval, left, left_ty, left_pkt, right, right_ty, right_pkt
-):
+def _packet_pointer_binop(builder, rval, left, left_ty, right, right_ty):
     """A binary operation with a packet-pointer operand (see packet_pointer.py):
-    64-bit, never ranked as the field's declared u32, with the offset taken as
-    an unsigned 16-bit value so the verifier can track the packet range."""
+    64-bit, never ranked as an ordinary integer, with the offset taken as an
+    unsigned 16-bit value so the verifier can track the packet range. The
+    result of pointer +/- offset is a pointer of the same kind; pointer -
+    pointer is a plain 64-bit length."""
     op = rval.op
     where = f"line {rval.lineno}: {ast.unparse(rval)}"
-    ptr_ty = IntTy(64, False)
+    left_pkt = isinstance(left_ty, PktPtrTy)
+    right_pkt = isinstance(right_ty, PktPtrTy)
     if left_pkt and right_pkt:
         if isinstance(op, ast.Sub):
             # data_end - data: a length, an ordinary 64-bit scalar.
-            left = convert(builder, left, left_ty, ptr_ty)
-            right = convert(builder, right, right_ty, ptr_ty)
-            return builder.sub(left, right), ptr_ty
+            return builder.sub(left, right), IntTy(64, False)
         raise SyntaxError(
             f"only subtraction is defined between packet pointers ({where})"
         )
@@ -333,24 +338,24 @@ def _packet_pointer_binop(
     if right_pkt and isinstance(op, ast.Sub):
         raise SyntaxError(f"cannot subtract a packet pointer from an offset ({where})")
 
-    ptr, ptr_src_ty, off, off_ty = (
-        (left, left_ty, right, right_ty)
-        if left_pkt
-        else (right, right_ty, left, left_ty)
-    )
+    ptr, ptr_ty, off = (left, left_ty, right) if left_pkt else (right, right_ty, left)
+    if ptr_ty.kind == "pkt_end":
+        # The verifier only compares against the end of the packet.
+        raise SyntaxError(
+            f"a packet-end pointer can only be compared, not offset ({where})"
+        )
     if isinstance(off, ir.Constant) and isinstance(off.constant, int):
         if not 0 <= off.constant <= MAX_PACKET_OFF:
             raise SyntaxError(
                 f"packet offset {off.constant} is outside 0..{MAX_PACKET_OFF} "
                 f"({where}); subtract instead of adding a negative offset"
             )
-    ptr = convert(builder, ptr, ptr_src_ty, ptr_ty)
     # The offset as u16, widened with zero-extension: a value the verifier can
     # bound to [0, 0xffff].
     off = builder.trunc(off, ir.IntType(16)) if off.type.width > 16 else off
     off = builder.zext(off, ir.IntType(64)) if off.type.width < 64 else off
     result = builder.add(ptr, off) if isinstance(op, ast.Add) else builder.sub(ptr, off)
-    return result, ptr_ty
+    return result, PktPtrTy(ptr_ty.kind)
 
 
 def _handle_binary_op(
@@ -462,6 +467,13 @@ def _handle_compare(func, compilation_context, builder, cond, local_sym_tab):
     lhs, lhs_ty = lhs
     rhs, rhs_ty = rhs
     lhs_desc, rhs_desc = _descriptor(lhs, lhs_ty), _descriptor(rhs, rhs_ty)
+    if isinstance(lhs_desc, PktPtrTy) or isinstance(rhs_desc, PktPtrTy):
+        # A packet bounds check (data + n > data_end): the verifier accepts
+        # pointer comparisons only at 64 bits, and they are unsigned.
+        u64 = IntTy(64, False)
+        lhs = convert(builder, lhs, lhs_desc, u64)
+        rhs = convert(builder, rhs, rhs_desc, u64)
+        return handle_comparator(func, builder, cond.ops[0], lhs, rhs, signed=False)
     if lhs_desc is not None and rhs_desc is not None:
         # Both integers: compare in the promoted type, which also picks the
         # signed or unsigned predicate (u64 > s64 is an unsigned compare in C).
