@@ -62,6 +62,42 @@ def _null_checked_operation(func, builder, ptr, operation, result_type, name_pre
     return phi
 
 
+def emit_if_not_null(func, builder, ptr, emit, name_prefix):
+    """Emit `emit(builder)` only on the path where `ptr` is non-null. The
+    write-side counterpart of _null_checked_operation: a store has no value to
+    merge, so the null path simply skips it."""
+    not_null_block = func.append_basic_block(name=f"{name_prefix}_not_null")
+    merge_block = func.append_basic_block(name=f"{name_prefix}_merge")
+
+    is_not_null = builder.icmp_signed("!=", ptr, ir.Constant(ptr.type, None))
+    builder.cbranch(is_not_null, not_null_block, merge_block)
+
+    builder.position_at_end(not_null_block)
+    emit(builder)
+    builder.branch(merge_block)
+
+    builder.position_at_end(merge_block)
+
+
+def with_struct_field_ptr(func, builder, symbol, struct_info, field_name, emit):
+    """Call `emit(builder, field_ptr)` with a pointer to `field_name` of the
+    struct `symbol` holds. A struct local holds the struct itself; a
+    map-lookup or cast local holds a pointer to it, which may be null, and
+    `emit` then runs only when it is not, as the read of the field yields 0
+    there instead (see access_struct_field)."""
+    if not isinstance(symbol.ir_type, ir.PointerType):
+        emit(builder, struct_info.gep(builder, symbol.var, field_name))
+        return
+
+    struct_ptr = builder.load(symbol.var)
+
+    def emit_through_ptr(builder):
+        typed_ptr = builder.bitcast(struct_ptr, struct_info.ir_type.as_pointer())
+        emit(builder, struct_info.gep(builder, typed_ptr, field_name))
+
+    emit_if_not_null(func, builder, struct_ptr, emit_through_ptr, f"field_{field_name}")
+
+
 def access_struct_field(
     builder, var_ptr, var_type, var_metadata, field_name, structs_sym_tab, func=None
 ):

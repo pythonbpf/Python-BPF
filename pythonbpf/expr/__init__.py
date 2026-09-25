@@ -7,7 +7,7 @@ from .type_normalization import (
     to_promoted,
 )
 from .operators import usual_arithmetic_conversions
-from .ir_ops import deref_to_depth, access_struct_field
+from .ir_ops import deref_to_depth, access_struct_field, with_struct_field_ptr
 from .operators import apply_binop
 from .call_registry import CallHandlerRegistry
 from .vmlinux_registry import VmlinuxHandlerRegistry
@@ -25,6 +25,7 @@ __all__ = [
     "deref_to_depth",
     "apply_binop",
     "access_struct_field",
+    "with_struct_field_ptr",
     "CallHandlerRegistry",
     "VmlinuxHandlerRegistry",
 ]

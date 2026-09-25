@@ -17,6 +17,8 @@ from pythonbpf.expr import (
     to_promoted,
     canonicalise,
     usual_arithmetic_conversions,
+    access_struct_field,
+    with_struct_field_ptr,
     VmlinuxHandlerRegistry,
 )
 from pythonbpf.assign_pass import (
@@ -207,6 +209,9 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
     read, and the operator table is apply_binop, the same one binary-op
     evaluation uses.
     """
+    # Set for a field reached through a pointer (a map-lookup or cast local):
+    # it is read and written through null checks rather than as a plain slot.
+    field_via_pointer = None
     if isinstance(stmt.target, ast.Name):
         name = stmt.target.id
         # One table: a declared global is a local_sym_tab entry whose slot is
@@ -250,8 +255,12 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
         struct_info = structs_sym_tab[metadata]
         if field_name not in struct_info.fields:
             raise SyntaxError(f"Field '{field_name}' not found in struct '{metadata}'")
-        slot = struct_info.gep(builder, local_sym_tab[var_name].var, field_name)
+        symbol = local_sym_tab[var_name]
         slot_type = struct_info.field_type(field_name)
+        if isinstance(symbol.ir_type, ir.PointerType):
+            field_via_pointer = (symbol, struct_info, field_name)
+        else:
+            slot = struct_info.gep(builder, symbol.var, field_name)
     elif isinstance(stmt.target, ast.Attribute):
         raise SyntaxError(
             f"augmented assignment to a nested struct field "
@@ -269,7 +278,19 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
         )
 
     # Python evaluates the target's current value before the right-hand side.
-    current = builder.load(slot)
+    if field_via_pointer is not None:
+        symbol, struct_info, field_name = field_via_pointer
+        current, _ = access_struct_field(
+            builder,
+            symbol.var,
+            symbol.ir_type,
+            symbol.metadata,
+            field_name,
+            compilation_context.structs_sym_tab,
+            func,
+        )
+    else:
+        current = builder.load(slot)
     rhs, rhs_ty = get_typed_operand(
         func, compilation_context, stmt.value, builder, local_sym_tab
     )
@@ -287,7 +308,16 @@ def handle_aug_assign(func, compilation_context, builder, stmt, local_sym_tab):
         apply_binop(builder, stmt.op, current, rhs, signedness(result_ty)),
         result_ty,
     )
-    builder.store(convert(builder, result, result_ty, slot_type), slot)
+    result = convert(builder, result, result_ty, slot_type)
+    if field_via_pointer is not None:
+        with_struct_field_ptr(
+            func,
+            builder,
+            *field_via_pointer,
+            lambda builder, field_ptr: builder.store(result, field_ptr),
+        )
+    else:
+        builder.store(result, slot)
 
 
 def handle_cond(func, compilation_context, builder, cond, local_sym_tab):

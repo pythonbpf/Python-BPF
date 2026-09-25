@@ -161,9 +161,8 @@ def track_syscalls(ctx: c_void_p) -> c_int64:
     s = stats.lookup(process_id)
 
     if s:
-        # Update existing stats
-        s.syscall_count = s.syscall_count + 1
-        stats.update(process_id, s)
+        # A field assignment writes into the map entry itself
+        s.syscall_count += 1
     else:
         # Create new stats
         new_stats = ProcessStats()

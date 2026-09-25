@@ -3,7 +3,7 @@ import logging
 from inspect import isclass
 
 from llvmlite import ir
-from pythonbpf.expr import eval_expr, convert
+from pythonbpf.expr import eval_expr, convert, with_struct_field_ptr
 from pythonbpf.helper import emit_probe_read_kernel_str_call
 from pythonbpf.type_deducer import ctypes_to_ir
 from pythonbpf.vmlinux_parser.dependency_node import Field
@@ -30,8 +30,7 @@ def handle_struct_field_assignment(
         logger.error(f"Field '{field_name}' not found in struct '{struct_type}'")
         return
 
-    # Get field pointer and evaluate value
-    field_ptr = struct_info.gep(builder, local_sym_tab[var_name].var, field_name)
+    # Python evaluates the value before the target.
     field_type = struct_info.field_type(field_name)
     val_result = eval_expr(func, compilation_context, builder, rval, local_sym_tab)
 
@@ -43,24 +42,29 @@ def handle_struct_field_assignment(
 
     # Special case: i8* string to [N x i8] char array
     if _is_char_array(field_type) and _is_i8_ptr(val_type):
-        _copy_string_to_char_array(
-            func,
-            builder,
-            val,
-            field_ptr,
-            field_type,
-            local_sym_tab,
-        )
-        logger.info(f"Copied string to char array {var_name}.{field_name}")
-        return
 
-    # Same implicit widening/truncation as assignment to a local: expressions
-    # evaluate in i64, but a field may be narrower.
-    if isinstance(val_type, ir.IntType) and isinstance(field_type, ir.IntType):
-        val = convert(builder, val, val_type, field_type)
+        def store(builder, field_ptr):
+            _copy_string_to_char_array(
+                func,
+                builder,
+                val,
+                field_ptr,
+                field_type,
+                local_sym_tab,
+            )
 
-    # Regular assignment
-    builder.store(val, field_ptr)
+    else:
+        # Same implicit widening/truncation as assignment to a local:
+        # expressions evaluate in i64, but a field may be narrower.
+        if isinstance(val_type, ir.IntType) and isinstance(field_type, ir.IntType):
+            val = convert(builder, val, val_type, field_type)
+
+        def store(builder, field_ptr):
+            builder.store(val, field_ptr)
+
+    with_struct_field_ptr(
+        func, builder, local_sym_tab[var_name], struct_info, field_name, store
+    )
     logger.info(f"Assigned to struct field {var_name}.{field_name}")
 
 

@@ -81,6 +81,12 @@ CASES = {
         [r"trunc i64 .* to i32", r"zext i32 .* to i64"],
         [r"sext i32 .* to i64"],
     ),
+    # A field of a struct map value is written through the lookup pointer,
+    # behind a null check, never by indexing into the local's own slot.
+    "assign/struct_map_value_field.py": (
+        [r"field_count_not_null", r"field_flags_not_null", r"store i32 .*, i32\* %"],
+        [r"getelementptr inbounds i64\*, i64\*\*"],
+    ),
     # `return p` on a map lookup dereferences through a null check and returns
     # the i64, never the pointer.
     "return/map_value.py": (

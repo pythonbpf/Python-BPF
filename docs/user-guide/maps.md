@@ -353,8 +353,8 @@ def track_stats(ctx: c_void_p) -> c_int64:
     stats = process_stats.lookup(process_id)
 
     if stats:
-        stats.count = stats.count + 1
-        process_stats.update(process_id, stats)
+        # A field assignment writes into the map entry itself
+        stats.count += 1
     else:
         new_stats = Stats()
         new_stats.count = 1
