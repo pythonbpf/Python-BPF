@@ -3,8 +3,7 @@
 # Bounce every packet back out of the interface it arrived on. Upstream is
 # the transmit side of the veth XDP tests.
 #
-# XDP_TX comes from vmlinux because pythonbpf.helper exports only XDP_PASS
-# and XDP_DROP; that is why this lives under vmlinux/.
+# XDP actions are vmlinux enum constants, like every kernel constant.
 
 from pythonbpf import bpf, section, bpfglobal, compile
 from vmlinux import XDP_TX

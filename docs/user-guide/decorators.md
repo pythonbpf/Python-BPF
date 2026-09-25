@@ -108,7 +108,7 @@ def trace_open_return(ctx):
 For network packet processing at the earliest point:
 
 ```python
-from pythonbpf.helper import XDP_PASS
+from vmlinux import XDP_PASS
 from ctypes import c_void_p, c_int64
 
 @section("xdp")

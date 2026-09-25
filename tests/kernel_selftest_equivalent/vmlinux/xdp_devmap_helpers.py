@@ -10,7 +10,7 @@
 #     return XDP_PASS;
 
 from pythonbpf import bpf, section, bpfglobal, compile
-from pythonbpf.helper import XDP_PASS
+from vmlinux import XDP_PASS
 from vmlinux import struct_xdp_md
 from ctypes import c_int64
 

@@ -1,5 +1,5 @@
 from pythonbpf import bpf, map, section, bpfglobal, compile
-from pythonbpf.helper import XDP_PASS
+from vmlinux import XDP_PASS
 from pythonbpf.maps import HashMap
 
 from ctypes import c_void_p, c_int64

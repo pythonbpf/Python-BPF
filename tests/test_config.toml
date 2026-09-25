@@ -26,7 +26,7 @@
 "failing_tests/vmlinux/args_test.py" = {reason = "struct_trace_event_raw_sys_enter args field access not supported", level = "ir"}
 
 
-"failing_tests/xdp_pass.py" = {reason = "XDP program using vmlinux structs (struct_xdp_md) and complex map/struct interaction not yet supported", level = "ir"}
+"failing_tests/vmlinux/xdp_pass.py" = {reason = "XDP program using vmlinux structs (struct_xdp_md) and complex map/struct interaction not yet supported", level = "ir"}
 
 "failing_tests/globals_read_before_shadow.py" = {reason = "Reading a name above the assignment that makes it a local shadowing a global is UnboundLocalError in Python, and a compile error here", level = "ir"}
 

@@ -5,7 +5,7 @@
 # program itself is the smallest privileged-type program there is.
 
 from pythonbpf import bpf, section, bpfglobal, compile
-from pythonbpf.helper import XDP_DROP
+from vmlinux import XDP_DROP
 from ctypes import c_void_p, c_int64
 
 
