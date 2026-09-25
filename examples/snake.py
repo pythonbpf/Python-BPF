@@ -20,7 +20,8 @@
 #   sudo -E env PYTHONPATH=. /path/to/python examples/snake.py     # pygame
 #   sudo env PYTHONPATH=. /path/to/python examples/snake.py --terminal
 # The pygame window needs pygame (pip install pygame), and -E keeps your display
-# in the environment. The terminal needs 64 columns and 26 rows.
+# in the environment. The terminal draws the original's board, and like the
+# original the game ends when the snake dies.
 # Arrows or WASD steer, Space pauses, R restarts, Esc or Q quits.
 # x86_64 only (the syscall name in the kprobe).
 
@@ -40,8 +41,8 @@ from pythonbpf.helper import pid, random
 from pythonbpf.maps import HashMap
 
 MAX_LENGTH = 32
-WIDTH = 30  # columns, walls included
-HEIGHT = 20  # rows, walls included
+WIDTH = 50  # columns, walls included
+HEIGHT = 12  # rows, walls included
 TICK_MS = 120
 
 # Slots in the `state` map. The eBPF function spells them as literals: module
@@ -103,7 +104,7 @@ def tick(ctx: c_void_p) -> c_int64:
     # Game over when the head hits a wall ...
     x = snakex.lookup(0)
     y = snakey.lookup(0)
-    if x == 0 or x == 19 or y == 0 or y == 29:
+    if x == 0 or x == 11 or y == 0 or y == 49:
         state.update(2, 1)  # GAME_OVER
 
     # ... or the snake's own body
@@ -115,8 +116,8 @@ def tick(ctx: c_void_p) -> c_int64:
 
     # Eat: new food somewhere inside the walls, and the tail grows by one
     if x == state.lookup(0) and y == state.lookup(1):  # FOODX, FOODY
-        state.update(0, random() % 18 + 1)
-        state.update(1, random() % 28 + 1)
+        state.update(0, random() % 10 + 1)
+        state.update(1, random() % 48 + 1)
         i = 2
         while i < 32 and snakex.lookup(i) != 0 and snakey.lookup(i) != 0:
             i += 1
@@ -156,11 +157,10 @@ class Game:
                     m.delete_elem(i)
                 except Exception:
                     pass  # the key was never set
-        mid = HEIGHT // 2
-        b["snakex"][0], b["snakey"][0] = mid, 4
-        b["snakex"][1], b["snakey"][1] = mid, 3
-        b["state"][FOODX] = mid
-        b["state"][FOODY] = WIDTH // 2
+        # BEGIN, as in the original
+        b["snakex"][0], b["snakey"][0] = 1, 1
+        b["snakex"][1], b["snakey"][1] = 1, 2
+        b["state"][FOODX], b["state"][FOODY] = 4, 4
         b["state"][GAME_OVER] = 0
         b["state"][KEY] = RIGHT
         b["state"][PLAYER] = os.getpid()
@@ -215,58 +215,28 @@ class Game:
 # ----------------------------------------------------------------- terminal
 
 
-def esc(code):
-    return f"\033[{code}m"
-
-
-T_WALL = esc("48;5;240")
-T_TILES = (esc("48;5;234"), esc("48;5;235"))
-T_HEAD = esc("48;5;120") + esc("38;5;16")
-T_BODY = (esc("48;5;41"), esc("48;5;35"), esc("48;5;29"))
-T_FOOD = esc("38;5;203")
-T_TEXT, T_MUTED, T_ACCENT = esc("1;38;5;255"), esc("38;5;245"), esc("38;5;81")
-T_RESET = esc("0")
-
 # Bytes a terminal sends: an arrow is ESC [ A..D (or ESC O A..D), and its last
 # byte happens to be the code the kernel expects.
 T_KEYS = {b"w": UP, b"s": DOWN, b"a": LEFT, b"d": RIGHT}
 
 
 def terminal_frame(game):
-    body = {cell: i for i, cell in reversed(list(enumerate(game.body)))}
-    n = max(len(game.body) - 1, 1)
-    lines = [
-        f"  {T_TEXT}bpfsnake{T_RESET}  {T_MUTED}game logic runs in eBPF{T_RESET}",
-        "",
-    ]
+    """The board exactly as the bpftrace script prints it."""
+    body = set(game.body)
+    rows = []
     for x in range(HEIGHT):
-        row = ["  "]
+        row = []
         for y in range(WIDTH):
-            tile = T_TILES[(x + y) % 2]
-            if x in (0, HEIGHT - 1) or y in (0, WIDTH - 1):
-                row.append(T_WALL + "  ")
+            if x == 0 or y == 0 or x == HEIGHT - 1 or y == WIDTH - 1:
+                row.append("#")
             elif (x, y) == game.food:
-                row.append(tile + T_FOOD + "● ")
+                row.append("$")
             elif (x, y) in body:
-                i = body[(x, y)]
-                if i == 0:
-                    row.append(T_HEAD + "••")
-                else:
-                    row.append(T_BODY[min(i * 3 // (n + 1), 2)] + "  ")
+                row.append("@")
             else:
-                row.append(tile + "  ")
-        lines.append("".join(row) + T_RESET)
-    lines.append("")
-    if game.over:
-        note = f"{T_TEXT}game over{T_RESET}  {T_MUTED}r restart · q quit{T_RESET}"
-    elif game.paused:
-        note = f"{T_TEXT}paused{T_RESET}  {T_MUTED}space resume{T_RESET}"
-    else:
-        note = f"{T_MUTED}arrows/wasd steer · space pause · q quit{T_RESET}"
-    lines.append(f"  {T_ACCENT}{game.status()}{T_RESET}")
-    lines.append(f"  {note}")
-    # Clear to the end of each line so a shorter status leaves nothing behind
-    return "\033[H" + "\033[K\n".join(lines) + "\033[K"
+                row.append(" ")
+        rows.append("".join(row) + "\n")
+    return "\033[H" + "".join(rows)  # move cursor to top left
 
 
 def terminal_keys(data, game):
@@ -299,10 +269,12 @@ def run_terminal(game):
     out = sys.stdout
     try:
         tty.setcbreak(fd)  # keys arrive at once and are not echoed
-        out.write("\033[?1049h\033[?25l\033[2J")  # alternate screen, no cursor
+        out.write("\033[H\033[2J")  # clear screen
         while True:
             out.write(terminal_frame(game))
             out.flush()
+            if game.over:
+                return  # exit(), as in the original
             wait = max(0.0, TICK_MS / 1000 - (time.monotonic() - game.last_tick))
             if select.select([fd], [], [], wait)[0]:
                 if not terminal_keys(os.read(fd, 64), game):
@@ -311,14 +283,11 @@ def run_terminal(game):
                 game.tick()
     finally:
         termios.tcsetattr(fd, termios.TCSAFLUSH, saved)
-        out.write("\033[?25h\033[?1049l")
-        out.flush()
-        print(f"bpfsnake: {game.status()}")
 
 
 # ------------------------------------------------------------------- pygame
 
-CELL = 28
+CELL = 24
 HUD = 56
 
 BG = (15, 23, 42)
