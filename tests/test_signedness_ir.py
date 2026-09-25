@@ -88,6 +88,18 @@ CASES = {
         [r"\bsub i64"],
         [r"to i16", r"trunc i64 %.* to i32"],
     ),
+    "vmlinux/ctx_bounds_check.py": (
+        [r"icmp ugt i64", r"\badd i64"],
+        [r"trunc i64 %.* to i32", r"icmp \w+ i32"],
+    ),
+    "vmlinux/ctx_bounds_check_direct.py": (
+        [r"icmp ugt i64"],
+        [r"trunc i64 %.* to i32", r"icmp \w+ i32"],
+    ),
+    "vmlinux/ctx_data_via_local.py": (
+        [r"\badd i64"],
+        [r"trunc i64 %.* to i32"],
+    ),
     # A bool widens with zext and an integer narrows to it by != 0, never by
     # trunc; sext of an i1 would return -1 for True.
     "signedness/bool_int.py": (
