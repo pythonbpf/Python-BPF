@@ -68,6 +68,12 @@ CASES = {
         [r"\bsub i64", r"trunc i64 .* to i32", r"zext i32 .* to i64"],
         [],
     ),
+    # c_uint16(0) declares a 16-bit slot, so a u32 ctx field stored into it
+    # is truncated to 16 bits (C: __u16 queue = ctx->rx_queue_index).
+    "vmlinux/ctx_field_narrow_store.py": (
+        [r'%"queue" = alloca i16', r"trunc i64 .* to i16"],
+        [r'%"queue" = alloca i64'],
+    ),
     # A bool widens with zext and an integer narrows to it by != 0, never by
     # trunc; sext of an i1 would return -1 for True.
     "signedness/bool_int.py": (
@@ -86,6 +92,18 @@ CASES = {
     "return/map_value.py": (
         [r"deref_0_not_null", r"ret i64 %"],
         [r"ret i64\*"],
+    ),
+    # One byte, sized from the c_int8 destination, read from the address in
+    # a register field.
+    "vmlinux/probe_read_kernel_scalar.py": (
+        [r'%"byte" = alloca i8', r"inttoptr i64 .* to i8\*", r"i32 1, i8\*"],
+        [],
+    ),
+    # Both sides of each comparison are loaded before the compare; the
+    # pointers into the map are never compared themselves.
+    "assign/map_value_compare.py": (
+        [r"icmp eq i64 %"],
+        [r"icmp (eq|ne) i64\* %\S+, %"],
     ),
 }
 

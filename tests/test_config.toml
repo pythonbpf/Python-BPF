@@ -6,6 +6,8 @@
 #     level "ir"       = fails during pythonbpf IR generation (exception or ERROR log)
 #     level "llc"      = IR generates but llc rejects it
 #     level "verifier" = IR and llc both succeed, but the kernel verifier rejects it
+#   A verifier-level entry may add match = "..." : the rejection must contain
+#   that text, otherwise the test fails instead of counting as expected.
 #
 # A failure at one level implies failure at every later one, so the declared
 # level marks that level and all later ones xfail.
@@ -24,7 +26,7 @@
 "failing_tests/vmlinux/args_test.py" = {reason = "struct_trace_event_raw_sys_enter args field access not supported", level = "ir"}
 
 
-"failing_tests/xdp_pass.py" = {reason = "XDP program using vmlinux structs (struct_xdp_md) and complex map/struct interaction not yet supported", level = "ir"}
+"failing_tests/vmlinux/xdp_pass.py" = {reason = "XDP program using vmlinux structs (struct_xdp_md) and complex map/struct interaction not yet supported", level = "ir"}
 
 "failing_tests/globals_read_before_shadow.py" = {reason = "Reading a name above the assignment that makes it a local shadowing a global is UnboundLocalError in Python, and a compile error here", level = "ir"}
 
@@ -36,27 +38,19 @@
 
 "failing_tests/globals_parameter_and_global.py" = {reason = "A parameter may not be declared global (Python: name is parameter and global)", level = "ir"}
 
-"failing_tests/assign/annotated_assign.py" = {reason = "Annotated assignment (ast.AnnAssign, e.g. `x: c_int64 = 0`) is not handled by process_stmt", level = "ir"}
+"failing_tests/loops/for_map_items.py" = {reason = "Loops iterate range() only: no sugar over bpf_for_each_map_elem() (a callback subprogram plus a way to capture outer locals) exists yet", level = "ir"}
 
-# Loop constructs: ast.For/ast.While are not handled by the statement dispatcher
-# (pythonbpf/functions/functions_pass.py process_stmt only matches Expr, Assign,
-# AugAssign, If, Return) and the pre-pass variable scan does not descend into
-# loop bodies. A loop is silently skipped rather than erroring, so anything
-# that reads a variable assigned in/around the loop afterward blows up later
-# with "Undefined variable ..." at the `return` statement. These document the
-# intended surface for when loops are implemented.
-"failing_tests/loops/for_range_sum.py" = {reason = "for/while loops not implemented: ast.For is silently skipped by the statement dispatcher", level = "ir"}
+"failing_tests/loops/break_outside_loop.py" = {reason = "`break` outside a loop is a SyntaxError in Python, and a compile error here", level = "ir"}
 
-"failing_tests/loops/for_range_start_stop_step.py" = {reason = "for/while loops not implemented: range() with start/stop/step is not supported", level = "ir"}
+"failing_tests/loops/range_variable_step.py" = {reason = "range() step must be an integer literal: its sign decides the loop test", level = "ir"}
 
-"failing_tests/loops/while_basic.py" = {reason = "for/while loops not implemented: ast.While is silently skipped by the statement dispatcher", level = "ir"}
+"kernel_selftest_equivalent/ringbuf/reserve_submit_discard.py" = {reason = "RingBuffer reserve/typed record/discard workflow is planned but not implemented yet", level = "ir"}
 
-"failing_tests/loops/while_true_break.py" = {reason = "for/while loops not implemented: while True with a break-based exit is not supported", level = "ir"}
+"kernel_selftest_equivalent/vmlinux/perf_skip.py" = {reason = "Nested struct field access (ctx.regs.ip) not supported; one level such as ctx.sample_period works", level = "ir"}
 
-"failing_tests/loops/nested_for.py" = {reason = "for/while loops not implemented: nested for loops are not supported", level = "ir"}
-
-"failing_tests/loops/for_break.py" = {reason = "for/while loops not implemented: break is not supported", level = "ir"}
-
-"failing_tests/loops/for_continue.py" = {reason = "for/while loops not implemented: continue is not supported", level = "ir"}
-
-"failing_tests/loops/for_map_items.py" = {reason = "for/while loops not implemented: no sugar over bpf_for_each_map_elem()-style map iteration exists yet", level = "ir"}
+# Upstream is a negative fixture: reading xdp_md->egress_ifindex is only legal
+# for programs loaded with expected_attach_type = BPF_XDP_DEVMAP, and the
+# prog_tests driver asserts that a plain load *fails*. The kernel rejects it
+# here with "invalid bpf_context access off=20 size=4", which is the pass
+# condition upstream. PythonBPF has no way to set expected_attach_type yet.
+"kernel_selftest_equivalent/vmlinux/xdp_devmap_helpers.py" = {reason = "Negative fixture: egress_ifindex needs expected_attach_type=BPF_XDP_DEVMAP, which cannot be set yet; the verifier rejection is upstream's pass condition", level = "verifier", match = "invalid bpf_context access"}

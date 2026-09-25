@@ -11,6 +11,7 @@ from .helpers import (
     deref,
     comm,
     probe_read_str,
+    probe_read_kernel,
     random,
     probe_read,
     smp_processor_id,
@@ -18,8 +19,6 @@ from .helpers import (
     skb_store_bytes,
     get_current_cgroup_id,
     get_stack,
-    XDP_DROP,
-    XDP_PASS,
 )
 
 
@@ -80,12 +79,11 @@ __all__ = [
     "deref",
     "comm",
     "probe_read_str",
+    "probe_read_kernel",
     "random",
     "probe_read",
     "smp_processor_id",
     "uid",
     "skb_store_bytes",
     "get_stack",
-    "XDP_DROP",
-    "XDP_PASS",
 ]

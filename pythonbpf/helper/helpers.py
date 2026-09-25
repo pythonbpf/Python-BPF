@@ -27,6 +27,11 @@ def probe_read_str(dst, src):
     return ctypes.c_int64(0)
 
 
+def probe_read_kernel(dst, src):
+    """Safely read sizeof(dst) bytes from kernel memory"""
+    return ctypes.c_int64(0)
+
+
 def random():
     """get a pseudorandom u32 number"""
     return ctypes.c_int32(0)
@@ -60,10 +65,3 @@ def get_stack(buf, flags=0):
 def get_current_cgroup_id():
     """Get the current cgroup ID"""
     return ctypes.c_int64(0)
-
-
-XDP_ABORTED = ctypes.c_int64(0)
-XDP_DROP = ctypes.c_int64(1)
-XDP_PASS = ctypes.c_int64(2)
-XDP_TX = ctypes.c_int64(3)
-XDP_REDIRECT = ctypes.c_int64(4)
