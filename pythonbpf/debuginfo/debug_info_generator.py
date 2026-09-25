@@ -4,6 +4,7 @@ Provides utilities for generating DWARF/BTF debug information
 """
 
 from . import dwarf_constants as dc
+from llvmlite.ir.values import DIValue
 from typing import Any, List
 
 
@@ -227,14 +228,25 @@ class DebugInfoGenerator:
         Example:
         !DILocalVariable(name: "ctx", arg: 1, file: !3, line: 20, type: !7)
         """
-        return self.module.add_debug_info(
-            "DILocalVariable",
+        # Not through add_debug_info, which returns a cached node for equal
+        # operands: a second function with the same parameter name would get
+        # the first one's node, already scoped to the first function by
+        # add_scope_to_local_variable. Scoping it again makes a metadata cycle
+        # that llvmlite recurses on forever when it hashes the next node.
+        operands = self.module._fix_di_operands(
             {
                 "name": name,
                 "arg": arg,
                 "file": self.module._file_metadata,
                 "type": var_type,
-            },
+            }.items()
+        )
+        return DIValue(
+            self.module,
+            False,
+            "DILocalVariable",
+            sorted(operands),
+            name=str(len(self.module.metadata)),
         )
 
     def add_scope_to_local_variable(self, local_variable_debug_info, scope_value):
