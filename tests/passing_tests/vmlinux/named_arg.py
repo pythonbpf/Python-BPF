@@ -4,12 +4,11 @@ from pythonbpf.maps import HashMap
 
 from ctypes import c_void_p, c_int64
 
-# NOTE: This example exposes the problems with our typing system.
-# We can't do steps on line 25 and 27.
-# prev is of type i64**. For prev + 1, we deref it down to i64
-# To assign it back to prev, we need to go back to i64**.
-# We cannot allocate space for the intermediate type now.
-# We probably need to track the ref/deref chain for each variable.
+# `prev` starts as a map lookup result (a pointer) and is rebound to
+# `prev + 1`, which lives in a temporary that `prev` then points at. The update
+# must store the incremented value: the helper gets the pointer the local
+# holds, not the address of the local's own slot (that used to store a kernel
+# stack address into the map).
 
 
 @bpf

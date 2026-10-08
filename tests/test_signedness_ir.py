@@ -112,6 +112,17 @@ CASES = {
         [r"deref_0_not_null", r"ret i64 %"],
         [r"ret i64\*"],
     ),
+    # A local holding a pointer is passed to a helper as that pointer, loaded
+    # from its slot; the slot's own address (an i64**) would make the map store
+    # a kernel address instead of the value.
+    "helpers/map_update_from_lookup.py": (
+        [r'load i64\*, i64\*\* %"prev"'],
+        [r'i64\*\* %"prev", i64 0\)'],
+    ),
+    "vmlinux/named_arg.py": (
+        [r'load i64\*, i64\*\* %"prev"'],
+        [r'i64\*\* %"prev", i64 0\)'],
+    ),
 }
 
 

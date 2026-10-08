@@ -67,6 +67,11 @@ def get_or_create_ptr_from_arg(
         else:
             # Stack space is already allocated
             ptr = get_var_ptr_from_name(arg.id, local_sym_tab)
+            if symbol is not None and isinstance(symbol.ir_type, ir.PointerType):
+                # The slot holds a pointer (a map lookup result, or a local
+                # rebound to point at a temporary): the helper wants that
+                # pointer, not the address of the slot it is kept in.
+                ptr = builder.load(ptr)
     elif isinstance(arg, ast.Constant) and isinstance(arg.value, int):
         int_width = 64  # Default to i64
         if expected_type and isinstance(expected_type, ir.IntType):
