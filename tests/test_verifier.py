@@ -2,7 +2,7 @@
 Level 3 — Kernel verifier tests.
 
 For every passing BPF test file, compiles to a .o and runs:
-    sudo bpftool prog load -d <file.o> /sys/fs/bpf/bpf_prog_test_<id>
+    sudo bpftool prog load <file.o> /sys/fs/bpf/bpf_prog_test_<id>
 
 These tests are opt-in: they require sudo and kernel access, and are gated
 behind the `verifier` pytest mark. Run with:
