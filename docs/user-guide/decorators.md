@@ -281,9 +281,10 @@ BPF global variables are values that:
 
 ### Common Global Variables
 
-#### LICENSE (Required)
+#### LICENSE
 
-Every BPF program must declare a license:
+Every BPF program carries a license, which the kernel reads when the program is
+loaded. Declare it as a string global:
 
 ```python
 @bpf
@@ -292,14 +293,24 @@ def LICENSE() -> str:
     return "GPL"
 ```
 
-Valid licenses include:
+If a program defines no `LICENSE`, PythonBPF uses `"GPL"`, the kernel's own
+license, and logs a warning:
+
+```text
+No LICENSE defined; defaulting to "GPL". Define @bpf @bpfglobal def LICENSE() -> str to choose another license.
+```
+
+Define `LICENSE` yourself to choose a different license or to silence the
+warning. The kernel treats these as GPL-compatible:
 * `"GPL"` - GNU General Public License
 * `"GPL v2"` - GPL version 2
+* `"GPL and additional rights"`
 * `"Dual BSD/GPL"` - Dual licensed
 * `"Dual MIT/GPL"` - Dual licensed
+* `"Dual MPL/GPL"` - Dual licensed
 
 ```{warning}
-Many BPF features require a GPL-compatible license. Using a non-GPL license may prevent your program from loading or accessing certain kernel features.
+Many BPF features require a GPL-compatible license. A program with any other license may not call GPL-only helpers, including `bpf_trace_printk`, which `print()` uses; the verifier rejects it with "cannot call GPL-restricted function from non-GPL compatible program".
 ```
 
 #### Custom Global Variables

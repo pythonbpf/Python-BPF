@@ -19,7 +19,7 @@
 
 "failing_tests/return_struct.py" = {reason = "Returning a struct value from an integer function is a type error (nothing to dereference to an integer)", level = "ir"}
 
-"failing_tests/license.py" = {reason = "Missing LICENSE global produces IR that llc rejects — should be caught earlier with a clear error message", level = "llc"}
+"failing_tests/license_non_gpl.py" = {reason = "Negative fixture: a non-GPL license may not call the GPL-only bpf_trace_printk that print lowers to", level = "verifier", match = "cannot call GPL-restricted function from non-GPL compatible program"}
 
 "failing_tests/undeclared_values.py" = {reason = "Undeclared variable used in f-string — should raise SyntaxError (correct behaviour, test documents it)", level = "ir"}
 

@@ -96,9 +96,10 @@ def LICENSE() -> str:
     return "GPL"
 ```
 
-* The Linux kernel requires BPF programs to declare a license
+* The Linux kernel reads a license from every BPF program
 * Most kernel features require GPL-compatible licenses
 * This is defined as a BPF global variable
+* If you leave it out, PythonBPF uses `"GPL"` and logs a warning saying so
 
 ### Compilation and Execution
 
@@ -197,7 +198,7 @@ def xdp_pass(ctx: c_void_p) -> c_int64:
 
 ## Best Practices
 
-1. **Always include a LICENSE** - Required by the kernel
+1. **Declare a LICENSE** - Without one, PythonBPF defaults to `"GPL"` and warns
 2. **Use type hints** - Required by PythonBPF to generate correct code
 3. **Return the correct type** - Match the expected return type for your program type
 4. **Test incrementally** - Start simple and add complexity gradually
