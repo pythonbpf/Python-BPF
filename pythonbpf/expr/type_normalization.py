@@ -113,6 +113,14 @@ def convert_to_bool(builder, val):
     """Convert a value to boolean."""
     if val.type == ir.IntType(1):
         return val
+    if not isinstance(val.type, (ir.IntType, ir.PointerType)):
+        # C rejects `if (s)` on a struct, and Python would call any object
+        # true; either way it is never what was meant.
+        kind = "struct" if isinstance(val.type, ir.BaseStructType) else "value"
+        raise TypeError(
+            f"a {kind} of type {val.type} has no truth value: test one of its "
+            "fields instead"
+        )
     if isinstance(val.type, ir.PointerType):
         zero = ir.Constant(val.type, None)
     else:

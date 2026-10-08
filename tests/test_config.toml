@@ -15,7 +15,7 @@
 
 [xfail]
 
-"failing_tests/conditionals/struct_ptr.py" = {reason = "Struct pointer used directly as boolean condition not supported", level = "ir"}
+"failing_tests/conditionals/struct_value.py" = {reason = "A struct value has no truth value (C rejects `if (s)`): a compile error naming the struct", level = "ir"}
 
 "failing_tests/return_struct.py" = {reason = "Returning a struct value from an integer function is a type error (nothing to dereference to an integer)", level = "ir"}
 

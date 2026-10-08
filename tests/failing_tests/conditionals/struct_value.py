@@ -1,10 +1,10 @@
 from pythonbpf import bpf, struct, section, bpfglobal, compile
 from ctypes import c_void_p, c_int64, c_uint64
 
-# NOTE: Decided against fixing this
-# as one workaround is to just check any field of the struct
-# in the if statement. Ugly but works.
-# Might fix in future.
+# Negative test: `dat` is a struct value, and a struct has no truth value
+# (C rejects `if (s)`; Python would call any object true). It is a compile
+# error that says to test one of the struct's fields instead. A *pointer* to
+# a struct, such as a map lookup result, is a valid condition (non-null).
 
 
 @bpf
