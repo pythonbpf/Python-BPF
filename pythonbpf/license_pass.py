@@ -5,6 +5,11 @@ import logging
 
 logger: Logger = logging.getLogger(__name__)
 
+# The license a program gets when it declares none. The kernel is GPL, and a
+# program whose license is not GPL-compatible may not call GPL-only helpers
+# (bpf_trace_printk, which `print` lowers to, is one).
+DEFAULT_LICENSE = "GPL"
+
 
 def emit_license(module: ir.Module, license_str: str):
     license_bytes = license_str.encode("utf8") + b"\x00"
@@ -24,7 +29,10 @@ def emit_license(module: ir.Module, license_str: str):
 
 
 def license_processing(tree, compilation_context):
-    """Process the LICENSE function decorated with @bpf and @bpfglobal and return the section name"""
+    """Process the LICENSE function decorated with @bpf and @bpfglobal and return the section name.
+
+    A program without one gets DEFAULT_LICENSE, with a warning.
+    """
     count = 0
     for node in tree.body:
         if isinstance(node, ast.FunctionDef) and node.name == "LICENSE":
@@ -52,4 +60,10 @@ def license_processing(tree, compilation_context):
                         )
                 else:
                     raise SyntaxError("ERROR: Multiple LICENSE globals defined")
-    return None
+
+    logger.warning(
+        f'No LICENSE defined; defaulting to "{DEFAULT_LICENSE}". Define '
+        "@bpf @bpfglobal def LICENSE() -> str to choose another license."
+    )
+    emit_license(compilation_context.module, DEFAULT_LICENSE)
+    return "LICENSE"
