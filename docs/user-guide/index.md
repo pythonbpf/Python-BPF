@@ -69,7 +69,7 @@ def my_function(ctx: c_void_p) -> c_int64:
     # BPF logic here
     return 0
 
-# License (required)
+# License (optional: without one, PythonBPF uses "GPL" and logs a warning)
 @bpf
 @bpfglobal
 def LICENSE() -> str:
