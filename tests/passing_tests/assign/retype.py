@@ -3,13 +3,9 @@ from ctypes import c_void_p, c_int64, c_uint64
 from pythonbpf.maps import HashMap
 
 
-# NOTE: This example tries to reinterpret the variable `x` to a different type.
-# We do not allow this for now, as stack allocations are typed and have to be
-# done in the first basic block. Allowing re-interpretation would require
-# re-allocation of stack space (possibly in a new basic block), which is not
-# supported in eBPF yet.
-# We can allow bitcasts in cases where the width of the types is the same in
-# the future. But for now, we do not allow any re-interpretation of variables.
+# `x` is first bound to a map lookup (a pointer) and then rebound to an integer,
+# as Python allows; the comparison sees the integer. This was once refused
+# because stack slots are typed, and now works.
 
 
 @bpf
