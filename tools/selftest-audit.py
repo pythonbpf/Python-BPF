@@ -15,7 +15,7 @@ negatives in both directions, and the envelope it encodes (the helper, map and
 construct lists below) must be kept in step with the compiler by hand. Re-run
 it after a feature lands to see what the feature unlocked. The lists were last
 reconciled against pythonbpf/helper and pythonbpf/maps when scalar @bpfglobal
-support and integer signedness merged.
+support, integer signedness and loops merged.
 """
 
 import argparse
@@ -70,7 +70,10 @@ NOT_HELPERS = {
 # cost a careful rewrite can absorb). Order does not matter.
 PATTERNS = [
     # control flow
-    ("loop", "hard", r"\b(for|while)\s*\(|\bbpf_for\b|\bbpf_repeat\b|\bbpf_loop\s*\("),
+    # plain for/while lower since loops landed (#106); `do { } while (0)` is a
+    # macro idiom, not a loop. Iterator loops and the bpf_loop helper are not.
+    ("open_coded_loop", "hard", r"\bbpf_for(_each)?\b|\bbpf_repeat\b|\bbpf_loop\s*\("),
+    ("do_while", "soft", r"\}\s*while\s*\((?!\s*0\s*\))"),
     ("goto", "hard", r"\bgoto\s+\w+"),
     ("switch", "hard", r"\bswitch\s*\("),
     ("ternary", "soft", r"\?[^?:]*:"),
