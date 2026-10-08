@@ -200,6 +200,41 @@ Globals no longer appear as a blocker at all. The next unlocks by count are help
 long tail, but `bpf_get_current_task`, `bpf_ktime_get_boot_ns` and the `bpf_probe_read_user*`
 family recur), array maps, and typed program arguments.
 
+## Fourth batch: loops
+
+With `for`/`while` lowering (#106) the audit no longer counts a plain loop as a hard
+blocker; the bpf_for/bpf_repeat iterators and the `bpf_loop` helper still are (38
+programs), and `do { } while (0)` macros are no longer mistaken for loops. Against
+bpf-next `5714ca8` that takes the programs with no hard blocker from 29 to 39. Four of
+the ten are ported, all from `prog_tests/bpf_verif_scale.c`:
+
+| Port | Upstream | Section | Upstream BPF insns | Port BPF insns |
+|---|---|---|---|---|
+| `vmlinux/loop1.py` | `loop1.c` | `raw_tracepoint/kfree_skb` | 21 | 20 |
+| `vmlinux/loop2.py` | `loop2.c` | `raw_tracepoint/consume_skb` | 12 | 2 |
+| `vmlinux/loop4.py` | `loop4.c` | `socket` | 14 | 97 |
+| `vmlinux/loop5.py` | `loop5.c` | `socket` | 18 | 13 |
+
+The loop lowering matches clang's: with `volatile`, `barrier()` and the no-unroll pragma
+taken out of the C, clang emits the same 2 and 97 instructions for `loop2` and `loop4`.
+Those three are what the ports cannot say, and they are the point of the upstream tests,
+which exist to make the verifier walk a loop. `loop2` folds to `return 42` and `loop4`
+unrolls, so those two ports compile, load and verify but no longer exercise what their
+upstream counterparts do. Each says so in its header; they are the first tests to
+tighten once volatile reads have a spelling. `loop1` and `loop5` keep their loops.
+
+The other six stay unported:
+
+- `loop3.c` is a negative test (the verifier must give up on a 2^32-iteration loop), and
+  without `volatile` LLVM replaces that loop with a closed form.
+- `test_skb_ctx.c` needs a subscript on a context array (`skb->cb[i]`) and writes to
+  context fields. Today the first fails with a bare `TypeError` in `handle_cond` and the
+  second with a `KeyError` in `handle_struct_field_assignment`.
+- `test_verif_scale1.c`, `2` and `3` contain no loop, only a `do { } while (0)` macro;
+  they need `jhash` over packet bytes through casts, and `scale1` a `noinline` subprogram.
+- `test_parse_tcp_hdr_opt.c` reads packet bytes through casts and passes a struct pointer
+  to a static function.
+
 ## 3. Incidental findings
 
 - **Nested struct field access fails with a misleading error.** `ctx.regs.ip` reports
