@@ -19,6 +19,13 @@ from tests.framework.compiler import run_ir_generation
 PASSING_DIR = Path(__file__).parent / "passing_tests"
 HAVE_VMLINUX = importlib.util.find_spec("vmlinux") is not None
 
+# The value argument of a map update is the very SSA value loaded from prev's
+# slot, not merely some load of prev elsewhere in the function.
+UPDATE_WITH_LOADED_PREV = (
+    r'(%"[^"]+") = load i64\*, i64\*\* %"prev"\n(?:.*\n)*?'
+    r'.*call i64 %"[^"]+"\(\{[^}]*\}\* @"count", i64\* %"[^"]+", i64\* \1, i64 0\)'
+)
+
 # path under passing_tests -> (patterns that must appear, patterns that must not)
 CASES = {
     "signedness/widen_unsigned.py": (
@@ -114,13 +121,16 @@ CASES = {
     ),
     # A local holding a pointer is passed to a helper as that pointer, loaded
     # from its slot; the slot's own address (an i64**) would make the map store
-    # a kernel address instead of the value.
+    # a kernel address instead of the value. The reference is
+    # tests/c-form/map_update_from_lookup.bpf.c: at -O0 clang passes
+    # bpf_map_update_elem the result of `load ptr, ptr <prev's slot>` in both
+    # copy() and rebind().
     "helpers/map_update_from_lookup.py": (
-        [r'load i64\*, i64\*\* %"prev"'],
+        [UPDATE_WITH_LOADED_PREV],
         [r'i64\*\* %"prev", i64 0\)'],
     ),
     "vmlinux/named_arg.py": (
-        [r'load i64\*, i64\*\* %"prev"'],
+        [UPDATE_WITH_LOADED_PREV],
         [r'i64\*\* %"prev", i64 0\)'],
     ),
 }
