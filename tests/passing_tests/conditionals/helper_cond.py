@@ -2,10 +2,8 @@ from pythonbpf import bpf, map, section, bpfglobal, compile
 from ctypes import c_void_p, c_int64, c_uint64
 from pythonbpf.maps import HashMap
 
-# NOTE: Decided against fixing this
-# as a workaround is assigning the result of lookup to a variable
-# and then using that variable in the if statement.
-# Might fix in future.
+# A map lookup used directly in a comparison: the value is null-checked and
+# dereferenced, and a missing key takes the else branch.
 
 
 @bpf

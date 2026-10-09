@@ -842,5 +842,13 @@ def handle_expr(
             call,
             local_sym_tab,
         )
+    elif any(isinstance(node, ast.Call) for node in ast.walk(call)):
+        # A docstring or a bare name has no effect and can be dropped; an
+        # expression with a call in it (`f() if c else g()`, `a() or b()`)
+        # does, and dropping it would silently lose the call.
+        raise NotImplementedError(
+            f"Unsupported expression statement on line {expr.lineno}: "
+            f"{type(call).__name__}; write it as an if statement or assignment"
+        )
     else:
-        logger.info("Unsupported expression type")
+        logger.debug(f"Dropping expression statement without effect: {ast.dump(call)}")

@@ -15,7 +15,9 @@
 
 [xfail]
 
-"failing_tests/conditionals/struct_ptr.py" = {reason = "Struct pointer used directly as boolean condition not supported", level = "ir"}
+"failing_tests/conditionals/struct_value.py" = {reason = "A struct value has no truth value (C rejects `if (s)`): a compile error naming the struct", level = "ir"}
+
+"failing_tests/conditionals/oneline.py" = {reason = "A conditional expression used as a statement (`f() if c else g()`) is not lowered: a compile error rather than silently dropping both calls; write it as an if statement", level = "ir"}
 
 "failing_tests/return_struct.py" = {reason = "Returning a struct value from an integer function is a type error (nothing to dereference to an integer)", level = "ir"}
 
@@ -26,7 +28,6 @@
 "failing_tests/vmlinux/args_test.py" = {reason = "struct_trace_event_raw_sys_enter args field access not supported", level = "ir"}
 
 
-"failing_tests/vmlinux/xdp_pass.py" = {reason = "XDP program using vmlinux structs (struct_xdp_md) and complex map/struct interaction not yet supported", level = "ir"}
 
 "failing_tests/globals_read_before_shadow.py" = {reason = "Reading a name above the assignment that makes it a local shadowing a global is UnboundLocalError in Python, and a compile error here", level = "ir"}
 
