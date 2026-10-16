@@ -1,14 +1,8 @@
 <p align="center">
-  <picture>
-    <source
-      media="(prefers-color-scheme: light)"
-      srcset="https://github.com/user-attachments/assets/f3738131-d7cb-4b5c-8699-c7010295a159"
-      width="450">
-    <img
-      src="https://github.com/user-attachments/assets/b175bf39-23cb-475d-a6e1-7b5c99a1ed72"
-      width="450"
-      alt="PythonBPF logo">
-  </picture>
+  <img
+    src="https://raw.githubusercontent.com/pythonbpf/Python-BPF/master/docs/_static/pythonbpf-logo.svg"
+    width="450"
+    alt="PythonBPF logo">
 </p>
 <!-- Badges -->
 <p align="center">
