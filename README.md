@@ -29,7 +29,7 @@
 
 Python-BPF is an LLVM IR generator for eBPF programs written in Python. It uses [llvmlite](https://github.com/numba/llvmlite) to generate LLVM IR and then compiles to LLVM object files. These object files can be loaded into the kernel for execution. Python-BPF performs compilation without relying on BCC.
 
-> **Note**: This project is under active development and not ready for production use.
+> **Note**: This project is under active development.
 
 ---
 
