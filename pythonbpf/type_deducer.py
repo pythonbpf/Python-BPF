@@ -41,6 +41,33 @@ class IntTy(ir.IntType):
         return f"{'i' if self.signed else 'u'}{self.width}"
 
 
+PACKET_KINDS = ("pkt", "pkt_meta", "pkt_end")
+
+
+class PktPtrTy(IntTy):
+    """A packet pointer: 64-bit, unsigned, and tagged with the verifier's kind
+    for it (packet data, packet metadata, or packet end). It is an IntTy so
+    every integer path accepts it; the few sites that must treat it as a
+    pointer check isinstance(ty, PktPtrTy) before the integer rules apply.
+    See pythonbpf/expr/packet_pointer.py for where kinds come from and the
+    rules applied to them."""
+
+    def __new__(cls, kind: str):
+        return IntTy.__new__(cls, 64, False)
+
+    def __init__(self, kind: str):
+        if kind not in PACKET_KINDS:
+            raise ValueError(f"unknown packet pointer kind {kind!r}")
+        IntTy.__init__(self, 64, False)
+        self.kind = kind
+
+    def __getnewargs__(self):  # type: ignore[override]
+        return (self.kind,)
+
+    def describe(self) -> str:
+        return f"{self.kind}*"
+
+
 def byte_size(ty) -> int:
     """Bytes an integer type occupies in memory: its width rounded up to whole
     bytes, so a 1-bit bool still takes one byte, as C's _Bool does."""
