@@ -42,6 +42,7 @@ docs = [
 test = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "hypothesis>=6.100",
     "ctypeslib2",
     # Pinned rather than left to ctypeslib2's own (unpinned) dependency: pip
     # installs the latest release by default, and its libclang API surface

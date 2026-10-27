@@ -72,6 +72,9 @@ jobs:
         run: uv pip install --system -e ".[test]"
 
       - name: Run test suite
+        env:
+          # tests/property: derandomized, so a failure always reproduces
+          HYPOTHESIS_PROFILE: ci
         run: make test
 
       - name: Check whether sudo is usable

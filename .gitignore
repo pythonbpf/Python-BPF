@@ -14,3 +14,4 @@ vmlinux.h
 # Documentation build artifacts
 docs/_build/
 docs/_templates/
+.hypothesis/
