@@ -104,12 +104,16 @@ GAPS: list[Gap] = [
         ),
     ),
     Gap(
-        "untyped-copy-keeps-narrow-type",
-        "`t = a` gives t a's own type, so a c_bool/c_uint8/c_uint16 copy stays "
-        "narrow and promotes to int; integers.md says an undeclared local is "
-        "always 64 bits with the expression's sign (unsigned here). Code or "
-        "doc: a decision (pythonbpf/allocation_pass.py, _allocate_for_name)",
-        lambda p: any(isinstance(e, Var) and e.ty.bits < 32 for _, _, e in p.temps),
+        "untyped-copy-keeps-source-type",
+        "`t = a` gives t a's own type, whatever it is: a c_uint32 copy stays "
+        "u32 and a c_int8 copy stays narrow and promotes to int, while "
+        "integers.md says an undeclared local is always 64 bits with the "
+        "expression's sign. Only a 64-bit source is unaffected. Code or doc: "
+        "a decision (pythonbpf/allocation_pass.py, _allocate_for_name)",
+        lambda p: any(
+            isinstance(e, Var) and e.ty != untyped_local_type(e.ty)
+            for _, _, e in p.temps
+        ),
         # C, by integers.md: -128 + (u64)1 is a u64, so 0 < it holds. PythonBPF:
         # t1 stays a u8, the sum is the int -127, and the compare is false.
         ExpressionProgram(

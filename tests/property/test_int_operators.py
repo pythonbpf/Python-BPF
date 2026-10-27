@@ -32,10 +32,13 @@ pytestmark = pytest.mark.skipif(CLANG is None, reason="clang is not installed")
 TYPES = st.sampled_from(ALL_TYPES)
 
 
-# A quarter of the profile's examples per operator, as there are 17 of them.
+# Parametrized over the left operand's type as well as the operator, so every
+# type gets examples on every run (153 parameters, a sixteenth of the
+# profile's examples each).
+@pytest.mark.parametrize("left_ty", ALL_TYPES, ids=lambda t: t.name)
 @pytest.mark.parametrize("op", ARITH_OPS + DIV_OPS + SHIFT_OPS + COMPARE_OPS)
-@settings(max_examples=max(10, settings.default.max_examples // 4))
-@given(left_ty=TYPES, right_ty=TYPES, data=st.data())
+@settings(max_examples=max(5, settings.default.max_examples // 16))
+@given(right_ty=TYPES, data=st.data())
 def test_binary_operator_matches_clang(op, left_ty, right_ty, data):
     left = data.draw(values_of(left_ty), label="left")
     if op in SHIFT_OPS:

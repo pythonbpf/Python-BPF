@@ -154,8 +154,8 @@ programs are generated, and each one is compiled two ways and run.
 | File | Property |
 |---|---|
 | `test_int_expressions.py` | Random straight-line programs over every ctypes integer type and `c_bool`: `+ - * / // % << >> & \| ^`, comparisons as values, unary `-`, `not`, constructor casts, typed and untyped temporaries, nested. The worked examples of `integers.md` are pinned with `@example`. |
-| `test_int_operators.py` | Every binary operator on every pair of operand types, values drawn edge-first. Random trees rarely reach a negative dividend under a signed `%` and return it undisturbed; this property always does. |
-| `test_int_conversions.py` | Every (source type, destination type, site) triple, where a site is each place a conversion happens: constructor call, declaration, reassignment, untyped local, global store, `return`, global initialiser, and each augmented assignment. |
+| `test_int_operators.py` | Every binary operator, parametrized by the left operand's type, with the right type and both values drawn (edge values first). Random trees rarely reach a negative dividend under a signed `%` and return it undisturbed; this property always does. |
+| `test_int_conversions.py` | Every conversion site, parametrized by the destination type: constructor call, declaration, reassignment, untyped local, global store, `return`, global initialiser, and each augmented assignment. The converted value is read back through an expression whose result depends on its sign and width, not just returned, so a value stored with the right bits but the wrong type is caught too. |
 | `test_known_gaps.py` | Each known divergence's smallest program, as a strict xfail. |
 
 ### Known gaps
@@ -164,8 +164,10 @@ programs are generated, and each one is compiled two ways and run.
 had fixed. Each has a predicate, so the properties step around it and keep
 finding *new* bugs, and a pinned program that `test_known_gaps.py` runs as a
 strict xfail. A fix makes that test XPASS, failing the run until the gap is
-deleted, at which point the properties cover that ground again. A failing
-conversion site is a strict xfail on its parameter instead.
+deleted, at which point the properties cover that ground again. The
+operator and conversion properties step around a gap by drawing only what
+avoids it (not by filtering, which Hypothesis rightly complains about), with
+a comment naming the gap.
 
 ### Running
 
@@ -175,9 +177,10 @@ HYPOTHESIS_PROFILE=thorough pytest tests/property  # 3000 examples, for bug hunt
 ```
 
 CI uses the `ci` profile (100 examples, derandomized, so a failure always
-reproduces), about 90 seconds. The operator and conversion properties run a
-quarter of the profile's count per parameter. Profiles are registered in
-`conftest.py`. A failure prints both programs and the model's value;
+reproduces): about two and a half minutes on a 16-core machine. The
+operator and conversion properties are parametrized by type, so every type
+is tested on every run, and run a sixteenth of the profile's count per
+parameter. Profiles are registered in `conftest.py`. A failure prints both programs and the model's value;
 Hypothesis shrinks it to the smallest program that still fails.
 
 ### Plan
