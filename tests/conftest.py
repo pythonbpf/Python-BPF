@@ -116,3 +116,22 @@ def pytest_collection_modifyitems(items):
 def set_log_level(caplog):
     with caplog.at_level(logging.ERROR, logger="pythonbpf"):
         yield
+
+
+# ── Hypothesis profiles (tests/property) ────────────────────────────────────
+# dev (default) for local runs, ci for GitHub Actions (derandomized, so a PR
+# never fails on an example nobody can reproduce), thorough for bug hunting:
+#   HYPOTHESIS_PROFILE=thorough pytest tests/property
+
+try:
+    import os
+
+    from hypothesis import HealthCheck, settings
+
+    _common = dict(deadline=None, suppress_health_check=[HealthCheck.too_slow])
+    settings.register_profile("dev", max_examples=100, **_common)
+    settings.register_profile("ci", max_examples=100, derandomize=True, **_common)
+    settings.register_profile("thorough", max_examples=3000, **_common)
+    settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
+except ImportError:
+    pass

@@ -17,7 +17,9 @@ from pathlib import Path
 import llvmlite.binding as llvm
 
 
-def run_function(ll_text: str, func_name: str) -> int:
+def run_function(ll_text: str, func_name: str, restype=None) -> int:
+    """Call func_name(NULL) and return its result. restype is the ctypes type
+    to read the result as; by default the IR's i32 or i64, read as signed."""
     ll_text = re.sub(r'^target (triple|datalayout) = ".*"$', "", ll_text, flags=re.M)
     llvm.initialize_native_target()
     llvm.initialize_native_asmprinter()
@@ -27,12 +29,15 @@ def run_function(ll_text: str, func_name: str) -> int:
     engine = llvm.create_mcjit_compiler(mod, tm)
     engine.finalize_object()
 
-    ret = re.search(rf'define [^\n]*?\bi(\d+) @"?{re.escape(func_name)}"?\(', ll_text)
-    ret_ty = {64: ctypes.c_int64, 32: ctypes.c_int32}[int(ret.group(1))]
-    func = ctypes.CFUNCTYPE(ret_ty, ctypes.c_void_p)(
+    if restype is None:
+        ret = re.search(
+            rf'define [^\n]*?\bi(\d+) @"?{re.escape(func_name)}"?\(', ll_text
+        )
+        restype = {64: ctypes.c_int64, 32: ctypes.c_int32}[int(ret.group(1))]
+    func = ctypes.CFUNCTYPE(restype, ctypes.c_void_p)(
         engine.get_function_address(func_name)
     )
-    return func(None)
+    return int(func(None))
 
 
 def run_in_subprocess(ll_path, func_name: str, timeout: float) -> int:
