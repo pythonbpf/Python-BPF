@@ -133,6 +133,69 @@ Anything importing from `vmlinux` belongs in `vmlinux/`, which is registered in
 `VMLINUX_TEST_DIRS_PASSING` so it is skipped rather than failed where no
 `vmlinux.py` has been generated.
 
+## Property-based tests (`tests/property/`)
+
+The integer rules in `docs/user-guide/integers.md` are tested with
+[Hypothesis](https://hypothesis.readthedocs.io): instead of hand-picked cases,
+programs are generated, and each one is compiled two ways and run.
+
+* **The oracle is clang.** Every generated program is printed twice, as
+  PythonBPF and as the equivalent C. clang compiles the C (`-O0 -fwrapv`) to a
+  native object; PythonBPF's IR is retargeted to the host. Both are JIT-run
+  in a worker process (a miscompile can trap or abort inside LLVM, which must
+  not take pytest down with it) and must return the same value.
+* **A model keeps undefined behaviour out.** `cints.py` implements C's
+  promotions, usual arithmetic conversions and operators. Programs where C
+  would be undefined (division by zero, `MIN / -1`, shift counts out of
+  range) are discarded before anything runs. The model is also checked
+  against clang on every example, so a disagreement is reported as a model
+  bug, never blamed on PythonBPF.
+
+| File | Property |
+|---|---|
+| `test_int_expressions.py` | Random straight-line programs over every ctypes integer type and `c_bool`: `+ - * / // % << >> & \| ^`, comparisons as values, unary `-`, `not`, constructor casts, typed and untyped temporaries, nested. The worked examples of `integers.md` are pinned with `@example`. |
+| `test_int_operators.py` | Every binary operator on every pair of operand types, values drawn edge-first. Random trees rarely reach a negative dividend under a signed `%` and return it undisturbed; this property always does. |
+| `test_int_conversions.py` | Every (source type, destination type, site) triple, where a site is each place a conversion happens: constructor call, declaration, reassignment, untyped local, global store, `return`, global initialiser, and each augmented assignment. |
+| `test_known_gaps.py` | Each known divergence's smallest program, as a strict xfail. |
+
+### Known gaps
+
+`known_gaps.py` lists the divergences from C the suite has found and not yet
+had fixed. Each has a predicate, so the properties step around it and keep
+finding *new* bugs, and a pinned program that `test_known_gaps.py` runs as a
+strict xfail. A fix makes that test XPASS, failing the run until the gap is
+deleted, at which point the properties cover that ground again. A failing
+conversion site is a strict xfail on its parameter instead.
+
+### Running
+
+```bash
+pytest tests/property                              # dev profile: 100 examples
+HYPOTHESIS_PROFILE=thorough pytest tests/property  # 3000 examples, for bug hunting
+```
+
+CI uses the `ci` profile (100 examples, derandomized, so a failure always
+reproduces), about 90 seconds. The operator and conversion properties run a
+quarter of the profile's count per parameter. Profiles are registered in
+`conftest.py`. A failure prints both programs and the model's value;
+Hypothesis shrinks it to the smallest program that still fails.
+
+### Plan
+
+1. **Integers and conversions** (done): the three properties above. A
+   mutation check (deliberately breaking `>>`, `%`, `/`, the usual arithmetic
+   conversions, integer promotion, sign extension and `c_bool` conversion in
+   the compiler) is caught every time, each shrunk to a program of two or
+   three lines.
+2. **Fix the known gaps**, each on its own branch; its strict xfail flips to
+   XPASS and the gap is deleted.
+3. **Widen the sites**: struct field stores and vmlinux field reads; map keys
+   and values, which needs helper calls stubbed with host functions in the
+   JIT; `range()` loops with random bounds, steps and types against CPython.
+4. **Robustness**: every generated program in the supported subset must
+   also pass `llc` for BPF, and a program outside the subset must be rejected
+   with a deliberate error, never an internal `KeyError` or `TypeError`.
+
 ## Directory structure
 
 ```
@@ -147,7 +210,13 @@ tests/
 │   ├── bpf_test_case.py       ← BpfTestCase dataclass
 │   ├── collector.py           ← discovers test files, reads test_config.toml
 │   ├── compiler.py            ← wrappers around compile_to_ir() + _run_llc()
+│   ├── host_jit.py            ← run a helper-free program's IR on the host
 │   └── verifier.py            ← bpftool subprocess wrapper
+├── property/                  ← Hypothesis property tests (integers, conversions)
+│   ├── cints.py               ← reference model of C's integer rules
+│   ├── programs.py            ← generated programs, printed as PythonBPF and C
+│   ├── harness.py             ← compile both, JIT-run in a worker, compare
+│   └── known_gaps.py          ← divergences found and not yet fixed
 ├── passing_tests/             ← programs that should compile and verify cleanly
 ├── failing_tests/             ← programs with known issues (declared in test_config.toml)
 └── kernel_selftest_equivalent/ ← ports of kernel selftests + feature roadmap tests
